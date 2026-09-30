@@ -69,6 +69,14 @@ model Plan {
   dailyAiRequests   Int      @map("daily_ai_requests")
   dailyTokenLimit   Int      @map("daily_token_limit")
   allowDeepAnalysis Boolean  @default(false) @map("allow_deep_analysis")
+  /// Screenshot/PDF slip reads per day.
+  dailyUploads      Int      @default(0) @map("daily_uploads")
+  /// Target-odds slip builds per day. -1 = unlimited.
+  dailySlipBuilds   Int      @default(0) @map("daily_slip_builds")
+  /// Deep match analyses per day (0 when allowDeepAnalysis is false).
+  dailyAnalyses     Int      @default(0) @map("daily_analyses")
+  /// Whether the daily 2/5 odds picks are visible.
+  allowDailyPicks   Boolean  @default(false) @map("allow_daily_picks")
   isActive          Boolean  @default(true) @map("is_active")
   sortOrder         Int      @default(0) @map("sort_order")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz

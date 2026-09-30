@@ -9,6 +9,7 @@ import { buildTargetSlip, chanceInWords, confidenceOf, type Candidate, type Conf
 import type { SlipView } from "@/lib/slips/view";
 import { asBookmakerError, getOwnedSlipRecord, marketOf, saveSlip, toSlipView, withLogos, type DraftSelection } from "@/lib/services/slips";
 import { lookupMatch, getMatchDetail } from "@/lib/services/stats";
+import { requireFeature } from "@/lib/services/ai-quota";
 import { enforceRateLimit, logUsage } from "@/lib/services/usage";
 import type { MatchDetail } from "@/lib/stats/types";
 import type { RawMarket } from "@/lib/bookmakers/types";
@@ -100,6 +101,7 @@ export async function buildToTarget(opts: {
 }): Promise<BuiltSlip> {
   const { user, target, ipHash } = opts;
   if (!(target > 1)) throw new AppError("BAD_REQUEST", "Give a target total odds above 1.0.");
+  await requireFeature(user.id, "build");
   await enforceRateLimit({ userId: user.id, kind: "SLIP_EDIT", ...BUILD_LIMIT });
 
   const { source, usable, candidates, dropped } = await candidatesFromSlip(user, opts.slipId);

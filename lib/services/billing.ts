@@ -14,6 +14,7 @@ const DAY_MS = 86_400_000;
 export async function startCheckout(user: AuthUser, planCode: string): Promise<{ authorizationUrl: string; reference: string }> {
   const plan = await db.plan.findUnique({ where: { code: planCode } });
   if (!plan || !plan.isActive) throw new AppError("BAD_REQUEST", "That plan isn't available.");
+  if (plan.pricePesewas <= 0) throw new AppError("BAD_REQUEST", "That plan is free: there's nothing to pay for.");
   const profile = await db.profile.findUnique({ where: { id: user.id }, select: { email: true } });
   const email = profile?.email ?? user.email;
   if (!email) throw new AppError("BAD_REQUEST", "Add an email address to your account to pay.");

@@ -7,7 +7,7 @@ import type { SlipView } from "@/lib/slips/view";
 import { anthropic } from "@/lib/ai/client";
 import { addUsage, CHAT_MODEL, costMicroUsd, ZERO_USAGE, type TokenUsage } from "@/lib/ai/models";
 import { runTool, TOOLS, type ToolContext } from "@/lib/ai/tools";
-import { consumeTrialCredit, getAiAllowance, requireAiAllowance, type AiAllowance } from "@/lib/services/ai-quota";
+import { getAiAllowance, requireAiAllowance, type AiAllowance } from "@/lib/services/ai-quota";
 import { logUsage } from "@/lib/services/usage";
 
 const MAX_ITERATIONS = 6;
@@ -104,7 +104,7 @@ export async function runChat(opts: {
   seenSlipIds?: string[];
 }): Promise<ChatResult> {
   const { user, ipHash } = opts;
-  const allowance = await requireAiAllowance(user.id);
+  await requireAiAllowance(user.id);
 
   const history = opts.history.slice(-MAX_HISTORY);
   while (history.length && history[0].role !== "user") history.shift();
@@ -192,7 +192,6 @@ export async function runChat(opts: {
     ...usageColumns(usage),
     meta: { toolCalls },
   });
-  await consumeTrialCredit(user.id, allowance);
 
   const slips = [...ctx.slips.values()];
   return { reply, slips, allowance: await getAiAllowance(user.id), quickReplies: quickRepliesFor(slips) };

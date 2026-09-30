@@ -60,8 +60,9 @@ describe("AI chat agent", () => {
     const log = await db.usageLog.findFirst({ where: { userId: user.id, kind: "AI_CHAT" } });
     expect(log).toMatchObject({ success: true, model: "claude-haiku-4-5", inputTokens: 4500, outputTokens: 270 });
     expect(log!.costMicroUsd).toBe(4500 * 1 + 270 * 5);
-    expect((await db.profile.findUnique({ where: { id: user.id } }))!.freeAiCredits).toBe(4);
-    expect(r.allowance).toMatchObject({ kind: "trial", remaining: 4 });
+    // Free plan: 3 chats a day, one just used.
+    expect(r.allowance).toMatchObject({ kind: "trial", remaining: 2 });
+    expect(r.allowance.features.chat).toMatchObject({ used: 1, limit: 3, remaining: 2 });
   });
 
   it("returns tool errors to the model instead of failing the request", async () => {
@@ -74,10 +75,11 @@ describe("AI chat agent", () => {
     expect(toolResult).toMatchObject({ is_error: true, content: expect.stringContaining("EXPIRED_CODE") });
   });
 
-  it("blocks requests when trial credits are used up", async () => {
+  it("blocks requests when the daily free limit is used up", async () => {
     const { runChat } = await import("@/lib/ai/agent");
     const user = await createUser();
-    await db.profile.update({ where: { id: user.id }, data: { freeAiCredits: 0 } });
+    // Free plan allows 3 chats a day.
+    await db.usageLog.createMany({ data: Array.from({ length: 3 }, () => ({ userId: user.id, kind: "AI_CHAT" as const, success: true })) });
     await expect(runChat({ user, ipHash: null, history: [{ role: "user", content: "hi" }] })).rejects.toMatchObject({ code: "PLAN_LIMIT_REACHED" });
     expect(calls).toHaveLength(0);
   });
@@ -85,7 +87,7 @@ describe("AI chat agent", () => {
   it("enforces plan daily limits", async () => {
     const { runChat } = await import("@/lib/ai/agent");
     const user = await createUser();
-    const plan = await db.plan.findUniqueOrThrow({ where: { code: "daily" } });
+    const plan = await db.plan.findUniqueOrThrow({ where: { code: "starter" } });
     await db.subscription.create({ data: { userId: user.id, planId: plan.id, status: "ACTIVE", startsAt: new Date(), endsAt: new Date(Date.now() + 86_400_000) } });
     await db.usageLog.createMany({ data: Array.from({ length: plan.dailyAiRequests }, () => ({ userId: user.id, kind: "AI_CHAT" as const })) });
     await expect(runChat({ user, ipHash: null, history: [{ role: "user", content: "hi" }] })).rejects.toMatchObject({ code: "PLAN_LIMIT_REACHED" });
@@ -100,10 +102,10 @@ describe("deep analysis", () => {
     const trialUser = await createUser();
     await expect(analyzeMatch(trialUser, match.id)).rejects.toMatchObject({ code: "PLAN_LIMIT_REACHED" });
 
-    const weekly = await db.plan.findUniqueOrThrow({ where: { code: "weekly" } });
+    const pro = await db.plan.findUniqueOrThrow({ where: { code: "pro" } });
     const subscribe = async () => {
       const u = await createUser();
-      await db.subscription.create({ data: { userId: u.id, planId: weekly.id, status: "ACTIVE", startsAt: new Date(), endsAt: new Date(Date.now() + 7 * 86_400_000) } });
+      await db.subscription.create({ data: { userId: u.id, planId: pro.id, status: "ACTIVE", startsAt: new Date(), endsAt: new Date(Date.now() + 7 * 86_400_000) } });
       return u;
     };
     await db.statsCache.deleteMany({ where: { endpoint: "analysis" } });

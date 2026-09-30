@@ -8,7 +8,7 @@ import { ANALYSIS_MODEL, costMicroUsd, supportsServerFallback, type TokenUsage }
 import { anthropic } from "@/lib/ai/client";
 import { compactMatchDetail } from "@/lib/ai/compact";
 import { getMatchDetail } from "@/lib/services/stats";
-import { getAiAllowance } from "@/lib/services/ai-quota";
+import { requireFeature } from "@/lib/services/ai-quota";
 import { logUsage } from "@/lib/services/usage";
 
 const ANALYSIS_TTL_MS = 3 * 60 * 60_000;
@@ -26,10 +26,7 @@ End with: "Stats, not guarantees. Bet responsibly."`;
  * shared between users (same data in, same analysis out), so repeat requests cost nothing.
  */
 export async function analyzeMatch(user: AuthUser, matchId: number, dateHint?: string): Promise<{ analysis: string; cached: boolean; source: string }> {
-  const allowance = await getAiAllowance(user.id);
-  if (!allowance.allowDeepAnalysis) {
-    throw new AppError("PLAN_LIMIT_REACHED", "Deep match analysis is included in the Weekly and Monthly plans.");
-  }
+  await requireFeature(user.id, "analysis");
 
   const detail = await getMatchDetail(user, matchId, dateHint);
   if (detail.unavailable.includes("form") && detail.h2h.length === 0) {

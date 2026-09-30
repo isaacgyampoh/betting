@@ -68,3 +68,8 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, both suites and a build.
 
 ## Scripts
 `dev` · `build` · `lint` · `typecheck` · `test` · `test:int` · `db:migrate` · `db:seed` · `db:studio` · `cf:preview` · `cf:deploy` · `cf:typegen`
+
+## Plans and costs
+Tiers (Free, Starter, Pro, VIP) and every daily limit live in the `plans` table, so prices and
+limits change without a deploy. Measured cost per action and the reasoning behind the prices:
+[docs/unit-economics.md](docs/unit-economics.md).

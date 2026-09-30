@@ -11,36 +11,10 @@ const prisma = new PrismaClient({
 
 // Starting prices; change them in the DB (plans table), not here.
 const plans = [
-  {
-    code: "daily",
-    name: "Day Pass",
-    pricePesewas: 500,
-    durationDays: 1,
-    dailyAiRequests: 30,
-    dailyTokenLimit: 60_000,
-    allowDeepAnalysis: false,
-    sortOrder: 1,
-  },
-  {
-    code: "weekly",
-    name: "Weekly",
-    pricePesewas: 2500,
-    durationDays: 7,
-    dailyAiRequests: 50,
-    dailyTokenLimit: 100_000,
-    allowDeepAnalysis: true,
-    sortOrder: 2,
-  },
-  {
-    code: "monthly",
-    name: "Monthly",
-    pricePesewas: 8000,
-    durationDays: 30,
-    dailyAiRequests: 80,
-    dailyTokenLimit: 150_000,
-    allowDeepAnalysis: true,
-    sortOrder: 3,
-  },
+  { code: "free", name: "Free", description: "Slip tools, a few chats a day.", pricePesewas: 0, durationDays: 0, dailyAiRequests: 3, dailyTokenLimit: 20_000, dailyUploads: 1, dailySlipBuilds: 1, dailyAnalyses: 0, allowDeepAnalysis: false, allowDailyPicks: false, sortOrder: 0 },
+  { code: "starter", name: "Starter", description: "A day of everyday use.", pricePesewas: 1000, durationDays: 1, dailyAiRequests: 15, dailyTokenLimit: 80_000, dailyUploads: 3, dailySlipBuilds: 2, dailyAnalyses: 0, allowDeepAnalysis: false, allowDailyPicks: false, sortOrder: 1 },
+  { code: "pro", name: "Pro", description: "A week, with analysis and the daily picks.", pricePesewas: 4500, durationDays: 7, dailyAiRequests: 40, dailyTokenLimit: 200_000, dailyUploads: 10, dailySlipBuilds: 10, dailyAnalyses: 3, allowDeepAnalysis: true, allowDailyPicks: true, sortOrder: 2 },
+  { code: "vip", name: "VIP", description: "A month, with the highest limits.", pricePesewas: 12000, durationDays: 30, dailyAiRequests: 100, dailyTokenLimit: 500_000, dailyUploads: 30, dailySlipBuilds: -1, dailyAnalyses: 10, allowDeepAnalysis: true, allowDailyPicks: true, sortOrder: 3 },
 ];
 
 const bookmakers = [

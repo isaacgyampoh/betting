@@ -24,7 +24,7 @@ const FEATURES = [
 
 const FAQ = [
   { q: "Is gameclaw a bookmaker?", a: "No. We don't take bets or hold money. You place bets directly with your bookmaker." },
-  { q: "What does it cost?", a: "Loading, converting and editing slips is free. Chat and match analysis come with a few free messages, then plans start at GHS 5 a day." },
+  { q: "What does it cost?", a: "Loading, converting and trimming slips is always free, and so are a few chat messages a day. Paid plans start at GHS 10 for a day and add screenshot reading, slip building, match analysis and the daily picks." },
   { q: "Can it tell me who will win?", a: "No one can. It shows what the numbers say, with a confidence level and the reasons, and never promises a result." },
   { q: "Which bookmakers work?", a: "SportyBet, Betway, 1xBet, betPawa, MSport, Football.com, Betwinner, 22Bet and PariPesa. Paste any code and we detect the bookmaker. Some still run on sample data while their live connection is finished; those slips are clearly marked." },
 ];
@@ -67,7 +67,7 @@ export default async function HomePage() {
             </div>
           ))}
           <div className="flex flex-col justify-between bg-card p-4">
-            <p className="text-sm font-medium">Plans from GHS 5 a day</p>
+            <p className="text-sm font-medium">Plans from GHS 10</p>
             <p className="mt-1 text-sm text-muted-foreground">Mobile money or card. No auto-renewal.</p>
             <Link href="/pricing" className="mt-3 text-sm font-medium text-primary hover:underline">
               See plans

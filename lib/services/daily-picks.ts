@@ -12,8 +12,7 @@ import { getActiveSubscription } from "@/lib/services/profile";
 // or removed, so the public record includes every loss.
 
 export const DAILY_TARGETS = [2, 5] as const;
-/** Plans that may see the picks themselves; others see that they exist. */
-const PLANS_WITH_PICKS = ["weekly", "monthly"];
+
 
 export type DailyPickLegView = {
   position: number;
@@ -53,10 +52,11 @@ function chanceInWords(probability: number): string {
   return oneIn <= 1 ? "very likely" : `roughly a 1 in ${oneIn} chance`;
 }
 
+/** Picks are visible to plans whose row has allowDailyPicks set. */
 export async function canSeePicks(userId: string | null): Promise<boolean> {
   if (!userId) return false;
   const sub = await getActiveSubscription(userId);
-  return !!sub && PLANS_WITH_PICKS.includes(sub.plan.code);
+  return sub?.plan.allowDailyPicks === true;
 }
 
 function toView(

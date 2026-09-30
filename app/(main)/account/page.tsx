@@ -40,11 +40,28 @@ export default async function AccountPage() {
           </CardTitle>
           <CardDescription>
             {me.subscription
-              ? `Active until ${me.subscription.endsAt?.toLocaleDateString("en-GH")} · ${ai.remaining} chat messages left today`
-              : `${me.freeAiCredits} free chat messages left. Slip tools are always free.`}
+              ? `Active until ${me.subscription.endsAt?.toLocaleDateString("en-GH")}. Limits reset at midnight (GMT).`
+              : "Slip tools are always free. Plans add more of everything below."}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+            {(
+              [
+                ["Chat messages", ai.features.chat],
+                ["Screenshot reads", ai.features.upload],
+                ["Slip builds", ai.features.build],
+                ["Match analyses", ai.features.analysis],
+              ] as const
+            ).map(([label, f]) => (
+              <div key={label}>
+                <dt className="text-xs text-muted-foreground">{label}</dt>
+                <dd className="font-medium">
+                  {f.limit === null ? "Unlimited" : f.limit === 0 ? "Not included" : `${f.remaining} of ${f.limit} left`}
+                </dd>
+              </div>
+            ))}
+          </dl>
           <Button asChild size="lg" variant={me.subscription ? "outline" : "default"}>
             <Link href="/pricing">{me.subscription ? "Extend or change plan" : "See plans"}</Link>
           </Button>

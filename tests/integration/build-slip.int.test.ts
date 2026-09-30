@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { buildToTarget } from "@/lib/services/build-slip";
 import { loadSlip } from "@/lib/services/slips";
+import { db } from "@/lib/db";
 import { createUser } from "./helpers";
+
+/** A plan with room for several builds a day. */
+async function proUser() {
+  const user = await createUser();
+  const plan = await db.plan.findUniqueOrThrow({ where: { code: "pro" } });
+  await db.subscription.create({
+    data: { userId: user.id, planId: plan.id, status: "ACTIVE", startsAt: new Date(), endsAt: new Date(Date.now() + 7 * 86_400_000) },
+  });
+  return user;
+}
 
 describe("building a slip to a target odds", () => {
   it("reaches the target, books a code, and explains every pick", async () => {
@@ -21,7 +32,7 @@ describe("building a slip to a target odds", () => {
   });
 
   it("a higher target gives longer odds and a lower confidence", async () => {
-    const user = await createUser();
+    const user = await proUser();
     const source = await loadSlip({ user, bookmaker: "sportybet", code: "BC7K2Q", ipHash: null });
     const two = await buildToTarget({ user, slipId: source.id, target: 2, ipHash: null });
     const ten = await buildToTarget({ user, slipId: source.id, target: 10, ipHash: null });
@@ -38,7 +49,7 @@ describe("building a slip to a target odds", () => {
   });
 
   it("refuses an impossible target politely", async () => {
-    const user = await createUser();
+    const user = await proUser();
     const source = await loadSlip({ user, bookmaker: "sportybet", code: "BC7K2Q", ipHash: null });
     const built = await buildToTarget({ user, slipId: source.id, target: 100000, ipHash: null });
     expect(built.reachedTarget).toBe(false);

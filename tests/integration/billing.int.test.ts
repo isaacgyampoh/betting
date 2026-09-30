@@ -18,7 +18,7 @@ function paystackOk(data: unknown) {
   return new Response(JSON.stringify({ status: true, message: "ok", data }), { status: 200 });
 }
 
-async function checkout(plan = "weekly") {
+async function checkout(plan = "pro") {
   const user = await createUser();
   const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
     const body = JSON.parse(init.body as string);
@@ -35,44 +35,44 @@ const tx = (reference: string, amount: number, status = "success") => ({
 
 describe("Paystack billing", () => {
   it("starts checkout with the DB price in pesewas, GHS, MoMo + card", async () => {
-    const { sent, authorizationUrl, reference } = await checkout("weekly");
-    const plan = await db.plan.findUniqueOrThrow({ where: { code: "weekly" } });
+    const { sent, authorizationUrl, reference } = await checkout("pro");
+    const plan = await db.plan.findUniqueOrThrow({ where: { code: "pro" } });
     expect(sent).toMatchObject({ amount: plan.pricePesewas, currency: "GHS", channels: ["mobile_money", "card"], reference });
     expect(authorizationUrl).toContain(reference);
     expect(await db.payment.findUnique({ where: { reference } })).toMatchObject({ status: "PENDING" });
   });
 
   it("activates the plan once, however many times the webhook/callback fire", async () => {
-    const { user, reference } = await checkout("weekly");
+    const { user, reference } = await checkout("pro");
     const amount = (await db.payment.findUniqueOrThrow({ where: { reference } })).amountPesewas;
     const results = await Promise.all([fulfilTransaction(tx(reference, amount)), fulfilTransaction(tx(reference, amount)), fulfilTransaction(tx(reference, amount))]);
     expect(results.filter((r) => r.status === "activated")).toHaveLength(1);
     expect(await db.subscription.count({ where: { userId: user.id } })).toBe(1);
     const allowance = await getAiAllowance(user.id);
-    expect(allowance).toMatchObject({ kind: "plan", allowDeepAnalysis: true, plan: { code: "weekly" } });
+    expect(allowance).toMatchObject({ kind: "plan", allowDeepAnalysis: true, plan: { code: "pro" } });
   });
 
   it("stacks time when buying again", async () => {
-    const first = await checkout("daily");
+    const first = await checkout("starter");
     const amount = (await db.payment.findUniqueOrThrow({ where: { reference: first.reference } })).amountPesewas;
     const a = await fulfilTransaction(tx(first.reference, amount));
-    const secondRef = (await startCheckout(first.user, "daily")).reference;
+    const secondRef = (await startCheckout(first.user, "starter")).reference;
     const b = await fulfilTransaction(tx(secondRef, amount));
     expect(b.endsAt!.getTime() - a.endsAt!.getTime()).toBe(86_400_000);
   });
 
   it("rejects an amount mismatch and unpaid transactions", async () => {
-    const { user, reference } = await checkout("monthly");
+    const { user, reference } = await checkout("vip");
     expect(await fulfilTransaction(tx(reference, 100))).toEqual({ status: "failed" });
     expect(await db.subscription.count({ where: { userId: user.id } })).toBe(0);
 
-    const second = await checkout("monthly");
+    const second = await checkout("vip");
     expect(await fulfilTransaction(tx(second.reference, 8000, "abandoned"))).toEqual({ status: "failed" });
     expect(await db.payment.findUnique({ where: { reference: second.reference } })).toMatchObject({ status: "ABANDONED" });
   });
 
   it("verifies the callback with Paystack and only for the payment's owner", async () => {
-    const { user, reference } = await checkout("daily");
+    const { user, reference } = await checkout("starter");
     const amount = (await db.payment.findUniqueOrThrow({ where: { reference } })).amountPesewas;
     vi.stubGlobal("fetch", vi.fn(async () => paystackOk(tx(reference, amount))));
     await expect(verifyAndFulfil(await createUser(), reference)).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -81,7 +81,7 @@ describe("Paystack billing", () => {
 
   it("webhook: rejects bad signatures, processes charge.success", async () => {
     const { POST } = await import("@/app/api/v1/webhooks/paystack/route");
-    const { user, reference } = await checkout("weekly");
+    const { user, reference } = await checkout("pro");
     const amount = (await db.payment.findUniqueOrThrow({ where: { reference } })).amountPesewas;
     const body = JSON.stringify({ event: "charge.success", data: tx(reference, amount) });
     const sign = (b: string) => createHmac("sha512", SECRET).update(b).digest("hex");
@@ -101,7 +101,7 @@ describe("maintenance cleanup", () => {
     const old = new Date(Date.now() - 100 * 86_400_000);
     await db.usageLog.create({ data: { userId: user.id, kind: "STATS", createdAt: old } });
     await db.statsCache.create({ data: { key: `old-${user.id}`, endpoint: "/x", params: {}, payload: [], expiresAt: old } });
-    const plan = await db.plan.findUniqueOrThrow({ where: { code: "daily" } });
+    const plan = await db.plan.findUniqueOrThrow({ where: { code: "starter" } });
     await db.payment.create({ data: { userId: user.id, planId: plan.id, reference: `old-${user.id}`, amountPesewas: 500, createdAt: old } });
     const r = await cleanup();
     expect(r.usageLogs).toBeGreaterThanOrEqual(1);

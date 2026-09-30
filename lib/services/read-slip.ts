@@ -5,6 +5,7 @@ import { extractSlipFromFile, type ExtractedSlip, type UploadedFile } from "@/li
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { searchMatches } from "@/lib/services/stats";
+import { requireFeature } from "@/lib/services/ai-quota";
 import { enforceRateLimit } from "@/lib/services/usage";
 import type { MatchSummary } from "@/lib/stats/types";
 
@@ -41,6 +42,7 @@ function toMatch(m: MatchSummary) {
  */
 export async function readSlipFile(opts: { user: AuthUser; file: UploadedFile; ipHash: string | null }): Promise<ReadSlip> {
   const { user, file, ipHash } = opts;
+  await requireFeature(user.id, "upload");
   await enforceRateLimit({ userId: user.id, kind: "AI_CHAT", ...UPLOAD_LIMIT });
 
   const extracted: ExtractedSlip = await extractSlipFromFile(user, file, ipHash);
