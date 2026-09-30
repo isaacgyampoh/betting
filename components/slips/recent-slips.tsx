@@ -12,11 +12,11 @@ export function RecentSlips({ slips, activeId, onOpen }: { slips: SlipSummary[];
         <History className="size-4" /> Recent slips
       </h2>
       {slips.length === 0 ? (
-        <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
           Slips you load will appear here.
         </p>
       ) : (
-        <ul className="divide-y rounded-xl border bg-card">
+        <ul className="divide-y rounded-lg border bg-card">
           {slips.map((s) => (
             <li key={s.id}>
               <button
@@ -25,7 +25,7 @@ export function RecentSlips({ slips, activeId, onOpen }: { slips: SlipSummary[];
                 className={cn("flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent", s.id === activeId && "bg-accent/60")}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-mono text-sm font-semibold tracking-wider">
+                  <p className="font-mono text-sm font-medium">
                     {s.code ?? "No code"}
                     {s.kind !== "LOADED" && <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">{s.kind.toLowerCase()}</span>}
                   </p>
@@ -33,7 +33,7 @@ export function RecentSlips({ slips, activeId, onOpen }: { slips: SlipSummary[];
                     {s.bookmaker.name} · {s.selectionCount} games · {timeAgo(s.createdAt)}
                   </p>
                 </div>
-                <span className="font-mono text-sm font-semibold tabular-nums">{formatOdds(s.totalOdds)}</span>
+                <span className="text-sm font-semibold">{formatOdds(s.totalOdds)}</span>
                 <ChevronRight className="size-4 text-muted-foreground" />
               </button>
             </li>

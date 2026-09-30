@@ -1,59 +1,62 @@
-import { ArrowDown, CheckCircle2, XCircle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 // Illustration for the landing page. Labelled "Example"; these are not live odds.
 const ROWS = [
-  { match: "Man Utd vs Tottenham", pick: "Man Utd", from: "2.00", to: "2.05" },
-  { match: "Arsenal vs Newcastle", pick: "Arsenal or Draw", from: "1.18", to: "1.17" },
-  { match: "Kotoko vs Hearts of Oak", pick: "Kotoko (+1)", from: "1.32", to: "1.35" },
-  { match: "Nations FC vs Karela Utd", pick: "Nations FC", from: "1.86", to: null },
+  { match: "Man Utd v Tottenham", pick: "Man Utd", from: 2.0, to: 2.05 },
+  { match: "Arsenal v Newcastle", pick: "Arsenal or Draw", from: 1.18, to: 1.17 },
+  { match: "Kotoko v Hearts of Oak", pick: "Kotoko (+1)", from: 1.32, to: 1.35 },
+  { match: "Nations FC v Karela Utd", pick: "Nations FC", from: 1.86, to: null },
 ];
 
 export function ExampleConversion({ className }: { className?: string }) {
   return (
-    <figure aria-label="Example of converting a SportyBet code to Betway" className={cn("rounded-2xl border bg-card p-4 text-left shadow-xl shadow-primary/5", className)}>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground">SportyBet</p>
-          <p className="font-mono font-semibold tracking-wider">BC7K2Q</p>
+    <figure aria-label="Example: a SportyBet code converted to Betway" className={cn("overflow-hidden rounded-lg border bg-card text-left text-sm", className)}>
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="flex items-baseline gap-2">
+          <span className="text-muted-foreground">SportyBet</span>
+          <span className="font-mono font-medium">BC7K2Q</span>
+          <span className="text-muted-foreground">→ Betway</span>
         </div>
-        <Badge variant="outline">Example</Badge>
+        <span className="rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground">Example</span>
       </div>
 
-      <div className="my-2 flex items-center gap-2 text-xs text-muted-foreground">
-        <ArrowDown className="size-3.5 text-primary" /> Converted to Betway in seconds
-      </div>
+      <table className="w-full">
+        <thead className="text-[11px] text-muted-foreground">
+          <tr className="border-b">
+            <th className="px-4 py-2 text-left font-normal">Game</th>
+            <th className="px-2 py-2 text-right font-normal">SportyBet</th>
+            <th className="px-4 py-2 text-right font-normal">Betway</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ROWS.map((r) => (
+            <tr key={r.match} className="border-b last:border-0">
+              <td className="px-4 py-2">
+                <p className="truncate font-medium">{r.match}</p>
+                <p className="truncate text-xs text-muted-foreground">{r.to ? r.pick : "Not listed on Betway"}</p>
+              </td>
+              <td className="px-2 py-2 text-right text-muted-foreground">{r.from.toFixed(2)}</td>
+              <td
+                className={cn(
+                  "px-4 py-2 text-right font-medium",
+                  r.to === null ? "text-muted-foreground" : r.to > r.from ? "text-win" : r.to < r.from ? "text-loss" : "",
+                )}
+              >
+                {r.to === null ? "–" : r.to.toFixed(2)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
-      <ul className="space-y-1.5">
-        {ROWS.map((r) => (
-          <li key={r.match} className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 text-sm", !r.to && "border-dashed opacity-80")}>
-            {r.to ? <CheckCircle2 className="size-4 shrink-0 text-primary" /> : <XCircle className="size-4 shrink-0 text-destructive" />}
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{r.match}</p>
-              <p className="truncate text-xs text-muted-foreground">{r.to ? r.pick : "Not on Betway: shown, not dropped"}</p>
-            </div>
-            <span className="shrink-0 text-right font-mono text-xs tabular-nums">
-              {r.to ? (
-                <>
-                  <span className="text-muted-foreground line-through">{r.from}</span> <span className="font-semibold text-primary">{r.to}</span>
-                </>
-              ) : (
-                <span className="text-muted-foreground line-through">{r.from}</span>
-              )}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      <div className="mt-3 flex items-center justify-between rounded-lg bg-primary/10 px-3 py-2">
+      <div className="flex items-center justify-between border-t bg-muted/50 px-4 py-3">
         <div>
-          <p className="text-xs text-muted-foreground">New Betway code</p>
-          <p className="font-mono font-semibold tracking-wider text-primary">BW4T9X</p>
+          <p className="text-[11px] text-muted-foreground">New Betway code</p>
+          <p className="font-mono font-medium">BW4T9X</p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-muted-foreground">Total odds</p>
-          <p className="font-mono font-bold tabular-nums">3.24</p>
+          <p className="text-[11px] text-muted-foreground">3 of 4 games · total odds</p>
+          <p className="font-semibold">3.24</p>
         </div>
       </div>
     </figure>

@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Loader2, ReceiptText, RotateCcw, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowUp, Loader2, ReceiptText, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ApiErrorAlert } from "@/components/slips/api-error-alert";
 import { apiFetch, type ApiError } from "@/lib/api-client";
@@ -19,11 +18,10 @@ type ChatResponse = { reply: string; slips: SlipView[]; allowance: Allowance };
 const STORAGE_KEY = "gameclaw.chat.v1";
 
 const SUGGESTIONS = [
-  "Load SportyBet code BC7K2Q",
   "Convert SportyBet BC7K2Q to Betway",
   "Load BC7K2Q on SportyBet and keep the 4 safest picks",
-  "Convert BW5V8N to SportyBet and remove anything above 2.0 odds",
-  "How has Arsenal been playing?",
+  "Convert BW5V8N to SportyBet and drop anything above 2.0",
+  "Arsenal's next match: what does head-to-head say?",
 ];
 
 function loadStored(): Turn[] {
@@ -84,12 +82,12 @@ export function ChatWorkspace({ initialAllowance, matchId }: { initialAllowance:
 
   return (
     <div className="flex min-h-[calc(100dvh-14rem)] flex-col">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <Badge variant={allowance.remaining > 0 ? "secondary" : "destructive"}>
+      <div className="mb-4 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className={cn(allowance.remaining === 0 && "text-loss")}>
           {allowance.kind === "trial"
-            ? `${allowance.remaining} free ${allowance.remaining === 1 ? "request" : "requests"} left`
-            : `${allowance.plan?.name}: ${allowance.remaining} left today`}
-        </Badge>
+            ? `${allowance.remaining} free ${allowance.remaining === 1 ? "message" : "messages"} left`
+            : `${allowance.plan?.name} · ${allowance.remaining} left today`}
+        </span>
         {turns.length > 0 && (
           <Button variant="ghost" size="sm" onClick={() => setTurns([])}>
             <RotateCcw data-icon="inline-start" /> New chat
@@ -97,15 +95,13 @@ export function ChatWorkspace({ initialAllowance, matchId }: { initialAllowance:
         )}
       </div>
 
-      <div className="flex-1 space-y-4">
+      <div className="flex-1 space-y-5">
         {turns.length === 0 && (
-          <div className="space-y-3 rounded-xl border bg-card p-4">
-            <p className="flex items-center gap-2 font-medium">
-              <Sparkles className="size-4 text-primary" /> Ask in plain English
-            </p>
-            <div className="flex flex-wrap gap-2">
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Paste a booking code, or ask about a slip or a match. For example:</p>
+            <div className="flex flex-col gap-1.5">
               {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => send(s)} className="rounded-full border px-3 py-1.5 text-left text-xs hover:bg-accent">
+                <button key={s} onClick={() => send(s)} className="rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent">
                   {s}
                 </button>
               ))}
@@ -113,29 +109,39 @@ export function ChatWorkspace({ initialAllowance, matchId }: { initialAllowance:
           </div>
         )}
 
-        {turns.map((t, i) => (
-          <div key={i} className={cn("flex", t.role === "user" ? "justify-end" : "justify-start")}>
-            <div className={cn("max-w-[88%] space-y-3 rounded-2xl px-4 py-3", t.role === "user" ? "bg-primary text-primary-foreground" : "border bg-card")}>
-              {t.role === "user" ? <p className="text-sm whitespace-pre-wrap">{t.content}</p> : <RichText text={t.content} />}
-              {t.slips?.map((s) => (
-                <Link key={s.id} href={`/slip?id=${s.id}`} className="flex items-center gap-3 rounded-lg border bg-background p-3 text-foreground hover:bg-accent">
-                  <ReceiptText className="size-4 shrink-0 text-primary" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-mono text-sm font-semibold tracking-wider">{s.code ?? "No code"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {s.bookmaker.name} · {s.selectionCount} games
-                    </p>
-                  </div>
-                  <span className="font-mono text-sm font-semibold text-primary">{formatOdds(s.totalOdds)}</span>
-                </Link>
-              ))}
+        {turns.map((t, i) =>
+          t.role === "user" ? (
+            <div key={i} className="flex justify-end">
+              <p className="max-w-[85%] rounded-lg bg-secondary px-3.5 py-2.5 text-sm whitespace-pre-wrap">{t.content}</p>
             </div>
-          </div>
-        ))}
+          ) : (
+            <div key={i} className="space-y-3">
+              <RichText text={t.content} />
+              {t.slips && t.slips.length > 0 && (
+                <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+                  {t.slips.map((s) => (
+                    <li key={s.id}>
+                      <Link href={`/slip?id=${s.id}`} className="flex items-center gap-3 px-3 py-2.5 hover:bg-accent">
+                        <ReceiptText className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-mono text-sm font-medium">{s.code ?? "No code"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {s.bookmaker.name} · {s.selectionCount} {s.selectionCount === 1 ? "game" : "games"}
+                          </p>
+                        </div>
+                        <span className="text-sm font-semibold">{formatOdds(s.totalOdds)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ),
+        )}
 
         {pending && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Working on it…
+            <Loader2 className="size-4 animate-spin" /> Checking…
           </div>
         )}
         {error && <ApiErrorAlert error={error} onRetry={() => send(input)} />}
@@ -147,7 +153,7 @@ export function ChatWorkspace({ initialAllowance, matchId }: { initialAllowance:
           e.preventDefault();
           send(input);
         }}
-        className="sticky bottom-20 mt-4 flex items-end gap-2 rounded-2xl border bg-background p-2 shadow-sm md:bottom-4"
+        className="sticky bottom-20 mt-4 flex items-end gap-2 rounded-lg border bg-card p-1.5 md:bottom-4"
       >
         <textarea
           value={input}
@@ -160,15 +166,17 @@ export function ChatWorkspace({ initialAllowance, matchId }: { initialAllowance:
           }}
           rows={1}
           maxLength={2000}
-          placeholder="e.g. Convert this SportyBet code to Betway…"
-          className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none"
+          placeholder="Paste a code or ask something"
+          className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 text-sm outline-none"
           aria-label="Message"
         />
-        <Button type="submit" size="icon" className="size-10 rounded-full" disabled={pending || !input.trim()} aria-label="Send">
+        <Button type="submit" size="icon" className="size-10" disabled={pending || !input.trim()} aria-label="Send">
           <ArrowUp />
         </Button>
       </form>
-      <p className="mt-2 text-center text-[11px] text-muted-foreground">AI can make mistakes. Odds and stats come from bookmakers and API-Football. 18+.</p>
+      <p className="mt-2 text-center text-[11px] text-muted-foreground">
+        Replies are generated by AI from bookmaker and API-Football data, and can be wrong. 18+.
+      </p>
     </div>
   );
 }

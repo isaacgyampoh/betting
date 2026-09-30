@@ -25,7 +25,7 @@ export default async function ConvertPage({ searchParams }: PageProps<"/convert"
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Convert a slip</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Convert a slip</h1>
         <p className="text-sm text-muted-foreground">
           Move a booking code to another bookmaker. Games we can&apos;t match are listed, never silently dropped.
         </p>

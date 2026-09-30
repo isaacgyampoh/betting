@@ -5,7 +5,7 @@ import type { BookmakerSlug, RawMarket } from "@/lib/bookmakers/types";
 import { AppError } from "@/lib/errors";
 import { applyEdit, type EditOp } from "@/lib/slips/edit";
 import type { SlipView } from "@/lib/slips/view";
-import { asBookmakerError, getOwnedSlipRecord, marketOf, saveSlip, toSlipView, type DraftSelection } from "@/lib/services/slips";
+import { asBookmakerError, getOwnedSlipRecord, marketOf, saveSlip, toSlipView, withLogos, type DraftSelection } from "@/lib/services/slips";
 import { enforceRateLimit, logUsage } from "@/lib/services/usage";
 
 export const SLIP_EDIT_LIMIT = { limit: 60, windowMs: 60 * 60_000 };
@@ -59,7 +59,7 @@ export async function editSlip(opts: { user: AuthUser; slipId: string; op: EditO
         status: "OK",
       }));
       const saved = await saveSlip({ userId: user.id, bookmakerId: source.bookmaker.id, kind, code, parentSlipId: source.id, expiresAt, selections: drafts });
-      results.push(toSlipView(saved));
+      results.push(await withLogos(toSlipView(saved)));
     }
     await logUsage({ userId: user.id, ipHash, kind: "SLIP_EDIT", success: true, meta });
     return results;

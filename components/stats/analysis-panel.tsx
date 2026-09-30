@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ApiErrorAlert } from "@/components/slips/api-error-alert";
 import { RichText } from "@/components/chat/rich-text";
@@ -23,19 +23,22 @@ export function AnalysisPanel({ matchId, date }: { matchId: number; date?: strin
 
   if (text) {
     return (
-      <div className="rounded-xl border bg-card p-4">
-        <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
-          <Sparkles className="size-4 text-primary" /> AI analysis
-        </p>
-        <RichText text={text} />
-      </div>
+      <section className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between border-b px-4 py-2.5">
+          <h2 className="text-sm font-medium">Analysis</h2>
+          <span className="text-xs text-muted-foreground">From the numbers on this page. Not a prediction.</span>
+        </div>
+        <div className="p-4">
+          <RichText text={text} />
+        </div>
+      </section>
     );
   }
   return (
     <div className="space-y-2">
-      <Button size="lg" className="h-11 w-full" onClick={run} disabled={pending}>
-        {pending ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Sparkles data-icon="inline-start" />}
-        {pending ? "Analysing the numbers…" : "Deep AI analysis"}
+      <Button variant="outline" size="lg" className="h-11 w-full" onClick={run} disabled={pending}>
+        {pending ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <FileText data-icon="inline-start" />}
+        {pending ? "Reading the numbers…" : "Match analysis"}
       </Button>
       {error && <ApiErrorAlert error={error} onRetry={run} />}
     </div>

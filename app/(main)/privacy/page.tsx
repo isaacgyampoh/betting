@@ -25,7 +25,7 @@ export default function PrivacyPage() {
       </p>
       <h2>Who we share it with</h2>
       <p>
-        Service providers that help us run gameclaw: Supabase (database and sign-in), Vercel (hosting), Anthropic (AI
+        Service providers that help us run gameclaw: Supabase (database and sign-in), Cloudflare (hosting), Anthropic (AI
         processing of your chat messages), API-Football (match data, no personal data sent) and Paystack (payments).
       </p>
       <h2>Your rights</h2>

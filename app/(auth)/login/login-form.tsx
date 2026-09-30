@@ -76,7 +76,7 @@ export function LoginForm({ next, googleEnabled, callbackError }: { next: string
     return (
       <Card>
         <CardHeader>
-          <Mail className="mb-2 size-6 text-primary" />
+          <Mail className="mb-2 size-5 text-muted-foreground" />
           <CardTitle>Check your email</CardTitle>
           <CardDescription>
             We sent a sign-in link and a code to <span className="font-medium text-foreground">{sentTo}</span>. Tap the link on any device, or enter the code here.

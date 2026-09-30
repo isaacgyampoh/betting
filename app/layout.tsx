@@ -12,9 +12,9 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   metadataBase: new URL(publicEnv.siteUrl),
-  title: { default: "gameclaw: smarter betting slips", template: "%s · gameclaw" },
+  title: { default: "gameclaw", template: "%s · gameclaw" },
   description:
-    "Load, convert and edit betting slips across SportyBet, Betway and more. Match stats and an AI assistant for Ghanaian bettors. 18+.",
+    "Load, convert and trim betting slips across SportyBet and Betway, and check head-to-head before you bet. Built in Ghana. 18+.",
   applicationName: "gameclaw",
   appleWebApp: { capable: true, title: "gameclaw", statusBarStyle: "black-translucent" },
   formatDetection: { telephone: false },
@@ -24,8 +24,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1512" },
+    { media: "(prefers-color-scheme: light)", color: "#fafaf9" },
+    { media: "(prefers-color-scheme: dark)", color: "#111113" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -36,7 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
           <Toaster position="top-center" />
         </ThemeProvider>

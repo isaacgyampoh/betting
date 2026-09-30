@@ -26,8 +26,8 @@ export default async function SlipPage({ searchParams }: PageProps<"/slip">) {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Load a booking code</h1>
-        <p className="text-sm text-muted-foreground">See every game, market and odd on a slip. Free.</p>
+        <h1 className="text-xl font-semibold tracking-tight">Load a booking code</h1>
+        <p className="text-sm text-muted-foreground">Every game, market and price on the slip. Free.</p>
       </div>
       <SlipWorkspace bookmakers={bookmakers} initialRecent={recent} initialSlip={initialSlip} />
     </div>

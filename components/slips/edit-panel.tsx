@@ -27,7 +27,7 @@ function Stepper({ value, min, max, onChange, id }: { value: number; min: number
       <Button type="button" variant="outline" size="icon" className="size-10" onClick={() => onChange(Math.max(min, value - 1))} aria-label="Decrease">
         <Minus />
       </Button>
-      <output id={id} className="w-10 text-center font-mono text-lg font-semibold tabular-nums">{value}</output>
+      <output id={id} className="w-10 text-center text-lg font-semibold">{value}</output>
       <Button type="button" variant="outline" size="icon" className="size-10" onClick={() => onChange(Math.min(max, value + 1))} aria-label="Increase">
         <Plus />
       </Button>
@@ -81,7 +81,7 @@ export function EditPanel({
   }
 
   return (
-    <div className="space-y-4 rounded-xl border bg-card p-4">
+    <div className="space-y-4 rounded-lg border bg-card p-4">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">Edit slip</h3>
         <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close editor">
@@ -96,7 +96,7 @@ export function EditPanel({
             role="tab"
             aria-selected={tool === t.id}
             onClick={() => setTool(t.id)}
-            className={cn("rounded-md py-2 text-xs font-medium", tool === t.id ? "bg-background shadow-sm" : "text-muted-foreground")}
+            className={cn("rounded-md py-2 text-xs font-medium", tool === t.id ? "bg-background text-foreground" : "text-muted-foreground")}
           >
             {t.label}
           </button>
@@ -132,7 +132,7 @@ export function EditPanel({
                 {preview.groups.length > 1 ? `Slip ${i + 1}: ` : "Result: "}
                 {g.length} {g.length === 1 ? "game" : "games"} {g.length > 0 && <span className="text-muted-foreground">(#{g.join(", #")})</span>}
               </span>
-              <span className="font-mono font-semibold">{formatOdds(preview.totals[i])}</span>
+              <span className="font-semibold">{formatOdds(preview.totals[i])}</span>
             </p>
           ))}
         </div>

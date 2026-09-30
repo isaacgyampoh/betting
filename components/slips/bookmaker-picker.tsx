@@ -33,7 +33,7 @@ export function BookmakerPicker({
               onClick={() => onChange(b.slug)}
               className={cn(
                 "h-11 rounded-lg border text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                value === b.slug ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent",
+                value === b.slug ? "border-primary bg-card text-foreground ring-1 ring-primary" : "bg-card text-muted-foreground hover:text-foreground",
               )}
             >
               {b.name}

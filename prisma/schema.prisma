@@ -413,3 +413,14 @@ model UsageLog {
   @@index([ipHash, kind, createdAt])
   @@map("usage_logs")
 }
+
+/// Club crests from API-Football, keyed by the alias-group / normalized team name so bookmaker
+/// spellings ("Man Utd") find the same crest as API names ("Manchester United").
+model TeamLogo {
+  key       String   @id
+  name      String
+  logoUrl   String   @map("logo_url")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("team_logos")
+}

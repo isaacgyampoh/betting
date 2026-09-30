@@ -17,7 +17,7 @@ import { matchInsights } from "@/lib/stats/insights";
 import type { MatchDetail, MatchSummary, TeamForm } from "@/lib/stats/types";
 import { getMatchDetail } from "@/lib/services/stats";
 
-export const metadata: Metadata = { title: "Match stats" };
+export const metadata: Metadata = { title: "Matches" };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -30,7 +30,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function PlanNote({ what }: { what: string }) {
   return (
-    <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+    <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
       {what} aren&apos;t included in our current stats plan, so we don&apos;t show them rather than guess.
     </p>
   );
@@ -41,7 +41,7 @@ function ResultRow({ m }: { m: MatchSummary }) {
     <li className="flex items-center justify-between gap-2 px-4 py-2 text-sm">
       <span className="w-20 shrink-0 text-xs text-muted-foreground">{formatKickoff(m.kickoffAt).split(",")[0]}</span>
       <span className="min-w-0 flex-1 truncate text-right">{m.home.name}</span>
-      <span className="w-12 shrink-0 text-center font-mono font-semibold">
+      <span className="w-12 shrink-0 text-center font-semibold">
         {m.goals.home}-{m.goals.away}
       </span>
       <span className="min-w-0 flex-1 truncate">{m.away.name}</span>
@@ -51,7 +51,7 @@ function ResultRow({ m }: { m: MatchSummary }) {
 
 function FormCard({ form }: { form: TeamForm }) {
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
+    <div className="overflow-hidden rounded-lg border bg-card">
       <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
         <span className="flex min-w-0 items-center gap-2 font-medium">
           <TeamBadge team={form.team} size={24} /> <span className="truncate">{form.team.name}</span>
@@ -70,7 +70,7 @@ function FormCard({ form }: { form: TeamForm }) {
 function Standings({ d }: { d: MatchDetail }) {
   const ids = new Set([d.match.home.id, d.match.away.id]);
   return (
-    <div className="overflow-x-auto rounded-xl border bg-card">
+    <div className="overflow-x-auto rounded-lg border bg-card">
       <table className="w-full text-sm tabular-nums">
         <thead className="text-xs text-muted-foreground">
           <tr className="border-b">
@@ -83,7 +83,7 @@ function Standings({ d }: { d: MatchDetail }) {
         </thead>
         <tbody>
           {d.standings!.map((r) => (
-            <tr key={r.team.id} className={cn("border-b last:border-0", ids.has(r.team.id) && "bg-primary/10 font-semibold")}>
+            <tr key={r.team.id} className={cn("border-b last:border-0", ids.has(r.team.id) && "bg-accent font-semibold")}>
               <td className="px-3 py-1.5">{r.rank}</td>
               <td className="max-w-40 truncate px-2 py-1.5">{r.team.name}</td>
               <td className="px-2 py-1.5 text-center">{r.played}</td>
@@ -116,9 +116,12 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
 
   return (
     <div className="space-y-6">
-      <header className="rounded-xl border bg-card p-4">
-        <p className="mb-3 text-center text-xs text-muted-foreground">
-          {m.league.country} · {m.league.name} · {formatKickoff(m.kickoffAt)}
+      <header className="rounded-lg border bg-card p-4">
+        <p className="mb-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          {m.league.logo && <TeamBadge team={{ id: m.league.id, name: m.league.name, logo: m.league.logo }} size={16} />}
+          <span>
+            {m.league.country} · {m.league.name} · {formatKickoff(m.kickoffAt)}
+          </span>
         </p>
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <div className="flex flex-col items-center gap-2 text-center">
@@ -129,7 +132,7 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
             {m.status === "SCHEDULED" ? (
               <span className="text-lg font-semibold text-muted-foreground">vs</span>
             ) : (
-              <span className="font-mono text-2xl font-bold">
+              <span className="text-2xl font-semibold">
                 {m.goals.home} - {m.goals.away}
               </span>
             )}
@@ -142,14 +145,14 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
         </div>
         <Button asChild variant="outline" size="lg" className="mt-4 h-11 w-full">
           <Link href={`/chat?match=${m.id}`}>
-            <MessageCircle data-icon="inline-start" /> Ask the AI about this match
+            <MessageCircle data-icon="inline-start" /> Discuss in chat
           </Link>
         </Button>
       </header>
 
       {d.source === "sample" && <SampleDataNotice />}
       {d.busy && (
-        <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
           Some stats are busy right now (high demand). Refresh in a minute to fill them in.
         </p>
       )}
@@ -158,10 +161,10 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
 
       {insights.length > 0 && (
         <Section title="Key numbers">
-          <ul className="space-y-1.5 rounded-xl border bg-card p-4 text-sm">
+          <ul className="space-y-1.5 rounded-lg border bg-card p-4 text-sm">
             {insights.map((s) => (
               <li key={s} className="flex gap-2">
-                <span className="text-primary">•</span> {s}
+                <span className="text-muted-foreground">·</span> {s}
               </li>
             ))}
           </ul>
@@ -172,7 +175,7 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
         {d.unavailable.includes("form") ? (
           <PlanNote what="Recent results for each team" />
         ) : d.busy && d.form.home.matches.length === 0 && d.form.away.matches.length === 0 ? (
-          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Recent results are loading slowly right now. Refresh in a minute.</p>
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Recent results are loading slowly right now. Refresh in a minute.</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             <FormCard form={d.form.home} />
@@ -185,9 +188,9 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
         {d.unavailable.includes("h2h") ? (
           <PlanNote what="Head-to-head results" />
         ) : d.h2h.length ? (
-          <ul className="divide-y rounded-xl border bg-card">{d.h2h.map((h) => <ResultRow key={h.id} m={h} />)}</ul>
+          <ul className="divide-y rounded-lg border bg-card">{d.h2h.map((h) => <ResultRow key={h.id} m={h} />)}</ul>
         ) : (
-          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No previous meetings found.</p>
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No previous meetings found.</p>
         )}
       </Section>
 

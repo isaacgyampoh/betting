@@ -16,7 +16,7 @@ export default async function AccountPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold tracking-tight">Account</h1>
+      <h1 className="text-xl font-semibold tracking-tight">Account</h1>
       <Card>
         <CardHeader>
           <CardTitle>{me.displayName ?? me.email}</CardTitle>
@@ -31,8 +31,8 @@ export default async function AccountPage() {
           </CardTitle>
           <CardDescription>
             {me.subscription
-              ? `Active until ${me.subscription.endsAt?.toLocaleDateString("en-GH")} · ${ai.remaining} AI requests left today`
-              : `${me.freeAiCredits} free AI requests left. Slip tools are always free.`}
+              ? `Active until ${me.subscription.endsAt?.toLocaleDateString("en-GH")} · ${ai.remaining} chat messages left today`
+              : `${me.freeAiCredits} free chat messages left. Slip tools are always free.`}
           </CardDescription>
         </CardHeader>
         <CardContent>

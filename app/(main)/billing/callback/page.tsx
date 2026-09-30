@@ -29,7 +29,7 @@ export default async function BillingCallbackPage({ searchParams }: PageProps<"/
   return (
     <div className="mx-auto max-w-sm space-y-4 py-8 text-center">
       <Icon className={ok ? "mx-auto size-12 text-primary" : "mx-auto size-12 text-muted-foreground"} />
-      <h1 className="text-xl font-bold">
+      <h1 className="text-xl font-semibold">
         {ok ? "You're all set" : result.status === "pending" ? "Payment processing" : "Payment not completed"}
       </h1>
       <p className="text-sm text-muted-foreground">

@@ -4,7 +4,7 @@ import { ApiErrorNotice } from "@/components/api-error-notice";
 import { requireAdultPage } from "@/lib/auth-pages";
 import { lookupMatch } from "@/lib/services/stats";
 
-export const metadata = { title: "Match stats" };
+export const metadata = { title: "Matches" };
 
 const querySchema = z.object({ home: z.string().min(1).max(80), away: z.string().min(1).max(80), kickoff: z.iso.datetime() });
 

@@ -53,9 +53,9 @@ export function SlipSkeleton({ label = "Loading slip" }: { label?: string }) {
   return (
     <div className="space-y-3" aria-busy="true" aria-label={label}>
       <p className="text-center text-sm text-muted-foreground">{label}…</p>
-      <Skeleton className="h-36 w-full rounded-xl" />
+      <Skeleton className="h-36 w-full rounded-lg" />
       {Array.from({ length: 3 }, (_, i) => (
-        <Skeleton key={i} className="h-28 w-full rounded-xl" />
+        <Skeleton key={i} className="h-28 w-full rounded-lg" />
       ))}
     </div>
   );
@@ -113,7 +113,7 @@ export function SlipWorkspace({
 
   return (
     <div className="space-y-6">
-      <form onSubmit={load} className="space-y-4 rounded-xl border bg-card p-4">
+      <form onSubmit={load} className="space-y-4 rounded-lg border bg-card p-4">
         <BookmakerPicker label="Bookmaker" options={bookmakers} value={bookmaker} onChange={setBookmaker} />
         <CodeInput value={code} onChange={setCode} />
         <Button type="submit" size="lg" className="h-11 w-full" disabled={pending || !code.trim() || !bookmaker}>

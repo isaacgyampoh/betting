@@ -16,6 +16,7 @@ import {
   marketOf,
   saveSlip,
   toSlipView,
+  withLogos,
   type DraftSelection,
   type SlipRecord,
 } from "@/lib/services/slips";
@@ -147,7 +148,7 @@ export async function convertSlip(opts: { user: AuthUser; source: ConvertSource;
       }),
     );
 
-    const view = toSlipView(saved);
+    const view = await withLogos(toSlipView(saved));
     await logUsage({
       userId: user.id,
       ipHash,

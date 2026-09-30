@@ -29,12 +29,15 @@ export function MatchList({ groups }: { groups: Group[] }) {
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search team or league" className="h-11 pl-9" />
       </div>
 
-      {filtered.length === 0 && <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No matches found.</p>}
+      {filtered.length === 0 && <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No matches found.</p>}
 
       {filtered.slice(0, 40).map((g) => (
-        <section key={g.league.id} className="overflow-hidden rounded-xl border bg-card">
-          <h2 className="border-b bg-muted/40 px-4 py-2 text-xs font-semibold text-muted-foreground">
-            {g.league.country} · {g.league.name}
+        <section key={g.league.id} className="overflow-hidden rounded-lg border bg-card">
+          <h2 className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
+            {g.league.logo && <TeamBadge team={{ id: g.league.id, name: g.league.name, logo: g.league.logo }} size={16} />}
+            <span className="truncate">
+              {g.league.country} · {g.league.name}
+            </span>
           </h2>
           <ul className="divide-y">
             {g.matches.map((m) => (
@@ -52,7 +55,7 @@ export function MatchList({ groups }: { groups: Group[] }) {
                     {m.status === "SCHEDULED" ? (
                       <span className="text-muted-foreground">{formatKickoff(m.kickoffAt).split(", ")[1]}</span>
                     ) : (
-                      <span className={m.status === "LIVE" ? "font-semibold text-primary" : "text-muted-foreground"}>
+                      <span className={m.status === "LIVE" ? "font-semibold text-loss" : "text-muted-foreground"}>
                         {m.goals.home ?? "-"} : {m.goals.away ?? "-"}
                         <br />
                         {m.statusLabel}

@@ -44,7 +44,7 @@ export function ConvertWorkspace({ bookmakers, source }: { bookmakers: Bookmaker
 
   return (
     <div className="space-y-6">
-      <form onSubmit={convert} className="space-y-4 rounded-xl border bg-card p-4">
+      <form onSubmit={convert} className="space-y-4 rounded-lg border bg-card p-4">
         {useSource && source ? (
           <div className="space-y-2">
             <p className="text-sm font-medium">From</p>
@@ -55,7 +55,7 @@ export function ConvertWorkspace({ bookmakers, source }: { bookmakers: Bookmaker
                 <p className="text-xs text-muted-foreground">{source.selectionCount} games</p>
               </div>
               <div className="text-right">
-                <p className="font-mono text-lg font-bold text-primary">{formatOdds(source.totalOdds)}</p>
+                <p className="text-lg font-semibold">{formatOdds(source.totalOdds)}</p>
                 <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setUseSource(false)}>
                   Use another code
                 </Button>

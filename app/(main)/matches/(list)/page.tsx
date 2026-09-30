@@ -9,7 +9,7 @@ import { AppError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { listMatches } from "@/lib/services/stats";
 
-export const metadata: Metadata = { title: "Match stats" };
+export const metadata: Metadata = { title: "Matches" };
 
 function dayOffset(n: number) {
   const d = new Date();
@@ -40,8 +40,8 @@ export default async function MatchesPage({ searchParams }: PageProps<"/matches"
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Match stats</h1>
-        <p className="text-sm text-muted-foreground">Form, head-to-head and standings before you bet.</p>
+        <h1 className="text-xl font-semibold tracking-tight">Matches</h1>
+        <p className="text-sm text-muted-foreground">Fixtures and head-to-head from API-Football.</p>
       </div>
 
       <nav aria-label="Date" className="grid grid-cols-4 gap-1 rounded-lg bg-muted p-1">
@@ -52,7 +52,7 @@ export default async function MatchesPage({ searchParams }: PageProps<"/matches"
               key={d.offset}
               href={`/matches?date=${value}`}
               aria-current={value === date ? "page" : undefined}
-              className={cn("rounded-md py-2 text-center text-xs font-medium", value === date ? "bg-background shadow-sm" : "text-muted-foreground")}
+              className={cn("rounded-md py-2 text-center text-xs font-medium", value === date ? "bg-background text-foreground" : "text-muted-foreground")}
             >
               {d.label}
             </Link>

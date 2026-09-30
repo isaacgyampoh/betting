@@ -25,6 +25,9 @@ export type SelectionView = {
   pickLabel: string;
   odds: number | null;
   status: SelectionStatus;
+  /** Club crests (API-Football), when known. */
+  homeLogo?: string | null;
+  awayLogo?: string | null;
   /** Odds of the same pick on the parent slip (conversions), for comparison. */
   sourceOdds?: number | null;
 };

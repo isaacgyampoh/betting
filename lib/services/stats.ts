@@ -9,6 +9,7 @@ import { buildTeamForm } from "@/lib/stats/form";
 import { sampleStatsProvider } from "@/lib/stats/sample";
 import type { MatchDetail, MatchSummary, StatsProvider } from "@/lib/stats/types";
 import { getAliasIndex } from "@/lib/services/events";
+import { rememberLogos } from "@/lib/services/team-logos";
 import { enforceRateLimit, logUsage } from "@/lib/services/usage";
 
 export const STATS_LIMIT = { limit: 200, windowMs: 60 * 60_000 };
@@ -56,6 +57,7 @@ async function orBusy<T>(p: Promise<T>): Promise<T> {
 export async function listMatches(date: string): Promise<{ groups: LeagueGroup[]; source: StatsProvider["source"] }> {
   const provider = statsProvider();
   const matches = await orBusy(provider.fixturesByDate(date));
+  await rememberLogos(matches);
   const byLeague = new Map<number, LeagueGroup>();
   for (const m of matches) {
     const g = byLeague.get(m.league.id) ?? { league: m.league, matches: [] };
@@ -135,6 +137,7 @@ export async function lookupMatch(home: string, away: string, kickoff: Date): Pr
   const day = (d: Date) => d.toISOString().slice(0, 10);
   const dates = new Set([day(kickoff), day(new Date(kickoff.getTime() - 3 * 3600_000)), day(new Date(kickoff.getTime() + 3 * 3600_000))]);
   const [aliases, ...lists] = await Promise.all([getAliasIndex(), ...[...dates].map((d) => provider.fixturesByDate(d))]);
+  await rememberLogos(lists.flat());
   const candidates = lists.flat().map((m) => ({ ...m, kickoffAt: new Date(m.kickoffAt), home: m.home.name, away: m.away.name, summary: m }));
   return bestMatch({ home, away, kickoffAt: kickoff }, candidates, aliases)?.candidate.summary ?? null;
 }
@@ -146,6 +149,7 @@ export async function searchMatches(team: string, opponent?: string, days = 4): 
   const aliases = await getAliasIndex();
   const dates = Array.from({ length: days }, (_, i) => new Date(Date.now() + (i - 1) * 86_400_000).toISOString().slice(0, 10));
   const lists = await Promise.all(dates.map((d) => provider.fixturesByDate(d)));
+  await rememberLogos(lists.flat());
   const hits = (m: MatchSummary, name: string) => Math.max(teamSimilarity(name, m.home.name, aliases), teamSimilarity(name, m.away.name, aliases)) >= 0.8;
   return lists
     .flat()

@@ -6,7 +6,7 @@ export function SiteFooter() {
       <div className="mx-auto max-w-5xl space-y-3 px-4 py-6 text-xs text-muted-foreground">
         <p>
           <strong className="text-foreground">18+ only.</strong> gameclaw is an information tool, not a
-          bookmaker. Odds and stats come from third parties and may change. Predictions and AI analysis are
+          bookmaker. Odds and stats come from third parties and may change. Analysis and chat replies (AI-generated) are
           not guaranteed. Bet only what you can afford to lose.
         </p>
         <nav className="flex flex-wrap gap-x-4 gap-y-2" aria-label="Legal">

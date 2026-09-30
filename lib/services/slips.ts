@@ -9,6 +9,7 @@ import type { Market } from "@/lib/markets/types";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import type { SlipKind } from "@/lib/generated/prisma/enums";
 import { requireEnabledBookmaker } from "@/lib/services/bookmakers";
+import { logosFor } from "@/lib/services/team-logos";
 import { enforceRateLimit, logUsage } from "@/lib/services/usage";
 import {
   buildWarnings,
@@ -100,6 +101,19 @@ export function marketOf(s: { marketType: Market["type"] | null; period: Market[
   return s.marketType && s.outcome
     ? { type: s.marketType, period: s.period, outcome: s.outcome, line: s.line === null ? null : Number(s.line) }
     : null;
+}
+
+/** Adds club crests to slip views (one query for all teams). */
+export async function withLogos<T extends SlipView | SlipView[]>(views: T): Promise<T> {
+  const list: SlipView[] = Array.isArray(views) ? views : [views as SlipView];
+  const logos = await logosFor([...new Set(list.flatMap((v) => v.selections.flatMap((s) => [s.home, s.away])))]);
+  for (const v of list) {
+    for (const s of v.selections) {
+      s.homeLogo = logos.get(s.home) ?? null;
+      s.awayLogo = logos.get(s.away) ?? null;
+    }
+  }
+  return views;
 }
 
 export function toSlipView(slip: SlipRecord): SlipView {
@@ -250,7 +264,7 @@ export async function loadSlip(opts: { user: AuthUser; bookmaker: BookmakerSlug;
       })),
     });
     await logUsage({ userId: user.id, ipHash, kind: "SLIP_LOAD", success: true, meta: { ...meta, cached } });
-    return toSlipView(saved);
+    return withLogos(toSlipView(saved));
   } catch (err) {
     const errorCode = err instanceof AppError ? err.code : "INTERNAL";
     await logUsage({ userId: user.id, ipHash, kind: "SLIP_LOAD", success: false, errorCode, meta });
@@ -260,7 +274,7 @@ export async function loadSlip(opts: { user: AuthUser; bookmaker: BookmakerSlug;
 }
 
 export async function getSlip(user: AuthUser, id: string): Promise<SlipView> {
-  return toSlipView(await getOwnedSlipRecord(user, id));
+  return withLogos(toSlipView(await getOwnedSlipRecord(user, id)));
 }
 
 export async function listRecentSlips(user: AuthUser, limit = 10): Promise<SlipSummary[]> {

@@ -1,6 +1,6 @@
-import { ArrowDownRight, ArrowUpRight, BarChart3, Clock, HelpCircle, XCircle } from "lucide-react";
+import { ArrowDown, ArrowUp, ChartNoAxesColumn } from "lucide-react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
+import { TeamBadge } from "@/components/stats/team-badge";
 import { cn } from "@/lib/utils";
 import { formatKickoff, formatOdds } from "@/lib/format";
 import { STATUS_REASON, type SelectionView } from "@/lib/slips/view";
@@ -10,86 +10,90 @@ function matchHref(s: SelectionView) {
   return `/matches/lookup?${q}`;
 }
 
-export function SelectionCard({ selection: s, selectable, selected, onToggle }: {
+function Team({ name, logo }: { name: string; logo?: string | null }) {
+  return (
+    <p className="flex min-w-0 items-center gap-2">
+      <TeamBadge team={{ id: 0, name, logo: logo ?? null }} size={18} />
+      <span className="truncate">{name}</span>
+    </p>
+  );
+}
+
+/** One game on a slip: teams, league and kickoff, market and pick, price (and movement vs the source slip). */
+export function SelectionCard({
+  selection: s,
+  selectable,
+  selected,
+  onToggle,
+}: {
   selection: SelectionView;
   selectable?: boolean;
   selected?: boolean;
   onToggle?: () => void;
 }) {
   const skipped = s.status !== "OK";
-  const diff = s.sourceOdds != null && s.odds != null ? s.odds - s.sourceOdds : null;
+  const diff = s.sourceOdds != null && s.odds != null ? Math.round((s.odds - s.sourceOdds) * 100) / 100 : null;
+  const problem = skipped ? STATUS_REASON[s.status as Exclude<typeof s.status, "OK">] : s.started ? "Already started" : !s.market ? "Market not supported yet" : null;
 
   return (
     <li
       className={cn(
-        "relative rounded-xl border bg-card p-4 text-card-foreground",
-        s.started && !skipped && "border-destructive/40",
-        (!s.market || skipped) && "border-dashed",
-        skipped && "opacity-80",
-        selectable && "cursor-pointer",
-        selected && "ring-2 ring-primary",
+        "grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 bg-card px-4 py-3 text-sm",
+        skipped && "text-muted-foreground",
+        selectable && "cursor-pointer hover:bg-accent",
+        selected && "bg-accent outline-2 -outline-offset-2 outline-primary",
       )}
       onClick={selectable ? onToggle : undefined}
     >
-      <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+      <div className="col-span-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="truncate">
-          {s.position}. {s.competition ?? "Football"}
+          <span>{s.position}</span> · {s.competition ?? "Football"}
         </span>
-        <span className="flex shrink-0 items-center gap-1">
-          <Clock className="size-3" />
-          <time dateTime={s.kickoffAt}>{formatKickoff(s.kickoffAt)}</time>
-        </span>
+        <time dateTime={s.kickoffAt} className="shrink-0">
+          {formatKickoff(s.kickoffAt)}
+        </time>
       </div>
 
-      <p className="font-medium leading-snug">
-        {s.home} <span className="text-muted-foreground">vs</span> {s.away}
-      </p>
+      <div className="min-w-0 space-y-1 font-medium">
+        <Team name={s.home} logo={s.homeLogo} />
+        <Team name={s.away} logo={s.awayLogo} />
+      </div>
 
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <p className="text-xs text-muted-foreground">{s.marketLabel}</p>
-          <p className="truncate text-sm font-semibold">{s.pickLabel}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {skipped && (
-              <Badge variant="destructive" className="gap-1">
-                <XCircle className="size-3" /> {STATUS_REASON[s.status as Exclude<typeof s.status, "OK">]}
-              </Badge>
-            )}
-            {!skipped && s.started && <Badge variant="destructive">Started</Badge>}
-            {!skipped && !s.market && (
-              <Badge variant="outline" className="gap-1">
-                <HelpCircle className="size-3" /> Unsupported market
-              </Badge>
-            )}
-            {!selectable && (
-              <Link
-                href={matchHref(s)}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:text-foreground"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <BarChart3 className="size-3" /> Stats
-              </Link>
-            )}
-          </div>
-        </div>
-        <div className="shrink-0 text-right">
-          {s.sourceOdds != null && !skipped && (
-            <p className="mb-1 flex items-center justify-end gap-0.5 text-xs text-muted-foreground tabular-nums">
-              was {formatOdds(s.sourceOdds)}
-              {diff !== null && diff !== 0 &&
-                (diff > 0 ? <ArrowUpRight className="size-3 text-primary" /> : <ArrowDownRight className="size-3 text-destructive" />)}
-            </p>
-          )}
+      <div className="flex flex-col items-end justify-center">
+        <span className={cn("text-base font-semibold", skipped && "line-through")}>
+          {formatOdds(skipped ? (s.sourceOdds ?? null) : s.odds)}
+        </span>
+        {s.sourceOdds != null && !skipped && diff !== null && (
           <span
             className={cn(
-              "inline-block rounded-lg px-3 py-1.5 font-mono text-base font-semibold tabular-nums",
-              skipped ? "bg-muted text-muted-foreground line-through" : "bg-primary/10 text-primary",
+              "flex items-center gap-0.5 text-xs",
+              diff > 0 ? "text-win" : diff < 0 ? "text-loss" : "text-muted-foreground",
             )}
+            title={`Was ${formatOdds(s.sourceOdds)}`}
           >
-            {formatOdds(skipped ? (s.sourceOdds ?? null) : s.odds)}
+            {diff > 0 ? <ArrowUp className="size-3" /> : diff < 0 ? <ArrowDown className="size-3" /> : null}
+            {diff === 0 ? "same" : `was ${formatOdds(s.sourceOdds)}`}
           </span>
-        </div>
+        )}
       </div>
+
+      <div className="col-span-2 flex items-center justify-between gap-2 border-t pt-2">
+        <p className="min-w-0 truncate">
+          <span className="text-muted-foreground">{s.marketLabel}: </span>
+          <span className="font-medium text-foreground">{s.pickLabel}</span>
+        </p>
+        {!selectable && !skipped && (
+          <Link
+            href={matchHref(s)}
+            className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ChartNoAxesColumn className="size-3.5" /> Stats
+          </Link>
+        )}
+      </div>
+
+      {problem && <p className={cn("col-span-2 text-xs", skipped || s.started ? "text-loss" : "text-muted-foreground")}>{problem}</p>}
     </li>
   );
 }
