@@ -6,6 +6,11 @@ import { publicEnv } from "@/lib/public-env";
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  // Anonymous visitors have no Supabase auth cookie: skip the auth round-trip entirely.
+  if (!request.cookies.getAll().some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"))) {
+    return { response, userId: null };
+  }
+
   const supabase = createServerClient(publicEnv.supabaseUrl, publicEnv.supabaseAnonKey, {
     cookies: {
       getAll: () => request.cookies.getAll(),

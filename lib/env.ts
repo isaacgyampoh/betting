@@ -19,6 +19,7 @@ const serverSchema = z.object({
   STATS_MODE: z.enum(["auto", "live", "sample"]).default("auto"),
   PAYSTACK_SECRET_KEY: z.string().min(1).optional(),
   NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: z.string().min(1).optional(),
+  CRON_SECRET: z.string().min(16).optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;

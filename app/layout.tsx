@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   applicationName: "gameclaw",
   appleWebApp: { capable: true, title: "gameclaw", statusBarStyle: "black-translucent" },
   formatDetection: { telephone: false },
+  openGraph: { type: "website", siteName: "gameclaw", locale: "en_GH" },
+  twitter: { card: "summary_large_image" },
 };
 
 export const viewport: Viewport = {

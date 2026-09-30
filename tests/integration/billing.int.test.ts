@@ -93,3 +93,19 @@ describe("Paystack billing", () => {
     expect(await db.subscription.count({ where: { userId: user.id, status: "ACTIVE" } })).toBe(1);
   });
 });
+
+describe("maintenance cleanup", () => {
+  it("prunes expired caches, old logs, and abandons stale pending payments", async () => {
+    const { cleanup } = await import("@/lib/services/maintenance");
+    const user = await createUser();
+    const old = new Date(Date.now() - 100 * 86_400_000);
+    await db.usageLog.create({ data: { userId: user.id, kind: "STATS", createdAt: old } });
+    await db.statsCache.create({ data: { key: `old-${user.id}`, endpoint: "/x", params: {}, payload: [], expiresAt: old } });
+    const plan = await db.plan.findUniqueOrThrow({ where: { code: "daily" } });
+    await db.payment.create({ data: { userId: user.id, planId: plan.id, reference: `old-${user.id}`, amountPesewas: 500, createdAt: old } });
+    const r = await cleanup();
+    expect(r.usageLogs).toBeGreaterThanOrEqual(1);
+    expect(r.statsCache).toBeGreaterThanOrEqual(1);
+    expect(await db.payment.findUnique({ where: { reference: `old-${user.id}` } })).toMatchObject({ status: "ABANDONED" });
+  });
+});

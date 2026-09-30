@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
 
-// Pages that need a signed-in user. Slip tools stay public (free tier works without sign-in).
-const PROTECTED_PREFIXES = ["/chat", "/account", "/welcome"];
+// Pages that need a signed-in user. Redirecting here (not only in the page) gives a real 307
+// before any streaming starts. Pages still check age confirmation themselves.
+const PROTECTED_PREFIXES = ["/slip", "/convert", "/matches", "/chat", "/account", "/welcome", "/billing"];
 
 export async function proxy(request: NextRequest) {
   const { response, userId } = await updateSession(request);
