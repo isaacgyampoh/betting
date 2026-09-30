@@ -22,6 +22,6 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // Skip static assets, the service worker, PWA files and API routes (they authenticate themselves).
-    "/((?!api|_next/static|_next/image|sw.js|manifest.webmanifest|icons/|favicon.ico|icon|apple-icon|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
+    "/((?!api|auth/|_next/static|_next/image|sw.js|manifest.webmanifest|icons/|favicon.ico|icon|apple-icon|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
   ],
 };
