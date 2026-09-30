@@ -135,6 +135,9 @@ export const SPORTYBET_MOCK_CODES: Record<string, MockCode> = {
   BCDOWN: { kind: "unavailable" },
 };
 
+// Assumed booking-code format; confirm from captured real codes.
+const SPORTYBET_CODE = /^[A-Z0-9]{5,10}$/;
+
 export function createSportyBetAdapter(mode: AdapterMode, opts: { latencyMs?: number } = {}): BookmakerAdapter {
   const mock = createMockBackend(
     {
@@ -153,9 +156,10 @@ export function createSportyBetAdapter(mode: AdapterMode, opts: { latencyMs?: nu
     slug: "sportybet",
     name: "SportyBet",
     mode,
+    codeFormat: SPORTYBET_CODE,
     normalizeCode(code) {
       const c = code.replace(/\s+/g, "").toUpperCase();
-      return /^[A-Z0-9]{4,12}$/.test(c) ? c : null;
+      return SPORTYBET_CODE.test(c) ? c : null;
     },
     loadCode: (code) => (mode === "mock" ? mock.loadCode(code) : liveNotImplemented("sportybet", "loadCode")),
     createCode: (s) => (mode === "mock" ? mock.createCode(s) : liveNotImplemented("sportybet", "createCode")),

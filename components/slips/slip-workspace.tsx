@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch, type ApiError } from "@/lib/api-client";
 import type { SlipSummary, SlipView as Slip } from "@/lib/slips/view";
 import { ApiErrorAlert } from "./api-error-alert";
-import { BookmakerPicker, type BookmakerOption } from "./bookmaker-picker";
+import { AUTO, BookmakerPicker, type BookmakerOption } from "./bookmaker-picker";
 import { RecentSlips } from "./recent-slips";
 import { SlipView } from "./slip-view";
 
@@ -70,7 +70,7 @@ export function SlipWorkspace({
   initialRecent: SlipSummary[];
   initialSlip: Slip | null;
 }) {
-  const [bookmaker, setBookmaker] = useState(initialSlip?.bookmaker.slug ?? bookmakers[0]?.slug ?? "");
+  const [bookmaker, setBookmaker] = useState(AUTO);
   const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -84,12 +84,16 @@ export function SlipWorkspace({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function load(e?: React.FormEvent) {
+  async function load(e?: React.FormEvent, override?: string) {
     e?.preventDefault();
-    if (!code.trim() || !bookmaker) return;
+    const chosen = override ?? bookmaker;
+    if (!code.trim()) return;
     setPending(true);
     setError(null);
-    const res = await apiFetch<Slip>("/api/v1/slips/load", { method: "POST", body: JSON.stringify({ bookmaker, code }) });
+    const res = await apiFetch<Slip>("/api/v1/slips/load", {
+      method: "POST",
+      body: JSON.stringify({ code, ...(chosen !== AUTO ? { bookmaker: chosen } : {}) }),
+    });
     setPending(false);
     if (!res.ok) {
       setError(res.error);
@@ -106,7 +110,7 @@ export function SlipWorkspace({
     setPending(false);
     if (!res.ok) return setError(res.error);
     setSlips([res.data]);
-    setBookmaker(res.data.bookmaker.slug);
+
     window.history.replaceState(null, "", `/slip?id=${id}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -114,15 +118,24 @@ export function SlipWorkspace({
   return (
     <div className="space-y-6">
       <form onSubmit={load} className="space-y-4 rounded-lg border bg-card p-4">
-        <BookmakerPicker label="Bookmaker" options={bookmakers} value={bookmaker} onChange={setBookmaker} />
+        <BookmakerPicker label="Bookmaker" options={bookmakers} value={bookmaker} onChange={setBookmaker} withAuto />
         <CodeInput value={code} onChange={setCode} />
-        <Button type="submit" size="lg" className="h-11 w-full" disabled={pending || !code.trim() || !bookmaker}>
+        <Button type="submit" size="lg" className="h-11 w-full" disabled={pending || !code.trim()}>
           {pending && <Loader2 className="animate-spin" data-icon="inline-start" />}
           {pending ? "Loading…" : "Load slip"}
         </Button>
       </form>
 
-      {error && <ApiErrorAlert error={error} onRetry={() => load()} />}
+      {error && (
+        <ApiErrorAlert
+          error={error}
+          onRetry={() => load()}
+          onChooseBookmaker={(slug) => {
+            setBookmaker(slug);
+            void load(undefined, slug);
+          }}
+        />
+      )}
 
       {pending ? (
         <SlipSkeleton />

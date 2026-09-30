@@ -65,6 +65,37 @@ describe("load slip", () => {
   });
 });
 
+describe("auto-detect bookmaker", () => {
+  it("detects the bookmaker from the code, saves it, and marks demo data", async () => {
+    const user = await createUser();
+    const slip = await loadSlip({ user, code: "7kq2m", ipHash: null });
+    expect(slip.bookmaker.slug).toBe("1xbet");
+    expect(slip.code).toBe("7KQ2M");
+    expect(slip.demo).toBe(true);
+    const log = await db.usageLog.findFirst({ where: { userId: user.id, kind: "SLIP_LOAD" } });
+    expect(log?.meta).toMatchObject({ bookmaker: "auto", detected: "1xbet" });
+  });
+
+  it("asks which bookmaker when the code is valid on several", async () => {
+    const user = await createUser();
+    await expect(loadSlip({ user, code: "SHARED7", ipHash: null })).rejects.toMatchObject({
+      code: "AMBIGUOUS_BOOKMAKER",
+      details: { candidates: expect.arrayContaining([{ slug: "betwinner", name: "Betwinner" }, { slug: "paripesa", name: "PariPesa" }]) },
+    });
+    const chosen = await loadSlip({ user, bookmaker: "paripesa", code: "SHARED7", ipHash: null });
+    expect(chosen.bookmaker.slug).toBe("paripesa");
+  });
+
+  it("converts across the new bookmakers (1xBet → betPawa)", async () => {
+    const user = await createUser();
+    const source = await loadSlip({ user, code: "7KQ2M", ipHash: null });
+    const converted = await convertSlip({ user, source: { slipId: source.id }, target: "betpawa", ipHash: null });
+    expect(converted.bookmaker.slug).toBe("betpawa");
+    expect(converted.code).toMatch(/^BP/);
+    expect(converted.selectionCount).toBe(source.selectionCount);
+  });
+});
+
 describe("convert slip", () => {
   it("converts SportyBet → Betway, lists the unmatched game, and books a working code", async () => {
     const user = await createUser();

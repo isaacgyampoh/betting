@@ -7,7 +7,7 @@ import { convertSlip } from "@/lib/services/convert";
 
 const bodySchema = z.union([
   z.object({ slipId: z.uuid(), target: z.enum(BOOKMAKER_SLUGS) }),
-  z.object({ bookmaker: z.enum(BOOKMAKER_SLUGS), code: z.string().trim().min(1).max(40), target: z.enum(BOOKMAKER_SLUGS) }),
+  z.object({ bookmaker: z.enum(BOOKMAKER_SLUGS).optional(), code: z.string().trim().min(1).max(40), target: z.enum(BOOKMAKER_SLUGS) }),
 ]);
 
 export const POST = route(async (req) => {

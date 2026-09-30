@@ -14,9 +14,11 @@ const ERROR_UI: Record<string, { title: string; icon: typeof AlertCircle; retry?
   PLAN_LIMIT_REACHED: { title: "Limit reached", icon: CreditCard },
   NETWORK: { title: "You're offline", icon: WifiOff, retry: true },
   BAD_REQUEST: { title: "Can't do that", icon: AlertCircle },
+  AMBIGUOUS_BOOKMAKER: { title: "Which bookmaker?", icon: AlertCircle },
 };
 
-export function ApiErrorAlert({ error, onRetry }: { error: ApiError; onRetry?: () => void }) {
+export function ApiErrorAlert({ error, onRetry, onChooseBookmaker }: { error: ApiError; onRetry?: () => void; onChooseBookmaker?: (slug: string) => void }) {
+  const candidates = error.code === "AMBIGUOUS_BOOKMAKER" ? ((error.details as { candidates?: { slug: string; name: string }[] })?.candidates ?? []) : [];
   const ui = ERROR_UI[error.code] ?? { title: "Something went wrong", icon: AlertCircle, retry: true };
   const Icon = ui.icon;
   return (
@@ -29,6 +31,15 @@ export function ApiErrorAlert({ error, onRetry }: { error: ApiError; onRetry?: (
           <Button variant="outline" size="sm" className="mt-2" onClick={onRetry}>
             <RotateCw data-icon="inline-start" /> Try again
           </Button>
+        )}
+        {candidates.length > 0 && onChooseBookmaker && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {candidates.map((c) => (
+              <Button key={c.slug} variant="outline" size="sm" onClick={() => onChooseBookmaker(c.slug)}>
+                {c.name}
+              </Button>
+            ))}
+          </div>
         )}
         {error.code === "PLAN_LIMIT_REACHED" && (
           <Button asChild size="sm" className="mt-2">

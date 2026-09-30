@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   { icon: ReceiptText, title: "Read any code", text: "Every game, market and price on a booking code, laid out in one list." },
-  { icon: ArrowLeftRight, title: "Convert between bookmakers", text: "SportyBet to Betway and back, with a fresh code. Games that can't be matched are listed, not dropped." },
+  { icon: ArrowLeftRight, title: "Convert between bookmakers", text: "Nine bookmakers used in Ghana, with a fresh code. Games that can't be matched are listed, not dropped." },
   { icon: Scissors, title: "Cut it down", text: "Remove games, keep the safest picks, trim to a target total, or split one slip into several." },
   { icon: BarChart3, title: "Check the numbers", text: "Head-to-head and fixtures from API-Football before you commit." },
   { icon: MessageSquare, title: "Or just ask", text: "\"Convert this to Betway and drop anything above 2.0.\" Answers use real prices and results only." },
@@ -24,7 +24,7 @@ const FAQ = [
   { q: "Is gameclaw a bookmaker?", a: "No. We don't take bets or hold money. You place bets directly with your bookmaker." },
   { q: "What does it cost?", a: "Loading, converting and editing slips is free. Chat and match analysis come with a few free messages, then plans start at GHS 5 a day." },
   { q: "Can it tell me who will win?", a: "No one can. It shows what the numbers say, with a confidence level and the reasons, and never promises a result." },
-  { q: "Which bookmakers work?", a: "SportyBet and Betway Ghana today. More are being added." },
+  { q: "Which bookmakers work?", a: "SportyBet, Betway, 1xBet, betPawa, MSport, Football.com, Betwinner, 22Bet and PariPesa. Paste any code and we detect the bookmaker. Some still run on sample data while their live connection is finished; those slips are clearly marked." },
 ];
 
 export default function HomePage() {
@@ -34,7 +34,7 @@ export default function HomePage() {
         <div className="space-y-5 text-center lg:text-left">
           <h1 className="text-4xl font-semibold tracking-tight text-balance md:text-5xl">Paste a code. Convert it. Check the numbers.</h1>
           <p className="mx-auto max-w-xl text-balance text-muted-foreground lg:mx-0">
-            Move booking codes between SportyBet and Betway, cut them down to the odds you want, and see head-to-head before you bet.
+            Move booking codes between SportyBet, Betway, 1xBet, betPawa and more, cut them down to the odds you want, and see head-to-head before you bet.
           </p>
           <div className="flex flex-col justify-center gap-2 sm:flex-row lg:justify-start">
             <Button asChild size="lg" className="h-11 px-5">

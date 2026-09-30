@@ -7,7 +7,10 @@ export type MockFixture = {
   country: string;
   /** Minutes from "now"; negative = already started. */
   kickoffOffsetMin: number;
-  names: { sportybet?: [string, string]; betway?: [string, string] };
+  /** Team spellings per bookmaker; bookmakers without an entry use the SportyBet spelling. */
+  names: Partial<Record<import("@/lib/bookmakers/types").BookmakerSlug, [string, string]>> & { sportybet: [string, string] };
+  /** Restrict the fixture to these bookmakers (exercises "game not found" on conversion). */
+  onlyOn?: import("@/lib/bookmakers/types").BookmakerSlug[];
   /** Fair 1X2 odds; other markets are derived from these. */
   odds1x2: [number, number, number];
   /** Fair probability of over 2.5 goals. */
@@ -30,7 +33,12 @@ export const FIXTURES: MockFixture[] = [
     competition: "Premier League",
     country: "England",
     kickoffOffsetMin: DAY + 180,
-    names: { sportybet: ["Manchester United", "Tottenham"], betway: ["Man Utd", "Tottenham Hotspur"] },
+    names: {
+      sportybet: ["Manchester United", "Tottenham"],
+      betway: ["Man Utd", "Tottenham Hotspur"],
+      "1xbet": ["Manchester United", "Tottenham Hotspur"],
+      msport: ["Man United", "Tottenham"],
+    },
     odds1x2: [2.1, 3.6, 3.4],
     pOver25: 0.58,
   },
@@ -84,7 +92,7 @@ export const FIXTURES: MockFixture[] = [
     competition: "Serie A",
     country: "Italy",
     kickoffOffsetMin: DAY + 405,
-    names: { sportybet: ["Inter Milano", "AC Milan"], betway: ["Inter", "Milan"] },
+    names: { sportybet: ["Inter Milano", "AC Milan"], betway: ["Inter", "Milan"], "1xbet": ["Inter Milan", "AC Milan"], betpawa: ["Internazionale", "AC Milan"] },
     odds1x2: [1.95, 3.6, 3.9],
     pOver25: 0.56,
   },
@@ -102,7 +110,7 @@ export const FIXTURES: MockFixture[] = [
     competition: "Premier League",
     country: "Ghana",
     kickoffOffsetMin: DAY + 60,
-    names: { sportybet: ["Asante Kotoko", "Hearts of Oak"], betway: ["Kotoko", "Accra Hearts of Oak"] },
+    names: { sportybet: ["Asante Kotoko", "Hearts of Oak"], betway: ["Kotoko", "Accra Hearts of Oak"], betpawa: ["Asante Kotoko SC", "Accra Hearts of Oak"], msport: ["Kotoko", "Hearts of Oak"] },
     odds1x2: [2.05, 2.9, 4.1],
     pOver25: 0.38,
   },
@@ -131,6 +139,7 @@ export const FIXTURES: MockFixture[] = [
     country: "Ghana",
     kickoffOffsetMin: 2 * DAY + 60,
     names: { sportybet: ["Nations FC", "Karela United"] },
+    onlyOn: ["sportybet", "footballcom"],
     odds1x2: [1.85, 3.1, 4.7],
     pOver25: 0.37,
   },

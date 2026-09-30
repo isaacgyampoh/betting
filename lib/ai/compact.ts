@@ -32,6 +32,7 @@ export function compactSlip(s: SlipView) {
   return {
     slip_id: s.id,
     bookmaker: s.bookmaker.name,
+    ...(s.demo ? { demo_data: "sample bookmaker data: this code will not work on the real site" } : {}),
     code: s.code,
     total_odds: s.totalOdds,
     games: s.selections.map((g) => ({

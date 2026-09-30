@@ -48,10 +48,11 @@ export function stableNumber(key: string, digits: number): string {
 }
 
 export function createMockBackend(config: MockBackendConfig, adapter: () => Adapter) {
-  const listed = FIXTURES.filter((f) => f.names[config.slug]);
+  const listed = FIXTURES.filter((f) => !f.onlyOn || f.onlyOn.includes(config.slug));
+  const namesOf = (f: MockFixture): [string, string] => f.names[config.slug] ?? f.names.sportybet;
 
   function eventOf(f: MockFixture, now = new Date()): BookmakerEventInfo {
-    const [home, away] = f.names[config.slug]!;
+    const [home, away] = namesOf(f);
     const kickoffAt = mockKickoff(f.kickoffOffsetMin, now);
     return {
       externalId: config.eventId(f),
@@ -65,7 +66,7 @@ export function createMockBackend(config: MockBackendConfig, adapter: () => Adap
   }
 
   function offersOf(f: MockFixture): RawOffer[] {
-    return config.offers(f, derivePrices(f, config.margin), f.names[config.slug]!);
+    return config.offers(f, derivePrices(f, config.margin), namesOf(f));
   }
 
   function findOffer(f: MockFixture, raw: RawMarket): RawOffer | undefined {

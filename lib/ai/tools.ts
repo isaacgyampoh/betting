@@ -75,8 +75,8 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "load_slip",
-    description: "Load a booking code from a bookmaker. Returns games, markets, odds, total odds and a slip_id for later tools.",
-    input_schema: { type: "object", properties: { bookmaker, code: { type: "string" } }, required: ["bookmaker", "code"] },
+    description: "Load a booking code. Omit bookmaker to auto-detect it. Returns games, markets, odds, total odds and a slip_id for later tools. If the bookmaker is ambiguous, ask the user which one.",
+    input_schema: { type: "object", properties: { bookmaker, code: { type: "string" } }, required: ["code"] },
   },
   {
     name: "stats_for_slip_game",
@@ -93,7 +93,7 @@ const slug = z.enum(BOOKMAKER_SLUGS);
 const uuid = z.uuid({ message: "slip_id must be a slip_id returned by an earlier tool" });
 
 const SCHEMAS = {
-  load_slip: z.object({ bookmaker: slug, code: z.string().min(1).max(40) }),
+  load_slip: z.object({ bookmaker: slug.optional(), code: z.string().min(1).max(40) }),
   convert_slip: z.object({ target: slug, slip_id: uuid.optional(), bookmaker: slug.optional(), code: z.string().max(40).optional() }),
   edit_slip: z.object({
     slip_id: uuid,
@@ -173,7 +173,7 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
       const i = input as z.infer<(typeof SCHEMAS)["convert_slip"]>;
       const source = i.slip_id
         ? { slipId: i.slip_id }
-        : i.bookmaker && i.code
+        : i.code
           ? { bookmaker: i.bookmaker, code: i.code }
           : null;
       if (!source) throw new AppError("BAD_REQUEST", "Pass slip_id, or bookmaker and code.");

@@ -38,6 +38,8 @@ export type SlipWarning = { code: SlipWarningCode; message: string; positions: n
 export type SlipView = {
   id: string;
   bookmaker: { slug: string; name: string };
+  /** Sample bookmaker data (mock adapter): the code won't work on the real bookmaker site. */
+  demo: boolean;
   code: string | null;
   kind: string;
   totalOdds: number | null;

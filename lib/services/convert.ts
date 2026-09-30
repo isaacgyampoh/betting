@@ -25,7 +25,7 @@ import type { SlipView } from "@/lib/slips/view";
 
 export const SLIP_CONVERT_LIMIT = { limit: 20, windowMs: 60 * 60_000 };
 
-export type ConvertSource = { slipId: string } | { bookmaker: BookmakerSlug; code: string };
+export type ConvertSource = { slipId: string } | { bookmaker?: BookmakerSlug; code: string };
 
 type Converted = { draft: DraftSelection; link?: { targetExternalId: string; score: number } };
 

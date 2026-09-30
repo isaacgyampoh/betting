@@ -46,9 +46,13 @@ const plans = [
 const bookmakers = [
   { slug: "sportybet", name: "SportyBet", website: "https://www.sportybet.com/gh", isEnabled: true },
   { slug: "betway", name: "Betway", website: "https://www.betway.com.gh", isEnabled: true },
-  { slug: "betpawa", name: "betPawa", website: "https://www.betpawa.com.gh", isEnabled: false },
-  { slug: "1xbet", name: "1xBet", website: "https://1xbet.com.gh", isEnabled: false },
-  { slug: "msport", name: "MSport", website: "https://www.msport.com/gh", isEnabled: false },
+  { slug: "1xbet", name: "1xBet", website: "https://1xbet.com.gh", isEnabled: true },
+  { slug: "betpawa", name: "betPawa", website: "https://www.betpawa.com.gh", isEnabled: true },
+  { slug: "msport", name: "MSport", website: "https://www.msport.com/gh", isEnabled: true },
+  { slug: "footballcom", name: "Football.com", website: "https://www.football.com/gh", isEnabled: true },
+  { slug: "betwinner", name: "Betwinner", website: "https://betwinner.com", isEnabled: true },
+  { slug: "22bet", name: "22Bet", website: "https://22bet.com", isEnabled: true },
+  { slug: "paripesa", name: "PariPesa", website: "https://paripesa.com", isEnabled: true },
 ];
 
 async function main() {
@@ -57,7 +61,7 @@ async function main() {
     await prisma.plan.upsert({ where: { code: plan.code }, create: plan, update: {} });
   }
   for (const bm of bookmakers) {
-    await prisma.bookmaker.upsert({ where: { slug: bm.slug }, create: bm, update: {} });
+    await prisma.bookmaker.upsert({ where: { slug: bm.slug }, create: bm, update: { name: bm.name, isEnabled: bm.isEnabled } });
   }
   console.log(`Seeded ${plans.length} plans and ${bookmakers.length} bookmakers.`);
 }

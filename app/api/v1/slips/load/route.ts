@@ -6,7 +6,8 @@ import { clientIpHash } from "@/lib/request";
 import { loadSlip } from "@/lib/services/slips";
 
 const bodySchema = z.object({
-  bookmaker: z.enum(BOOKMAKER_SLUGS),
+  /** Omit to auto-detect the bookmaker from the code. */
+  bookmaker: z.enum(BOOKMAKER_SLUGS).optional(),
   code: z.string().trim().min(1, "Enter a booking code.").max(40),
 });
 

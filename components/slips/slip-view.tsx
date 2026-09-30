@@ -120,6 +120,13 @@ export function SlipView({ slip, onEdited, title }: { slip: Slip; onEdited?: (sl
         />
       )}
 
+      {slip.demo && (
+        <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Demo data.</span> {slip.bookmaker.name} isn&apos;t connected to the real site yet, so
+          this code and these prices are samples. The code won&apos;t work on {slip.bookmaker.name}.
+        </p>
+      )}
+
       {slip.warnings.length > 0 && (
         <ul className="space-y-1 rounded-lg border px-4 py-3 text-sm">
           {slip.warnings.map((w) => (

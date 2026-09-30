@@ -1,6 +1,17 @@
 import type { Market } from "@/lib/markets/types";
 
-export const BOOKMAKER_SLUGS = ["sportybet", "betway"] as const;
+// Bookmakers used in Ghana. Slugs are stable identifiers (DB, API, env var names).
+export const BOOKMAKER_SLUGS = [
+  "sportybet",
+  "betway",
+  "1xbet",
+  "betpawa",
+  "msport",
+  "footballcom",
+  "betwinner",
+  "22bet",
+  "paripesa",
+] as const;
 export type BookmakerSlug = (typeof BOOKMAKER_SLUGS)[number];
 
 export type AdapterMode = "mock" | "live";
@@ -60,6 +71,12 @@ export interface BookmakerAdapter {
   readonly slug: BookmakerSlug;
   readonly name: string;
   readonly mode: AdapterMode;
+
+  /**
+   * Booking-code format, used first when auto-detecting the bookmaker of a pasted code.
+   * Assumed until confirmed from captured real codes (docs/capturing-bookmaker-requests.md).
+   */
+  readonly codeFormat: RegExp;
 
   /** Normalizes a user-typed code (trim, case). Returns null if the format can't be valid. */
   normalizeCode(code: string): string | null;

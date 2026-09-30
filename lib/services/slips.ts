@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import type { AuthUser } from "@/lib/auth";
-import { getAdapter } from "@/lib/bookmakers/registry";
+import { detectBookmaker } from "@/lib/bookmakers/detect";
+import { getAdapter, isBookmakerSlug } from "@/lib/bookmakers/registry";
 import type { BookmakerSlug, LoadedSlip, RawMarket } from "@/lib/bookmakers/types";
 import type { Market } from "@/lib/markets/types";
 import type { Prisma } from "@/lib/generated/prisma/client";
@@ -141,6 +142,7 @@ export function toSlipView(slip: SlipRecord): SlipView {
   return {
     id: slip.id,
     bookmaker: { slug: slip.bookmaker.slug, name: slip.bookmaker.name },
+    demo: isBookmakerSlug(slip.bookmaker.slug) ? getAdapter(slip.bookmaker.slug).mode === "mock" : true,
     code: slip.bookingCode,
     kind: slip.kind,
     totalOdds: slip.totalOdds === null ? null : Number(slip.totalOdds),
@@ -237,20 +239,45 @@ export async function getOwnedSlipRecord(user: AuthUser, id: string): Promise<Sl
 
 // --- Public API --------------------------------------------------------------
 
-export async function loadSlip(opts: { user: AuthUser; bookmaker: BookmakerSlug; code: string; ipHash: string | null }) {
+/**
+ * Loads a booking code. With `bookmaker` omitted, the bookmaker is detected from the code
+ * (format first, then parallel lookups); a code valid on several bookmakers asks the user.
+ */
+export async function loadSlip(opts: { user: AuthUser; bookmaker?: BookmakerSlug; code: string; ipHash: string | null }) {
   const { user, ipHash } = opts;
-  const bookmaker = await requireEnabledBookmaker(opts.bookmaker);
   await enforceRateLimit({ userId: user.id, kind: "SLIP_LOAD", ...SLIP_LOAD_LIMIT });
-
-  const code = getAdapter(opts.bookmaker).normalizeCode(opts.code);
-  const meta = { bookmaker: opts.bookmaker, code: code ?? opts.code.slice(0, 40) };
+  const meta: Record<string, unknown> = { bookmaker: opts.bookmaker ?? "auto", code: opts.code.slice(0, 40) };
 
   try {
-    if (!code) throw new AppError("INVALID_CODE", "That doesn't look like a booking code. Check it and try again.");
-    const { slip, cached } = await loadWithCache(bookmaker.id, opts.bookmaker, code);
+    let bookmakerRow: { id: string; slug: string; name: string };
+    let loaded: { slip: LoadedSlip; cached: boolean };
+
+    if (opts.bookmaker) {
+      bookmakerRow = await requireEnabledBookmaker(opts.bookmaker);
+      const code = getAdapter(opts.bookmaker).normalizeCode(opts.code);
+      if (!code) throw new AppError("INVALID_CODE", "That doesn't look like a booking code. Check it and try again.");
+      loaded = await loadWithCache(bookmakerRow.id, opts.bookmaker, code);
+    } else {
+      const rows = await db.bookmaker.findMany({ where: { isEnabled: true }, select: { id: true, slug: true, name: true } });
+      const enabled = rows.filter((r): r is typeof r & { slug: BookmakerSlug } => isBookmakerSlug(r.slug));
+      const bySlug = new Map(enabled.map((r) => [r.slug, r]));
+      const detection = await detectBookmaker(opts.code, enabled.map((r) => getAdapter(r.slug)), (slug, code) =>
+        loadWithCache(bySlug.get(slug)!.id, slug, code),
+      );
+      if (detection.kind === "ambiguous") {
+        throw new AppError("AMBIGUOUS_BOOKMAKER", "That code works on more than one bookmaker. Which one is it from?", {
+          details: { candidates: detection.slugs.map((slug) => ({ slug, name: bySlug.get(slug)!.name })) },
+        });
+      }
+      bookmakerRow = bySlug.get(detection.slug)!;
+      loaded = detection.result;
+      meta.detected = detection.slug;
+    }
+
+    const { slip, cached } = loaded;
     const saved = await saveSlip({
       userId: user.id,
-      bookmakerId: bookmaker.id,
+      bookmakerId: bookmakerRow.id,
       kind: "LOADED",
       code: slip.code,
       expiresAt: slip.expiresAt,
@@ -263,11 +290,11 @@ export async function loadSlip(opts: { user: AuthUser; bookmaker: BookmakerSlug;
         status: "OK",
       })),
     });
-    await logUsage({ userId: user.id, ipHash, kind: "SLIP_LOAD", success: true, meta: { ...meta, cached } });
+    await logUsage({ userId: user.id, ipHash, kind: "SLIP_LOAD", success: true, meta: { ...meta, cached } as Prisma.InputJsonValue });
     return withLogos(toSlipView(saved));
   } catch (err) {
     const errorCode = err instanceof AppError ? err.code : "INTERNAL";
-    await logUsage({ userId: user.id, ipHash, kind: "SLIP_LOAD", success: false, errorCode, meta });
+    await logUsage({ userId: user.id, ipHash, kind: "SLIP_LOAD", success: false, errorCode, meta: meta as Prisma.InputJsonValue });
     if (err instanceof AppError) logger.info("slips.load_rejected", { ...meta, errorCode });
     throw err;
   }

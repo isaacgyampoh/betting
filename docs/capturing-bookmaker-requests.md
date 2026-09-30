@@ -41,6 +41,46 @@ Repeat A, B and C:
 - **B:** Add picks, then **Book a bet** / **Share** to get a code.
 - **C:** Open a match page, and search for a team.
 
+## Priority order
+
+Capture them in this order. It's based on how widely each is used in Ghana, and on how much work one capture saves:
+
+| # | Bookmaker | Why this position |
+|---|---|---|
+| 1 | **SportyBet** | The largest in Ghana; most shared codes are SportyBet codes. |
+| 2 | **Betway** | The second big name; the most common conversion target. |
+| 3 | **1xBet** | Very popular. Betwinner, 22Bet and PariPesa are widely reported to run on the same platform, so one good 1xBet capture probably unlocks all four (confirm with one small capture from each). |
+| 4 | **betPawa** | Popular with mobile and low-data users. |
+| 5 | **MSport** | Established Ghanaian brand. |
+| 6 | **Football.com** | Growing quickly. |
+| 7 | **Betwinner, 22Bet, PariPesa** | A quick check each, to confirm they match 1xBet. |
+
+This ranking is an estimate from public information. Tell me if your users lean differently.
+
+## Steps for every other bookmaker
+
+Do the same three captures (**A** load a code, **B** book a code, **C** a match page plus a team search) in a fresh Guest window, logged out:
+
+| Bookmaker | Site | Where the booking code box usually is | What to name your files |
+|---|---|---|---|
+| 1xBet | 1xbet.com.gh | Bet slip → "Load bet slip" / coupon code | `1xbet-load.har`, `1xbet-book.har`, `1xbet-match.har` |
+| betPawa | betpawa.com.gh | Betslip → "Load booking code" | `betpawa-*.har` |
+| MSport | msport.com/gh | Betslip → booking code field | `msport-*.har` |
+| Football.com | football.com/gh | Betslip → "Load code" | `footballcom-*.har` |
+| Betwinner | betwinner.com | Bet slip → "Load bet slip" | `betwinner-*.har` |
+| 22Bet | 22bet.com | Bet slip → "Load" | `22bet-*.har` |
+| PariPesa | paripesa.com | Bet slip → "Load bet slip" | `paripesa-*.har` |
+
+The exact button names change often; look for "booking code", "load", "coupon" or "share" around the betslip.
+
+**Also collect 3 or 4 real codes per bookmaker** (from friends, Telegram or X). Their exact format (length, letters or digits) sharpens auto-detection. For now each adapter uses a broad placeholder pattern (`codeFormat` in `lib/bookmakers/<name>.ts`), and ties are settled by trying each matching bookmaker in parallel.
+
+To switch a bookmaker to live once its adapter is implemented, set its environment variable to `live`, for example:
+```bash
+npx wrangler secret put ONEXBET_MODE   # value: live
+```
+The variables are `SPORTYBET_MODE`, `BETWAY_MODE`, `ONEXBET_MODE`, `BETPAWA_MODE`, `MSPORT_MODE`, `FOOTBALLCOM_MODE`, `BETWINNER_MODE`, `TWENTYTWOBET_MODE` and `PARIPESA_MODE`.
+
 ## 3. Save what you captured
 
 ### Option 1: HAR files (easiest)

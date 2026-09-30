@@ -7,16 +7,16 @@ import { apiFetch, type ApiError } from "@/lib/api-client";
 import { formatOdds } from "@/lib/format";
 import type { SlipView as Slip } from "@/lib/slips/view";
 import { ApiErrorAlert } from "./api-error-alert";
-import { BookmakerPicker, type BookmakerOption } from "./bookmaker-picker";
+import { AUTO, BookmakerPicker, type BookmakerOption } from "./bookmaker-picker";
 import { SlipView } from "./slip-view";
 import { CodeInput, SlipSkeleton } from "./slip-workspace";
 
 export function ConvertWorkspace({ bookmakers, source }: { bookmakers: BookmakerOption[]; source: Slip | null }) {
   const [useSource, setUseSource] = useState(source !== null);
-  const [from, setFrom] = useState(source?.bookmaker.slug ?? bookmakers[0]?.slug ?? "");
+  const [from, setFrom] = useState(source?.bookmaker.slug ?? AUTO);
   const [code, setCode] = useState("");
   const firstOther = (slug: string) => bookmakers.find((b) => b.slug !== slug)?.slug ?? "";
-  const [to, setTo] = useState(firstOther(source?.bookmaker.slug ?? bookmakers[0]?.slug ?? ""));
+  const [to, setTo] = useState(firstOther(source?.bookmaker.slug ?? "sportybet"));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [results, setResults] = useState<Slip[]>([]);
@@ -28,11 +28,15 @@ export function ConvertWorkspace({ bookmakers, source }: { bookmakers: Bookmaker
     if (slug === to) setTo(firstOther(slug));
   }
 
-  async function convert(e?: React.FormEvent) {
+  async function convert(e?: React.FormEvent, fromOverride?: string) {
     e?.preventDefault();
     setPending(true);
     setError(null);
-    const body = useSource && source ? { slipId: source.id, target: to } : { bookmaker: from, code, target: to };
+    const fromChoice = fromOverride ?? from;
+    const body =
+      useSource && source
+        ? { slipId: source.id, target: to }
+        : { code, target: to, ...(fromChoice !== AUTO ? { bookmaker: fromChoice } : {}) };
     const res = await apiFetch<Slip>("/api/v1/slips/convert", { method: "POST", body: JSON.stringify(body) });
     setPending(false);
     if (!res.ok) return setError(res.error);
@@ -64,7 +68,7 @@ export function ConvertWorkspace({ bookmakers, source }: { bookmakers: Bookmaker
           </div>
         ) : (
           <>
-            <BookmakerPicker label="From" options={bookmakers} value={from} onChange={pickFrom} />
+            <BookmakerPicker label="From" options={bookmakers} value={from} onChange={pickFrom} withAuto />
             <CodeInput value={code} onChange={setCode} />
           </>
         )}
@@ -81,7 +85,16 @@ export function ConvertWorkspace({ bookmakers, source }: { bookmakers: Bookmaker
         </Button>
       </form>
 
-      {error && <ApiErrorAlert error={error} onRetry={() => convert()} />}
+      {error && (
+        <ApiErrorAlert
+          error={error}
+          onRetry={() => convert()}
+          onChooseBookmaker={(slug) => {
+            pickFrom(slug);
+            void convert(undefined, slug);
+          }}
+        />
+      )}
 
       {pending ? (
         <SlipSkeleton label="Matching games and booking the new code" />
