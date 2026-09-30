@@ -19,8 +19,8 @@
   "placement": { "mode": "smart" },
   "observability": { "enabled": true },
 
-  // Daily cleanup (03:30 UTC = GMT): see worker.ts → /api/v1/cron/cleanup.
-  "triggers": { "crons": ["30 3 * * *"] },
+  // 03:30 GMT cleanup, 07:00 GMT daily picks: see worker.ts → /api/v1/cron/*.
+  "triggers": { "crons": ["30 3 * * *", "0 7 * * *"] },
 
   // Public / non-secret configuration. Secrets are set with `wrangler secret put` (see docs/deploy.md).
   // scripts/cf-build.mjs also injects the NEXT_PUBLIC_* values below into `next build`.

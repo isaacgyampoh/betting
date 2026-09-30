@@ -38,6 +38,7 @@ model Profile {
   payments      Payment[]
   slips         Slip[]
   usageLogs     UsageLog[]
+  pushSubs      PushSubscription[]
 
   @@map("profiles")
 }
@@ -423,4 +424,80 @@ model TeamLogo {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("team_logos")
+}
+
+// ---------------------------------------------------------------------------
+// Daily picks
+// ---------------------------------------------------------------------------
+
+enum PickStatus {
+  PENDING
+  WON
+  LOST
+  VOID
+}
+
+/// One published slip per target per day, generated once for everyone.
+/// Published rows are never edited or deleted: the public record must include losses.
+model DailyPick {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Ghana date (GMT) this pick is for.
+  forDate     DateTime   @map("for_date") @db.Date
+  /// Target total odds, e.g. 2 or 5.
+  target      Int
+  totalOdds   Decimal    @map("total_odds") @db.Decimal(10, 3)
+  /// Estimated chance all picks land, 0..1, as published.
+  probability Decimal    @db.Decimal(5, 4)
+  confidence  String
+  status      PickStatus @default(PENDING)
+  /// Set once every game has a result.
+  settledAt   DateTime?  @map("settled_at") @db.Timestamptz
+  /// Which plan tiers may see the picks (empty = everyone).
+  minPlanCode String?    @map("min_plan_code")
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  legs DailyPickLeg[]
+
+  @@unique([forDate, target])
+  @@index([forDate])
+  @@map("daily_picks")
+}
+
+/// One game on a daily pick, with the reason published alongside it.
+model DailyPickLeg {
+  id                   String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pickId               String     @map("pick_id") @db.Uuid
+  position             Int
+  homeTeam             String     @map("home_team")
+  awayTeam             String     @map("away_team")
+  competition          String?
+  kickoffAt            DateTime   @map("kickoff_at") @db.Timestamptz
+  apiFootballFixtureId Int?       @map("api_football_fixture_id")
+  marketLabel          String     @map("market_label")
+  pickLabel            String     @map("pick_label")
+  odds                 Decimal    @db.Decimal(10, 3)
+  reason               String
+  status               PickStatus @default(PENDING)
+  /// Final score once known, e.g. "2-1".
+  resultText           String?    @map("result_text")
+
+  pick DailyPick @relation(fields: [pickId], references: [id], onDelete: Cascade)
+
+  @@index([pickId, position])
+  @@map("daily_pick_legs")
+}
+
+/// Web push subscription from the PWA. One row per browser/device.
+model PushSubscription {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

@@ -17,14 +17,15 @@ const worker = {
     return handler.fetch(request, env, ctx);
   },
 
-  // Runs the same protected route Vercel Cron used to call, with the shared secret.
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-    const request = new Request(`${env.NEXT_PUBLIC_SITE_URL}/api/v1/cron/cleanup`, {
+  // Cron Triggers: 03:30 GMT prunes caches, 07:00 GMT publishes and settles the daily picks.
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    const path = controller.cron === "0 7 * * *" ? "/api/v1/cron/daily-picks" : "/api/v1/cron/cleanup";
+    const request = new Request(`${env.NEXT_PUBLIC_SITE_URL}${path}`, {
       headers: { authorization: `Bearer ${env.CRON_SECRET ?? ""}` },
     });
     ctx.waitUntil(
       handler.fetch(request, env, ctx).then(async (res: Response) => {
-        console.log(JSON.stringify({ level: res.ok ? "info" : "error", msg: "cron.cleanup_triggered", status: res.status, body: await res.text() }));
+        console.log(JSON.stringify({ level: res.ok ? "info" : "error", msg: "cron.triggered", path, status: res.status, body: await res.text() }));
       }),
     );
   },

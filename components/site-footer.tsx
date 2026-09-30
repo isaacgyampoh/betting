@@ -10,6 +10,7 @@ export function SiteFooter() {
           not guaranteed. Bet only what you can afford to lose.
         </p>
         <nav className="flex flex-wrap gap-x-4 gap-y-2" aria-label="Legal">
+          <Link href="/track-record" className="hover:text-foreground">Track record</Link>
           <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
           <Link href="/responsible-gambling" className="hover:text-foreground">Responsible gambling</Link>
           <Link href="/terms" className="hover:text-foreground">Terms</Link>

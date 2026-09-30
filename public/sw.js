@@ -50,3 +50,27 @@ self.addEventListener("fetch", (event) => {
   }
   // Everything else (API, data) goes straight to the network.
 });
+
+// Push: payload-less by design, so nothing sensitive passes through the push service.
+self.addEventListener("push", (event) => {
+  event.waitUntil(
+    self.registration.showNotification("gameclaw", {
+      body: "Today's picks are ready.",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: "daily-picks",
+      data: { url: "/picks" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/picks";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const open = clients.find((c) => c.url.includes(url));
+      return open ? open.focus() : self.clients.openWindow(url);
+    }),
+  );
+});
