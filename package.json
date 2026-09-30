@@ -22,7 +22,7 @@
     "test:int": "vitest run --config vitest.integration.config.mts",
     "cf:build": "node scripts/cf-build.mjs",
     "cf:preview": "node scripts/cf-build.mjs && opennextjs-cloudflare preview",
-    "cf:deploy": "MIGRATE=1 node scripts/migrate-on-deploy.mjs && node scripts/cf-build.mjs && opennextjs-cloudflare deploy",
+    "cf:deploy": "MIGRATE=1 node scripts/migrate-on-deploy.mjs && node scripts/cf-build.mjs && CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=\"$DIRECT_URL\" opennextjs-cloudflare deploy",
     "cf:build:ci": "node scripts/migrate-on-deploy.mjs && node scripts/cf-build.mjs",
     "cf:typegen": "wrangler types --env-interface CloudflareEnv --strict-vars=false cloudflare-env.d.ts"
   },
