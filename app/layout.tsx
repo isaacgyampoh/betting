@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ServiceWorkerRegister } from "@/components/sw-register";
 import { SessionKeeper } from "@/components/session-keeper";
+import { ReferralCapture } from "@/components/referral-capture";
 import { Toaster } from "@/components/ui/sonner";
 import { publicEnv } from "@/lib/public-env";
 import "./globals.css";
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         </ThemeProvider>
         <ServiceWorkerRegister />
         <SessionKeeper />
+        <ReferralCapture />
       </body>
     </html>
   );

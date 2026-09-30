@@ -46,5 +46,6 @@ export function compactSlip(s: SlipView) {
       ...(g.started ? { started: true } : {}),
     })),
     warnings: s.warnings.map((w) => w.message),
+    risk: { level: s.risk.level, summary: s.risk.summary, riskiest: s.risk.riskiest.map((r) => `#${r.position}: ${r.reason}`) },
   };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, Check, Copy, CornerDownRight, Pencil, TriangleAlert } from "lucide-react";
+import { ArrowLeftRight, Check, Copy, CornerDownRight, Pencil, Share2, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -82,6 +82,29 @@ export function SlipView({ slip, onEdited, title }: { slip: Slip; onEdited?: (sl
           </div>
         </div>
 
+        <div className="flex items-center justify-between gap-2 border-t px-4 py-2 text-xs">
+          <span className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "inline-block size-2 rounded-full",
+                slip.risk.level === "low" ? "bg-win" : slip.risk.level === "medium" ? "bg-muted-foreground" : "bg-loss",
+              )}
+            />
+            <span className="font-medium capitalize">{slip.risk.level} risk</span>
+            <span className="text-muted-foreground">· {slip.risk.summary}</span>
+          </span>
+        </div>
+
+        {slip.risk.riskiest.length > 0 && (
+          <ul className="space-y-1 border-t px-4 py-2 text-xs text-muted-foreground">
+            {slip.risk.riskiest.map((r) => (
+              <li key={r.position}>
+                <span className="font-medium text-foreground">#{r.position}</span> {r.reason}
+              </li>
+            ))}
+          </ul>
+        )}
+
         <div className="flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
           <span>
             {active.length} {active.length === 1 ? "game" : "games"}
@@ -90,7 +113,7 @@ export function SlipView({ slip, onEdited, title }: { slip: Slip; onEdited?: (sl
           {slip.expiresAt && <span>Last kickoff {formatKickoff(slip.expiresAt)}</span>}
         </div>
 
-        <div className="grid grid-cols-2 gap-px border-t bg-border">
+        <div className="grid grid-cols-3 gap-px border-t bg-border">
           <Button asChild variant="ghost" className="h-11 rounded-none bg-card">
             <Link href={`/convert?from=${slip.id}`}>
               <ArrowLeftRight data-icon="inline-start" /> Convert
@@ -103,6 +126,11 @@ export function SlipView({ slip, onEdited, title }: { slip: Slip; onEdited?: (sl
             disabled={!onEdited}
           >
             <Pencil data-icon="inline-start" /> Edit
+          </Button>
+          <Button asChild variant="ghost" className="h-11 rounded-none bg-card">
+            <a href={`/slip/${slip.id}/share`} target="_blank" rel="noopener noreferrer">
+              <Share2 data-icon="inline-start" /> Share
+            </a>
           </Button>
         </div>
       </div>

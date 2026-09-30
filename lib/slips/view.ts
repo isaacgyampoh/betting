@@ -1,4 +1,5 @@
 import { marketLabel, pickLabel } from "@/lib/markets/labels";
+import type { SlipRisk } from "@/lib/slips/risk";
 import type { Market } from "@/lib/markets/types";
 
 // API response shapes for slips. Pure and client-safe: shared by services, API and UI.
@@ -49,6 +50,8 @@ export type SlipView = {
   parent: { id: string; bookmaker: { slug: string; name: string }; code: string | null } | null;
   selections: SelectionView[];
   warnings: SlipWarning[];
+  /** How likely every pick is to land, from the prices. */
+  risk: SlipRisk;
 };
 
 export type SlipSummary = {

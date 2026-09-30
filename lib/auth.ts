@@ -45,12 +45,15 @@ export async function getProfile(user: AuthUser) {
   });
 }
 
-/** Signed-in user whose 18+ confirmation is on record. */
+/** Signed-in user, 18+ confirmed, and not on a self-imposed break. */
 export async function requireAdult(authorization?: string | null) {
   const user = await requireUser(authorization);
   const profile = await getProfile(user);
   if (!profile.ageConfirmedAt) {
     throw new AppError("AGE_NOT_CONFIRMED", "Please confirm you are 18 or older to continue.");
+  }
+  if (profile.excludedUntil && profile.excludedUntil > new Date()) {
+    throw new AppError("FORBIDDEN", `You're taking a break until ${profile.excludedUntil.toISOString().slice(0, 10)}. Support is on our responsible gambling page.`);
   }
   return { user, profile };
 }

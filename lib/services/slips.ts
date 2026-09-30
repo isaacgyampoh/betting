@@ -12,6 +12,7 @@ import type { SlipKind } from "@/lib/generated/prisma/enums";
 import { requireEnabledBookmaker } from "@/lib/services/bookmakers";
 import { logosFor } from "@/lib/services/team-logos";
 import { enforceRateLimit, logUsage } from "@/lib/services/usage";
+import { slipRisk } from "@/lib/slips/risk";
 import {
   buildWarnings,
   toSelectionView,
@@ -152,6 +153,7 @@ export function toSlipView(slip: SlipRecord): SlipView {
     parent: slip.parent ? { id: slip.parent.id, bookmaker: slip.parent.bookmaker, code: slip.parent.bookingCode } : null,
     selections,
     warnings: buildWarnings(selections),
+    risk: slipRisk(selections.filter((s) => s.status === "OK").map((s) => ({ position: s.position, odds: s.odds, started: s.started }))),
   };
 }
 

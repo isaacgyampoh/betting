@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { takeStoredReferral } from "@/components/referral-capture";
 
-export function AgeConfirmForm({ next }: { next: string }) {
+export function AgeConfirmForm({ next, referralCode }: { next: string; referralCode?: string }) {
   const router = useRouter();
   const [over18, setOver18] = useState(false);
   const [terms, setTerms] = useState(false);
@@ -29,6 +30,15 @@ export function AgeConfirmForm({ next }: { next: string }) {
       const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
       toast.error(body?.error?.message ?? "Could not save. Please try again.");
       return;
+    }
+    // A referral from a shared link: applied once the account is confirmed. Never blocks sign-up.
+    const code = referralCode ?? takeStoredReferral();
+    if (code) {
+      await fetch("/api/v1/me/referral", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code }),
+      }).catch(() => {});
     }
     router.replace(next);
     router.refresh();

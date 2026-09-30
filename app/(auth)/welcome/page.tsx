@@ -7,10 +7,12 @@ import { AgeConfirmForm } from "./age-confirm-form";
 export const metadata: Metadata = { title: "Welcome" };
 
 export default async function WelcomePage({ searchParams }: PageProps<"/welcome">) {
-  const nextPath = safeNext((await searchParams).next);
+  const params = await searchParams;
+  const nextPath = safeNext(params.next);
+  const ref = typeof params.ref === "string" ? params.ref : undefined;
   const user = await getAuthUser();
   if (!user) redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   const profile = await getProfile(user);
   if (profile.ageConfirmedAt) redirect(nextPath);
-  return <AgeConfirmForm next={nextPath} />;
+  return <AgeConfirmForm next={nextPath} referralCode={ref} />;
 }

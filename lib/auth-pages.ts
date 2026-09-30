@@ -11,6 +11,16 @@ const loadSession = cache(async () => {
 });
 
 /**
+ * Account pages: sign-in and 18+ only, so someone on a self-imposed break can still manage it.
+ */
+export async function requireAccountPage(next: string) {
+  const session = await loadSession();
+  if (!session) redirect(`/login?next=${encodeURIComponent(next)}`);
+  if (!session.profile.ageConfirmedAt) redirect(`/welcome?next=${encodeURIComponent(next)}`);
+  return session;
+}
+
+/**
  * Page guard: redirects to sign-in, then to the 18+ confirmation, before rendering.
  * Called from each protected section's layout (outside its loading.tsx, so a signed-out
  * visitor gets a real 307) and again from the page to get the user; the lookup is cached.
@@ -19,6 +29,10 @@ export async function requireAdultPage(next: string) {
   const session = await loadSession();
   if (!session) redirect(`/login?next=${encodeURIComponent(next)}`);
   if (!session.profile.ageConfirmedAt) redirect(`/welcome?next=${encodeURIComponent(next)}`);
+  // A self-imposed break blocks the betting features; the account page stays reachable.
+  if (session.profile.excludedUntil && session.profile.excludedUntil > new Date() && !next.startsWith("/account")) {
+    redirect("/account?break=1");
+  }
   return session;
 }
 

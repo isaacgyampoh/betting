@@ -22,23 +22,36 @@ enum UserRole {
 
 /// One row per Supabase auth user. `id` equals auth.users.id and is created by a DB trigger.
 model Profile {
-  id             String    @id @db.Uuid
-  email          String?
-  displayName    String?   @map("display_name")
-  avatarUrl      String?   @map("avatar_url")
-  role           UserRole  @default(USER)
-  ageConfirmedAt DateTime? @map("age_confirmed_at") @db.Timestamptz
+  id               String    @id @db.Uuid
+  email            String?
+  displayName      String?   @map("display_name")
+  avatarUrl        String?   @map("avatar_url")
+  role             UserRole  @default(USER)
+  ageConfirmedAt   DateTime? @map("age_confirmed_at") @db.Timestamptz
   /// Trial AI requests for users without an active subscription.
-  freeAiCredits  Int       @default(5) @map("free_ai_credits")
-  telegramChatId String?   @unique @map("telegram_chat_id")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  freeAiCredits    Int       @default(5) @map("free_ai_credits")
+  telegramChatId   String?   @unique @map("telegram_chat_id")
+  /// Referral code this user shares; others sign up with it.
+  referralCode     String?   @unique @map("referral_code")
+  /// Who referred this user, set once at sign-up.
+  referredById     String?   @map("referred_by_id") @db.Uuid
+  /// Self-set note about what they plan to spend (GHS). Shown back to them, never enforced as a limit.
+  spendNotePesewas Int?      @map("spend_note_pesewas")
+  /// Daily "you've been here a while" reminder.
+  remindersOn      Boolean   @default(false) @map("reminders_on")
+  /// Self-exclusion: blocks sign-in features until this time passes. Cannot be shortened.
+  excludedUntil    DateTime? @map("excluded_until") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  subscriptions Subscription[]
-  payments      Payment[]
-  slips         Slip[]
-  usageLogs     UsageLog[]
-  pushSubs      PushSubscription[]
+  subscriptions   Subscription[]
+  payments        Payment[]
+  slips           Slip[]
+  usageLogs       UsageLog[]
+  pushSubs        PushSubscription[]
+  referredBy      Profile?           @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referred        Profile[]          @relation("Referrals")
+  referralRewards ReferralReward[]   @relation("RewardEarner")
 
   @@map("profiles")
 }
@@ -500,4 +513,20 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// Free days granted for a referral, to both sides. One row per referred user, so it can't repeat.
+model ReferralReward {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Who receives the free days.
+  userId         String   @map("user_id") @db.Uuid
+  /// The sign-up that earned them.
+  referredUserId String   @map("referred_user_id") @db.Uuid
+  days           Int
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user Profile @relation("RewardEarner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, referredUserId])
+  @@map("referral_rewards")
 }

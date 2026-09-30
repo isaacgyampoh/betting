@@ -3,16 +3,25 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { requireAdultPage } from "@/lib/auth-pages";
+import { requireAccountPage } from "@/lib/auth-pages";
 import { getMe } from "@/lib/services/profile";
+import { ReferralCard } from "@/components/account/referral-card";
+import { ResponsibleTools } from "@/components/account/responsible-tools";
 import { getAiAllowance } from "@/lib/services/ai-quota";
+import { getReferralSummary, getResponsibleSettings, REFERRAL_DAYS } from "@/lib/services/account-tools";
 import { listPayments } from "@/lib/services/billing";
 
 export const metadata: Metadata = { title: "Account" };
 
 export default async function AccountPage() {
-  const { user } = await requireAdultPage("/account");
-  const [me, ai, payments] = await Promise.all([getMe(user), getAiAllowance(user.id), listPayments(user)]);
+  const { user } = await requireAccountPage("/account");
+  const [me, ai, payments, referral, responsible] = await Promise.all([
+    getMe(user),
+    getAiAllowance(user.id),
+    listPayments(user),
+    getReferralSummary(user),
+    getResponsibleSettings(user),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -64,6 +73,25 @@ export default async function AccountPage() {
           </CardContent>
         </Card>
       )}
+      <Card>
+        <CardHeader>
+          <CardTitle>Invite a friend</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ReferralCard code={referral.code} joined={referral.joined} daysEarned={referral.daysEarned} days={REFERRAL_DAYS} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Staying in control</CardTitle>
+          <CardDescription>Tools to keep betting to what you planned.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ResponsibleTools initial={responsible} />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="flex flex-col gap-2 sm:flex-row">
           <Button asChild variant="outline" size="lg">
