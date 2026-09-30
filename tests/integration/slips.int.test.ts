@@ -16,6 +16,7 @@ describe("auth trigger", () => {
 
 describe("load slip", () => {
   it("loads, saves, caches and lists", async () => {
+    await db.codeCache.deleteMany();
     const user = await createUser();
     const slip = await loadSlip({ user, bookmaker: "sportybet", code: " bc7k2q ", ipHash: "h" });
     expect(slip.code).toBe("BC7K2Q");

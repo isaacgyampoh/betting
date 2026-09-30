@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  images: {
+    // Team and league logos from API-Football.
+    remotePatterns: [{ protocol: "https", hostname: "media.api-sports.io" }],
+  },
   async headers() {
     return [
       {

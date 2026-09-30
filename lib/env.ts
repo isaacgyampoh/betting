@@ -15,6 +15,8 @@ const serverSchema = z.object({
   BETWAY_MODE: z.enum(["mock", "live"]).default("mock"),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   API_FOOTBALL_KEY: z.string().min(1).optional(),
+  /** auto = live when API_FOOTBALL_KEY is set, otherwise labelled sample data. */
+  STATS_MODE: z.enum(["auto", "live", "sample"]).default("auto"),
   PAYSTACK_SECRET_KEY: z.string().min(1).optional(),
   NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: z.string().min(1).optional(),
 });
