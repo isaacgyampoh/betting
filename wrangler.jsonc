@@ -32,8 +32,10 @@
     "SPORTYBET_MODE": "mock",
     "BETWAY_MODE": "mock",
     "STATS_MODE": "auto"
-  }
+  },
 
-  // Hyperdrive (recommended): after `wrangler hyperdrive create gameclaw-db ...`, add:
-  // "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<id>" }]
+  // Pooled Postgres connections next to Supabase (session pooler origin, query caching off).
+  // Local dev: set CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE (see docs/deploy.md).
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "673d415bb1174f8092e5649a5675516a" }]
+
 }

@@ -60,30 +60,26 @@ Every push to `main` then migrates, builds and deploys. Other branches get previ
 ### Hyperdrive (recommended)
 Without it, every request opens a new TLS connection to Ireland. With it, pooled connections sit next to the database.
 ```bash
-npx wrangler hyperdrive create gameclaw-db \
+npx wrangler hyperdrive create gameclaw-db --caching-disabled \
   --connection-string="postgresql://postgres.qefedcphkmxuxjetmtqw:<PASSWORD>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
 ```
-Add the returned id to `wrangler.jsonc` as `"hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<id>" }]`, run `pnpm cf:typegen`, then deploy. `lib/db.ts` picks it up automatically.
+It's already created (`gameclaw-db`, query caching **disabled** so fresh reads are never stale) and bound as `HYPERDRIVE` in `wrangler.jsonc`. `lib/db.ts` uses it automatically.
+
+For `pnpm cf:preview`, point the binding at a real database:
+```bash
+export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="$(grep ^DIRECT_URL= .env.local | cut -d= -f2-)"
+```
 
 ## Domain: gameclaw.win
 
 The Worker owns `gameclaw.win` and `www.gameclaw.win` as **Custom Domains** (`routes` in `wrangler.jsonc`). Cloudflare creates the DNS records and certificates. `www` redirects to the apex in `worker.ts`.
 
-**Cutover from Vercel (one time):**
-1. In Cloudflare DNS, delete the Vercel records: `A gameclaw.win 76.76.21.21` and `CNAME www cname.vercel-dns.com`.
-2. Run `pnpm cf:deploy`, or trigger Workers Builds. This attaches both custom domains.
-3. Check `https://gameclaw.win/api/v1/health` returns `ok`, then remove the domains from the Vercel project and delete it.
+Cutover from Vercel is done (30 Sep 2026): both hostnames are Worker custom domains, and the Vercel records and project domains have been removed.
 
-**Recommended Cloudflare security settings** (traffic is proxied through Cloudflare now, so these apply):
-- **SSL/TLS:** set to Full (strict), and turn on **Always Use HTTPS**.
-- **Security → WAF → Rate limiting rules:**
-  - When: URI Path starts with `/api/v1/` **and** URI Path does not start with `/api/v1/webhooks/`
-  - Limit: 60 requests per 1 minute, counted per IP
-  - Action: Block for 1 minute
-- **Security → Bots:** turn on **Bot Fight Mode**. It can't exempt paths, so add a WAF custom rule:
-  - When: URI Path equals `/api/v1/webhooks/paystack`
-  - Action: **Skip** (remaining custom rules, rate limiting, Bot Fight Mode)
-  - Paystack's own server calls then always get through. They're verified by HMAC signature in the app anyway.
+**Cloudflare security settings (applied):**
+- **SSL/TLS (applied):** Full (strict), Always Use HTTPS, Automatic HTTPS Rewrites, minimum TLS 1.2.
+- **Rate limit (applied):** 30 requests per 10 s per IP on `/api/v1/*`, blocked for 10 s, excluding `/api/v1/webhooks/`. These are the free zone plan's limits.
+- **Bot Fight Mode is deliberately OFF.** On the free zone plan it can't be skipped for a path, so it could challenge Paystack's webhook calls. Cloudflare's free managed WAF rules stay on. (With a Pro zone you could use Super Bot Fight Mode plus a skip rule for `/api/v1/webhooks/paystack`.)
 
 ## Third-party settings for gameclaw.win
 
