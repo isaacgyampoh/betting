@@ -29,5 +29,19 @@ pnpm dev
 - Success: `{ "data": ... }`. Error: `{ "error": { "code", "message", "details?" } }`
 - Auth: Supabase session cookie (web) or `Authorization: Bearer <supabase access token>` (bot/mobile).
 
+## Bookmaker adapters
+`lib/bookmakers/` has one file per bookmaker implementing `BookmakerAdapter` (`types.ts`); `registry.ts` picks mock or live per bookmaker from `SPORTYBET_MODE` / `BETWAY_MODE`. Every adapter maps to the internal market model in `lib/markets/` (type + period + outcome + line). Unknown markets are logged (`bookmaker.unmapped_market`) and shown to the user; they never crash a load.
+
+### Mock booking codes
+| SportyBet | Betway | Case |
+|---|---|---|
+| `BC7K2Q` | `BW5V8N` | Valid slip (8 / 6 games) |
+| `BCLIVE` | `BWLIVE` | A game already started + an unsupported market (corners) |
+| `BCEXP1` | `BWEXP1` | Expired code |
+| `BCDOWN` | `BWDOWN` | Bookmaker unavailable |
+| anything else | anything else | Invalid code |
+
+Mock kickoffs are relative to the current time, so slips never go stale.
+
 ## Scripts
-`dev` · `build` · `lint` · `typecheck` · `db:migrate` · `db:migrate:dev` · `db:seed` · `db:studio`
+`dev` · `build` · `lint` · `typecheck` · `test` · `db:migrate` · `db:seed` · `db:studio`

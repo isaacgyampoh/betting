@@ -11,6 +11,8 @@ const serverSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1).optional(),
   IP_HASH_SALT: z.string().min(16).optional(),
+  SPORTYBET_MODE: z.enum(["mock", "live"]).default("mock"),
+  BETWAY_MODE: z.enum(["mock", "live"]).default("mock"),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   API_FOOTBALL_KEY: z.string().min(1).optional(),
   PAYSTACK_SECRET_KEY: z.string().min(1).optional(),

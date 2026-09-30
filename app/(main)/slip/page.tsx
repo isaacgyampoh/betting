@@ -1,9 +1,35 @@
 import type { Metadata } from "next";
-import { ReceiptText } from "lucide-react";
-import { ComingSoon } from "@/components/coming-soon";
+import { z } from "zod";
+import { SlipWorkspace } from "@/components/slips/slip-workspace";
+import { requireAdultPage } from "@/lib/auth-pages";
+import { AppError } from "@/lib/errors";
+import { listEnabledBookmakers } from "@/lib/services/bookmakers";
+import { getSlip, listRecentSlips } from "@/lib/services/slips";
 
 export const metadata: Metadata = { title: "Load a slip" };
 
-export default function SlipPage() {
-  return <ComingSoon icon={ReceiptText} title="Load a booking code" description="Arrives in milestone 2." />;
+export default async function SlipPage({ searchParams }: PageProps<"/slip">) {
+  const { user } = await requireAdultPage("/slip");
+  const id = z.uuid().safeParse((await searchParams).id);
+
+  const [bookmakers, recent, initialSlip] = await Promise.all([
+    listEnabledBookmakers(),
+    listRecentSlips(user, 8),
+    id.success
+      ? getSlip(user, id.data).catch((err) => {
+          if (err instanceof AppError && err.code === "NOT_FOUND") return null;
+          throw err;
+        })
+      : null,
+  ]);
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Load a booking code</h1>
+        <p className="text-sm text-muted-foreground">See every game, market and odd on a slip. Free.</p>
+      </div>
+      <SlipWorkspace bookmakers={bookmakers} initialRecent={recent} initialSlip={initialSlip} />
+    </div>
+  );
 }

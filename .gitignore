@@ -43,3 +43,6 @@ next-env.d.ts
 /lib/generated/prisma
 
 !.env.example
+
+# Captured bookmaker traffic (may contain personal data)
+/captures/

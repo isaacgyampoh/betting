@@ -325,10 +325,10 @@ model Selection {
   awayTeam         String          @map("away_team")
   kickoffAt        DateTime        @map("kickoff_at") @db.Timestamptz
   competition      String?
-  // Internal market model
-  marketType       MarketType      @map("market_type")
+  // Internal market model (null when the bookmaker market could not be mapped)
+  marketType       MarketType?     @map("market_type")
   period           MarketPeriod    @default(FT)
-  outcome          String
+  outcome          String?
   line             Decimal?        @db.Decimal(6, 2)
   odds             Decimal?        @db.Decimal(10, 3)
   // Bookmaker's own labels, for display and debugging
