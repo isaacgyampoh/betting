@@ -4,6 +4,10 @@
 // Prisma can't read the generator runtime from env, so the Cloudflare variant is generated from a
 // temporary copy of the schema (same folder, so the relative output path stays identical).
 import { execFileSync } from "node:child_process";
+import { delimiter, resolve } from "node:path";
+
+// Local CLIs (prisma, opennextjs-cloudflare) resolve even when run as `node scripts/…` outside pnpm.
+process.env.PATH = `${resolve("node_modules/.bin")}${delimiter}${process.env.PATH}`;
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 
 const target = process.argv[2] ?? "node";

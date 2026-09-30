@@ -4,6 +4,10 @@
 //     (process env beats .env.local, so a local dev URL can never leak into a production build)
 //  3. locally, regenerate the Node Prisma client afterwards so `pnpm dev` and tests keep working
 import { execFileSync } from "node:child_process";
+import { delimiter, resolve } from "node:path";
+
+// Local CLIs (prisma, opennextjs-cloudflare) resolve even when run as `node scripts/…` outside pnpm.
+process.env.PATH = `${resolve("node_modules/.bin")}${delimiter}${process.env.PATH}`;
 import { readFileSync } from "node:fs";
 
 const jsonc = readFileSync("wrangler.jsonc", "utf8").replace(/^\s*\/\/.*$/gm, "");
