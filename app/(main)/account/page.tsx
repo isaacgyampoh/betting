@@ -6,12 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { requireAdultPage } from "@/lib/auth-pages";
 import { getMe } from "@/lib/services/profile";
 import { getAiAllowance } from "@/lib/services/ai-quota";
+import { listPayments } from "@/lib/services/billing";
 
 export const metadata: Metadata = { title: "Account" };
 
 export default async function AccountPage() {
   const { user } = await requireAdultPage("/account");
-  const [me, ai] = await Promise.all([getMe(user), getAiAllowance(user.id)]);
+  const [me, ai, payments] = await Promise.all([getMe(user), getAiAllowance(user.id), listPayments(user)]);
 
   return (
     <div className="space-y-4">
@@ -40,6 +41,29 @@ export default async function AccountPage() {
           </Button>
         </CardContent>
       </Card>
+      {payments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Payments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y text-sm">
+              {payments.map((p) => (
+                <li key={p.reference} className="flex items-center justify-between gap-2 py-2">
+                  <span>
+                    {p.plan} · {new Date(p.createdAt).toLocaleDateString("en-GH")}
+                    {p.channel && <span className="text-muted-foreground"> · {p.channel.replace("_", " ")}</span>}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    GHS {p.amountGhs.toFixed(2)}
+                    <Badge variant={p.status === "SUCCESS" ? "default" : "secondary"}>{p.status.toLowerCase()}</Badge>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardContent className="flex flex-col gap-2 sm:flex-row">
           <Button asChild variant="outline" size="lg">
