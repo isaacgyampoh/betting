@@ -1,0 +1,28 @@
+// Built-in alias groups (spellings of the same club). DB rows in team_aliases extend these
+// at runtime, including aliases learned from confident matches.
+export const ALIAS_GROUPS: string[][] = [
+  ["manchester united", "man utd", "man united", "manchester utd"],
+  ["manchester city", "man city"],
+  ["tottenham", "tottenham hotspur", "spurs"],
+  ["wolverhampton", "wolves", "wolverhampton wanderers"],
+  ["nottingham forest", "nottm forest", "nottingham"],
+  ["brighton", "brighton and hove albion", "brighton hove albion", "brighton and hove"],
+  ["newcastle", "newcastle united", "newcastle utd"],
+  ["west ham", "west ham united"],
+  ["sheffield united", "sheffield utd"],
+  ["atletico madrid", "atl madrid", "atletico de madrid", "atl"],
+  ["real betis", "betis"],
+  ["athletic bilbao", "athletic club", "athletic"],
+  ["barcelona", "barca"],
+  ["inter", "inter milan", "inter milano", "internazionale"],
+  ["milan", "ac milan"],
+  ["napoli", "ssc napoli"],
+  ["asante kotoko", "kotoko"],
+  ["hearts of oak", "accra hearts of oak", "hearts"],
+  ["medeama", "medeama sc"],
+  ["dreams", "dreams fc"],
+  ["bechem united", "bechem utd", "bechem"],
+  ["berekum chelsea", "berekum"],
+  ["nations", "nations fc"],
+  ["karela united", "karela utd", "karela"],
+];

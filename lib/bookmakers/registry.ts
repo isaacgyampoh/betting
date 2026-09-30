@@ -2,7 +2,9 @@ import { createBetwayAdapter } from "@/lib/bookmakers/betway";
 import { createSportyBetAdapter } from "@/lib/bookmakers/sportybet";
 import { BOOKMAKER_SLUGS, type AdapterMode, type BookmakerAdapter, type BookmakerSlug } from "@/lib/bookmakers/types";
 
-const FACTORIES: Record<BookmakerSlug, (mode: AdapterMode) => BookmakerAdapter> = {
+type Factory = (mode: AdapterMode, opts?: { latencyMs?: number }) => BookmakerAdapter;
+
+const FACTORIES: Record<BookmakerSlug, Factory> = {
   sportybet: createSportyBetAdapter,
   betway: createBetwayAdapter,
 };
@@ -21,7 +23,9 @@ export function isBookmakerSlug(value: string): value is BookmakerSlug {
 export function getAdapter(slug: BookmakerSlug): BookmakerAdapter {
   let adapter = cache.get(slug);
   if (!adapter) {
-    adapter = FACTORIES[slug](modeFor(slug));
+    // MOCK_LATENCY_MS overrides the simulated network delay (tests set it to 0).
+    const latency = process.env.MOCK_LATENCY_MS;
+    adapter = FACTORIES[slug](modeFor(slug), latency !== undefined ? { latencyMs: Number(latency) } : {});
     cache.set(slug, adapter);
   }
   return adapter;

@@ -4,12 +4,20 @@ import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import type { AuthUser } from "@/lib/auth";
 import { getAdapter } from "@/lib/bookmakers/registry";
-import type { BookmakerSlug, LoadedSlip } from "@/lib/bookmakers/types";
+import type { BookmakerSlug, LoadedSlip, RawMarket } from "@/lib/bookmakers/types";
 import type { Market } from "@/lib/markets/types";
 import type { Prisma } from "@/lib/generated/prisma/client";
+import type { SlipKind } from "@/lib/generated/prisma/enums";
 import { requireEnabledBookmaker } from "@/lib/services/bookmakers";
 import { enforceRateLimit, logUsage } from "@/lib/services/usage";
-import { buildWarnings, toSelectionView, totalOdds, type SlipSummary, type SlipView } from "@/lib/slips/view";
+import {
+  buildWarnings,
+  toSelectionView,
+  totalOdds,
+  type SelectionStatus,
+  type SlipSummary,
+  type SlipView,
+} from "@/lib/slips/view";
 
 export const SLIP_LOAD_LIMIT = { limit: 30, windowMs: 60 * 60_000 };
 const CODE_CACHE_TTL_MS = 5 * 60_000;
@@ -49,9 +57,7 @@ async function loadWithCache(bookmakerId: string, slug: BookmakerSlug, code: str
   try {
     slip = await getAdapter(slug).loadCode(code);
   } catch (err) {
-    if (err instanceof AppError) throw err;
-    logger.error("bookmaker.load_failed", { bookmaker: slug, code, err });
-    throw new AppError("BOOKMAKER_UNAVAILABLE", "The bookmaker isn't responding right now. Please try again shortly.", { cause: err });
+    throw asBookmakerError(err, slug, "loadCode");
   }
 
   const payload = toCache(slip) as unknown as Prisma.InputJsonValue;
@@ -64,17 +70,41 @@ async function loadWithCache(bookmakerId: string, slug: BookmakerSlug, code: str
   return { slip, cached: false };
 }
 
+/** AppErrors pass through; anything else from an adapter becomes a logged BOOKMAKER_UNAVAILABLE. */
+export function asBookmakerError(err: unknown, slug: string, op: string): AppError {
+  if (err instanceof AppError) return err;
+  logger.error("bookmaker.call_failed", { bookmaker: slug, op, err });
+  return new AppError("BOOKMAKER_UNAVAILABLE", "The bookmaker isn't responding right now. Please try again shortly.", {
+    cause: err,
+  });
+}
+
 // --- Persistence -------------------------------------------------------------
 
-const slipInclude = {
-  bookmaker: { select: { slug: true, name: true } },
+export const slipInclude = {
+  bookmaker: { select: { id: true, slug: true, name: true } },
   selections: { orderBy: { position: "asc" }, include: { bookmakerEvent: { select: { externalId: true } } } },
+  parent: {
+    select: {
+      id: true,
+      bookingCode: true,
+      bookmaker: { select: { slug: true, name: true } },
+      selections: { select: { position: true, odds: true } },
+    },
+  },
 } satisfies Prisma.SlipInclude;
 
-type SlipWithSelections = Prisma.SlipGetPayload<{ include: typeof slipInclude }>;
+export type SlipRecord = Prisma.SlipGetPayload<{ include: typeof slipInclude }>;
 
-function toSlipView(slip: SlipWithSelections): SlipView {
+export function marketOf(s: { marketType: Market["type"] | null; period: Market["period"]; outcome: string | null; line: Prisma.Decimal | null }): Market | null {
+  return s.marketType && s.outcome
+    ? { type: s.marketType, period: s.period, outcome: s.outcome, line: s.line === null ? null : Number(s.line) }
+    : null;
+}
+
+export function toSlipView(slip: SlipRecord): SlipView {
   const now = new Date();
+  const parentOdds = new Map(slip.parent?.selections.map((p) => [p.position, p.odds === null ? null : Number(p.odds)]));
   const selections = slip.selections.map((s) =>
     toSelectionView(
       {
@@ -84,72 +114,100 @@ function toSlipView(slip: SlipWithSelections): SlipView {
         away: s.awayTeam,
         competition: s.competition,
         kickoffAt: s.kickoffAt,
-        market:
-          s.marketType && s.outcome
-            ? { type: s.marketType, period: s.period, outcome: s.outcome, line: s.line === null ? null : Number(s.line) }
-            : null,
+        market: marketOf(s),
         rawMarketName: s.rawMarketName,
         rawOutcomeName: s.rawOutcomeName,
         odds: s.odds === null ? null : Number(s.odds),
+        status: s.status as SelectionStatus,
+        ...(slip.parent && slip.kind === "CONVERTED" ? { sourceOdds: parentOdds.get(s.position) ?? null } : {}),
       },
       now,
     ),
   );
   return {
     id: slip.id,
-    bookmaker: slip.bookmaker,
+    bookmaker: { slug: slip.bookmaker.slug, name: slip.bookmaker.name },
     code: slip.bookingCode,
     kind: slip.kind,
     totalOdds: slip.totalOdds === null ? null : Number(slip.totalOdds),
-    selectionCount: selections.length,
+    selectionCount: selections.filter((s) => s.status === "OK").length,
     expiresAt: slip.expiresAt?.toISOString() ?? null,
     createdAt: slip.createdAt.toISOString(),
+    parent: slip.parent ? { id: slip.parent.id, bookmaker: slip.parent.bookmaker, code: slip.parent.bookingCode } : null,
     selections,
     warnings: buildWarnings(selections),
   };
 }
 
-async function saveLoadedSlip(userId: string, bookmakerId: string, loaded: LoadedSlip) {
-  // Remember each bookmaker event; Milestone 3 links them to canonical events for conversion.
-  const bmEvents = await Promise.all(
-    loaded.selections.map(({ event }) =>
-      db.bookmakerEvent.upsert({
-        where: { bookmakerId_externalId: { bookmakerId, externalId: event.externalId } },
-        create: {
-          bookmakerId,
-          externalId: event.externalId,
-          homeName: event.home,
-          awayName: event.away,
-          kickoffAt: event.kickoffAt,
-          competition: event.competition,
-        },
-        update: { homeName: event.home, awayName: event.away, kickoffAt: event.kickoffAt, competition: event.competition },
-        select: { id: true },
-      }),
+/** A selection about to be saved. `event.externalId` is null when the game wasn't found on this bookmaker. */
+export type DraftSelection = {
+  position: number;
+  event: { externalId: string | null; home: string; away: string; kickoffAt: Date; competition: string | null };
+  market: Market | null;
+  odds: number | null;
+  raw: RawMarket | null;
+  status: SelectionStatus;
+};
+
+export async function saveSlip(input: {
+  userId: string;
+  bookmakerId: string;
+  kind: SlipKind;
+  code: string | null;
+  parentSlipId?: string | null;
+  expiresAt: Date | null;
+  selections: DraftSelection[];
+}) {
+  const { bookmakerId } = input;
+  // Remember each bookmaker event; conversion links them to canonical events.
+  const bmEventIds = await Promise.all(
+    input.selections.map(({ event }) =>
+      event.externalId
+        ? db.bookmakerEvent
+            .upsert({
+              where: { bookmakerId_externalId: { bookmakerId, externalId: event.externalId } },
+              create: {
+                bookmakerId,
+                externalId: event.externalId,
+                homeName: event.home,
+                awayName: event.away,
+                kickoffAt: event.kickoffAt,
+                competition: event.competition,
+              },
+              update: { homeName: event.home, awayName: event.away, kickoffAt: event.kickoffAt, competition: event.competition },
+              select: { id: true },
+            })
+            .then((r) => r.id)
+        : Promise.resolve(null),
     ),
   );
 
+  const ok = input.selections.filter((s) => s.status === "OK");
   return db.slip.create({
     data: {
-      userId,
+      userId: input.userId,
       bookmakerId,
-      kind: "LOADED",
-      bookingCode: loaded.code,
-      expiresAt: loaded.expiresAt,
-      totalOdds: totalOdds(loaded.selections.map((s) => s.odds)),
+      kind: input.kind,
+      bookingCode: input.code,
+      parentSlipId: input.parentSlipId ?? null,
+      expiresAt: input.expiresAt,
+      totalOdds: totalOdds(ok.map((s) => s.odds)),
       selections: {
-        create: loaded.selections.map((s, i) => ({
-          position: i + 1,
-          bookmakerEventId: bmEvents[i].id,
+        create: input.selections.map((s, i) => ({
+          position: s.position,
+          bookmakerEventId: bmEventIds[i],
           homeTeam: s.event.home,
           awayTeam: s.event.away,
           kickoffAt: s.event.kickoffAt,
           competition: s.event.competition,
-          ...marketColumns(s.market),
+          ...(s.market
+            ? { marketType: s.market.type, period: s.market.period, outcome: s.market.outcome, line: s.market.line }
+            : { marketType: null, outcome: null }),
           odds: s.odds,
-          rawMarketName: s.raw.marketName ?? s.raw.marketId,
-          rawOutcomeName: s.raw.outcomeName ?? s.raw.outcomeId,
-          raw: s.raw as unknown as Prisma.InputJsonValue,
+          rawMarketName: s.raw ? (s.raw.marketName ?? s.raw.marketId) : null,
+          rawOutcomeName: s.raw ? (s.raw.outcomeName ?? s.raw.outcomeId) : null,
+          raw: s.raw ? (s.raw as unknown as Prisma.InputJsonValue) : undefined,
+          status: s.status,
         })),
       },
     },
@@ -157,8 +215,10 @@ async function saveLoadedSlip(userId: string, bookmakerId: string, loaded: Loade
   });
 }
 
-function marketColumns(m: Market | null) {
-  return m ? { marketType: m.type, period: m.period, outcome: m.outcome, line: m.line } : { marketType: null, outcome: null };
+export async function getOwnedSlipRecord(user: AuthUser, id: string): Promise<SlipRecord> {
+  const slip = await db.slip.findFirst({ where: { id, userId: user.id }, include: slipInclude });
+  if (!slip) throw new AppError("NOT_FOUND", "Slip not found.");
+  return slip;
 }
 
 // --- Public API --------------------------------------------------------------
@@ -174,7 +234,21 @@ export async function loadSlip(opts: { user: AuthUser; bookmaker: BookmakerSlug;
   try {
     if (!code) throw new AppError("INVALID_CODE", "That doesn't look like a booking code. Check it and try again.");
     const { slip, cached } = await loadWithCache(bookmaker.id, opts.bookmaker, code);
-    const saved = await saveLoadedSlip(user.id, bookmaker.id, slip);
+    const saved = await saveSlip({
+      userId: user.id,
+      bookmakerId: bookmaker.id,
+      kind: "LOADED",
+      code: slip.code,
+      expiresAt: slip.expiresAt,
+      selections: slip.selections.map((s, i) => ({
+        position: i + 1,
+        event: s.event,
+        market: s.market,
+        odds: s.odds,
+        raw: s.raw,
+        status: "OK",
+      })),
+    });
     await logUsage({ userId: user.id, ipHash, kind: "SLIP_LOAD", success: true, meta: { ...meta, cached } });
     return toSlipView(saved);
   } catch (err) {
@@ -186,9 +260,7 @@ export async function loadSlip(opts: { user: AuthUser; bookmaker: BookmakerSlug;
 }
 
 export async function getSlip(user: AuthUser, id: string): Promise<SlipView> {
-  const slip = await db.slip.findFirst({ where: { id, userId: user.id }, include: slipInclude });
-  if (!slip) throw new AppError("NOT_FOUND", "Slip not found.");
-  return toSlipView(slip);
+  return toSlipView(await getOwnedSlipRecord(user, id));
 }
 
 export async function listRecentSlips(user: AuthUser, limit = 10): Promise<SlipSummary[]> {
@@ -196,12 +268,16 @@ export async function listRecentSlips(user: AuthUser, limit = 10): Promise<SlipS
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
     take: limit,
-    include: { bookmaker: { select: { slug: true, name: true } }, _count: { select: { selections: true } } },
+    include: {
+      bookmaker: { select: { slug: true, name: true } },
+      _count: { select: { selections: { where: { status: "OK" } } } },
+    },
   });
   return slips.map((s) => ({
     id: s.id,
     bookmaker: s.bookmaker,
     code: s.bookingCode,
+    kind: s.kind,
     totalOdds: s.totalOdds === null ? null : Number(s.totalOdds),
     selectionCount: s._count.selections,
     createdAt: s.createdAt.toISOString(),

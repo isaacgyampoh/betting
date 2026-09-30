@@ -312,6 +312,8 @@ enum SelectionStatus {
   OK // present on this bookmaker as-is
   EVENT_NOT_FOUND // conversion: game not found on target bookmaker
   MARKET_NOT_FOUND // conversion: game found but market/outcome not offered
+  EVENT_STARTED // conversion: game already started, can't be booked
+  UNSUPPORTED_MARKET // conversion: source market isn't in our internal model
 }
 
 model Selection {

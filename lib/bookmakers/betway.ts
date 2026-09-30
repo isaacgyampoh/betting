@@ -184,6 +184,7 @@ export function createBetwayAdapter(mode: AdapterMode, opts: { latencyMs?: numbe
     loadCode: (code) => (mode === "mock" ? mock.loadCode(code) : liveNotImplemented("betway", "loadCode")),
     createCode: (s) => (mode === "mock" ? mock.createCode(s) : liveNotImplemented("betway", "createCode")),
     searchEvent: (h, a, k) => (mode === "mock" ? mock.searchEvent(h, a, k) : liveNotImplemented("betway", "searchEvent")),
+    getEventMarkets: (id) => (mode === "mock" ? mock.getEventMarkets(id) : liveNotImplemented("betway", "getEventMarkets")),
     mapMarket: (raw, event) => mapMarket(raw, event),
     unmapMarket: (market, event) => unmapMarket(market, event),
   };

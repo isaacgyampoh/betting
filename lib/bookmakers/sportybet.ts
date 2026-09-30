@@ -160,6 +160,7 @@ export function createSportyBetAdapter(mode: AdapterMode, opts: { latencyMs?: nu
     loadCode: (code) => (mode === "mock" ? mock.loadCode(code) : liveNotImplemented("sportybet", "loadCode")),
     createCode: (s) => (mode === "mock" ? mock.createCode(s) : liveNotImplemented("sportybet", "createCode")),
     searchEvent: (h, a, k) => (mode === "mock" ? mock.searchEvent(h, a, k) : liveNotImplemented("sportybet", "searchEvent")),
+    getEventMarkets: (id) => (mode === "mock" ? mock.getEventMarkets(id) : liveNotImplemented("sportybet", "getEventMarkets")),
     mapMarket: (raw) => mapMarket(raw),
     unmapMarket: (market) => unmapMarket(market),
   };

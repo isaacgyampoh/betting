@@ -2,7 +2,7 @@ import { createHash, randomInt } from "node:crypto";
 import { AppError } from "@/lib/errors";
 import { mapOrLog } from "@/lib/bookmakers/map";
 import { derivePrices, FIXTURES, mockKickoff, type MockFixture, type MockPrices } from "@/lib/bookmakers/mock/fixtures";
-import { normalizeTeamName } from "@/lib/matching/normalize";
+import { teamSimilarity } from "@/lib/matching/similarity";
 import type { Market } from "@/lib/markets/types";
 import type {
   BookmakerAdapter,
@@ -10,6 +10,7 @@ import type {
   BookmakerSlug,
   CreateCodeSelection,
   CreatedCode,
+  EventMarkets,
   LoadedSlip,
   RawMarket,
 } from "@/lib/bookmakers/types";
@@ -138,14 +139,24 @@ export function createMockBackend(config: MockBackendConfig, adapter: () => Adap
 
   async function searchEvent(home: string, away: string, kickoff: Date): Promise<BookmakerEventInfo[]> {
     await sleep(config.latencyMs / 2);
-    const h = normalizeTeamName(home);
-    const aw = normalizeTeamName(away);
-    const close = (x: string, y: string) => x === y || x.includes(y) || y.includes(x);
+    // Like a site search: loose on names (either team), strict on kickoff window.
     return listed
       .map((f) => eventOf(f))
       .filter((e) => Math.abs(e.kickoffAt.getTime() - kickoff.getTime()) <= 15 * 60_000)
-      .filter((e) => close(normalizeTeamName(e.home), h) || close(normalizeTeamName(e.away), aw));
+      .filter((e) => Math.max(teamSimilarity(e.home, home), teamSimilarity(e.away, away)) >= 0.6);
   }
 
-  return { loadCode, createCode, searchEvent, events: () => listed.map((f) => eventOf(f)), offersOf };
+  async function getEventMarkets(eventExternalId: string): Promise<EventMarkets> {
+    await sleep(config.latencyMs / 2);
+    const f = listed.find((x) => config.eventId(x) === eventExternalId);
+    if (!f) throw new AppError("NOT_FOUND", "That game isn't available on this bookmaker.");
+    const event = eventOf(f);
+    const a = adapter();
+    return {
+      event,
+      offers: offersOf(f).map((o) => ({ ...o, market: a.mapMarket(o.raw, event) })),
+    };
+  }
+
+  return { loadCode, createCode, searchEvent, getEventMarkets, events: () => listed.map((f) => eventOf(f)), offersOf };
 }

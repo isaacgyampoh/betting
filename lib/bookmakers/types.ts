@@ -47,6 +47,11 @@ export type LoadedSlip = {
   expiresAt: Date | null;
 };
 
+export type EventMarkets = {
+  event: BookmakerEventInfo;
+  offers: { raw: RawMarket; market: Market | null; odds: number }[];
+};
+
 export type CreateCodeSelection = { eventExternalId: string; market: Market };
 
 export type CreatedCode = { code: string; expiresAt: Date | null };
@@ -67,6 +72,9 @@ export interface BookmakerAdapter {
 
   /** Finds candidate events for a fixture (kickoff within ±15 minutes). */
   searchEvent(home: string, away: string, kickoff: Date): Promise<BookmakerEventInfo[]>;
+
+  /** All markets and current odds for one event (used to price converted picks). */
+  getEventMarkets(eventExternalId: string): Promise<EventMarkets>;
 
   /** Bookmaker market → internal model. Returns null (never throws) when unknown. */
   mapMarket(raw: RawMarket, event: Pick<BookmakerEventInfo, "home" | "away">): Market | null;

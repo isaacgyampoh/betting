@@ -3,6 +3,15 @@ import type { Market } from "@/lib/markets/types";
 
 // API response shapes for slips. Pure and client-safe: shared by services, API and UI.
 
+export type SelectionStatus = "OK" | "EVENT_NOT_FOUND" | "MARKET_NOT_FOUND" | "EVENT_STARTED" | "UNSUPPORTED_MARKET";
+
+export const STATUS_REASON: Record<Exclude<SelectionStatus, "OK">, string> = {
+  EVENT_NOT_FOUND: "Game not found on this bookmaker",
+  MARKET_NOT_FOUND: "Game found, but this market isn't offered",
+  EVENT_STARTED: "Game already started, so it can't be booked",
+  UNSUPPORTED_MARKET: "Market not supported yet",
+};
+
 export type SelectionView = {
   position: number;
   eventExternalId: string | null;
@@ -15,9 +24,12 @@ export type SelectionView = {
   marketLabel: string;
   pickLabel: string;
   odds: number | null;
+  status: SelectionStatus;
+  /** Odds of the same pick on the parent slip (conversions), for comparison. */
+  sourceOdds?: number | null;
 };
 
-export type SlipWarningCode = "STARTED" | "UNMAPPED_MARKET" | "MISSING_ODDS";
+export type SlipWarningCode = "STARTED" | "UNMAPPED_MARKET" | "MISSING_ODDS" | "NOT_CONVERTED";
 export type SlipWarning = { code: SlipWarningCode; message: string; positions: number[] };
 
 export type SlipView = {
@@ -29,6 +41,7 @@ export type SlipView = {
   selectionCount: number;
   expiresAt: string | null;
   createdAt: string;
+  parent: { id: string; bookmaker: { slug: string; name: string }; code: string | null } | null;
   selections: SelectionView[];
   warnings: SlipWarning[];
 };
@@ -37,6 +50,7 @@ export type SlipSummary = {
   id: string;
   bookmaker: { slug: string; name: string };
   code: string | null;
+  kind: string;
   totalOdds: number | null;
   selectionCount: number;
   createdAt: string;
@@ -53,6 +67,8 @@ export type SelectionInput = {
   rawMarketName: string | null;
   rawOutcomeName: string | null;
   odds: number | null;
+  status?: SelectionStatus;
+  sourceOdds?: number | null;
 };
 
 /** Product of all odds, rounded to 2 dp. Null when no selection has odds. */
@@ -75,13 +91,24 @@ export function toSelectionView(s: SelectionInput, now = new Date()): SelectionV
     marketLabel: s.market ? marketLabel(s.market) : (s.rawMarketName ?? "Unknown market"),
     pickLabel: s.market ? pickLabel(s.market, s.home, s.away) : (s.rawOutcomeName ?? "Unknown pick"),
     odds: s.odds,
+    status: s.status ?? "OK",
+    ...(s.sourceOdds !== undefined ? { sourceOdds: s.sourceOdds } : {}),
   };
 }
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
-export function buildWarnings(selections: SelectionView[]): SlipWarning[] {
+export function buildWarnings(all: SelectionView[]): SlipWarning[] {
   const warnings: SlipWarning[] = [];
+  const skipped = all.filter((s) => s.status !== "OK").map((s) => s.position);
+  if (skipped.length) {
+    warnings.push({
+      code: "NOT_CONVERTED",
+      positions: skipped,
+      message: `${skipped.length} ${plural(skipped.length, "game", "games")} couldn't be carried over and ${plural(skipped.length, "is", "are")} not on the new code. See the reasons below.`,
+    });
+  }
+  const selections = all.filter((s) => s.status === "OK");
   const started = selections.filter((s) => s.started).map((s) => s.position);
   if (started.length) {
     warnings.push({

@@ -25,7 +25,10 @@ export function RecentSlips({ slips, activeId, onOpen }: { slips: SlipSummary[];
                 className={cn("flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent", s.id === activeId && "bg-accent/60")}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-mono text-sm font-semibold tracking-wider">{s.code ?? "Edited slip"}</p>
+                  <p className="font-mono text-sm font-semibold tracking-wider">
+                    {s.code ?? "No code"}
+                    {s.kind !== "LOADED" && <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">{s.kind.toLowerCase()}</span>}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {s.bookmaker.name} · {s.selectionCount} games · {timeAgo(s.createdAt)}
                   </p>
