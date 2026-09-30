@@ -1,17 +1,22 @@
 import "server-only";
 import { publicEnv } from "@/lib/public-env";
 
-/** Sign-in methods enabled in Supabase (public settings endpoint), cached for 5 minutes. */
+const TTL_MS = 5 * 60_000;
+let cached: { value: { google: boolean }; at: number } | null = null;
+
+/** Sign-in methods enabled in Supabase (public settings endpoint), cached in memory for 5 minutes. */
 export async function enabledProviders(): Promise<{ google: boolean }> {
+  if (cached && Date.now() - cached.at < TTL_MS) return cached.value;
   try {
     const res = await fetch(`${publicEnv.supabaseUrl}/auth/v1/settings`, {
       headers: { apikey: publicEnv.supabaseAnonKey },
-      next: { revalidate: 300 },
+      cache: "no-store",
     });
-    if (!res.ok) return { google: false };
+    if (!res.ok) return cached?.value ?? { google: false };
     const body = (await res.json()) as { external?: Record<string, boolean> };
-    return { google: !!body.external?.google };
+    cached = { value: { google: !!body.external?.google }, at: Date.now() };
+    return cached.value;
   } catch {
-    return { google: false };
+    return cached?.value ?? { google: false };
   }
 }

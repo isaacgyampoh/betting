@@ -46,3 +46,11 @@ next-env.d.ts
 
 # Captured bookmaker traffic (may contain personal data)
 /captures/
+
+# Temporary schema used by scripts/prisma-generate.mjs
+/prisma/.schema.cloudflare.prisma
+# Cloudflare / OpenNext build output and local secrets
+/.open-next/
+/.wrangler/
+.dev.vars*
+!.dev.vars.example

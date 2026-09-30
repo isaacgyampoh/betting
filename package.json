@@ -14,16 +14,21 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "postinstall": "prisma generate",
-    "db:generate": "prisma generate",
+    "postinstall": "node scripts/prisma-generate.mjs node",
+    "db:generate": "node scripts/prisma-generate.mjs node",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "test:int": "vitest run --config vitest.integration.config.mts",
-    "vercel-build": "prisma generate && node scripts/migrate-on-deploy.mjs && next build"
+    "cf:build": "node scripts/cf-build.mjs",
+    "cf:preview": "node scripts/cf-build.mjs && opennextjs-cloudflare preview",
+    "cf:deploy": "MIGRATE=1 node scripts/migrate-on-deploy.mjs && node scripts/cf-build.mjs && opennextjs-cloudflare deploy",
+    "cf:build:ci": "node scripts/migrate-on-deploy.mjs && node scripts/cf-build.mjs",
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
+    "@opennextjs/cloudflare": "1.20.7",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@supabase/ssr": "^0.12.7",
@@ -34,6 +39,7 @@
     "next": "16.3.7",
     "next-themes": "^0.4.6",
     "pg": "^8.23.0",
+    "pg-cloudflare": "^1.4.0",
     "radix-ui": "^1.6.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -56,6 +62,7 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "wrangler": "4.145.0"
   }
 }

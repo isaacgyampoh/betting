@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gameclaw",
+  // Custom entry: wraps the OpenNext worker to add the cron handler and the www → apex redirect.
+  "main": "worker.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+
+  // Only serve on the real domain (no *.workers.dev or preview URLs).
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "gameclaw.win", "custom_domain": true },
+    { "pattern": "www.gameclaw.win", "custom_domain": true }
+  ],
+
+  // Run close to the database (Supabase, eu-west-1) since most requests make several queries.
+  "placement": { "mode": "smart" },
+  "observability": { "enabled": true },
+
+  // Daily cleanup (03:30 UTC = GMT): see worker.ts → /api/v1/cron/cleanup.
+  "triggers": { "crons": ["30 3 * * *"] },
+
+  // Public / non-secret configuration. Secrets are set with `wrangler secret put` (see docs/deploy.md).
+  // scripts/cf-build.mjs also injects the NEXT_PUBLIC_* values below into `next build`.
+  "vars": {
+    "NEXT_PUBLIC_SITE_URL": "https://gameclaw.win",
+    "NEXT_PUBLIC_SUPABASE_URL": "https://qefedcphkmxuxjetmtqw.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlZmVkY3Boa214dXhqZXRtdHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NjE0NTUsImV4cCI6MjEwNjMzNzQ1NX0.0uK_oW-vIBwPfpg1qXi53BjXpF2XjfsdUz2SO9hYh6g",
+    "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "pk_live_9d21dd9b8bd208a10cd1a1195a0dbd1d477894b1",
+    "SPORTYBET_MODE": "mock",
+    "BETWAY_MODE": "mock",
+    "STATS_MODE": "auto"
+  }
+
+  // Hyperdrive (recommended): after `wrangler hyperdrive create gameclaw-db ...`, add:
+  // "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<id>" }]
+}

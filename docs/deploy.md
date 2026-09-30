@@ -1,180 +1,139 @@
-# Deploying gameclaw (Vercel + Supabase)
+# Deploying gameclaw (Cloudflare Workers + Supabase)
 
-**Live:** https://gameclaw.win (`www` and the old `gameclaw-smoky.vercel.app` address 308-redirect here). This is Vercel project `gameclaw` in team *isaac's projects*, running in region `dub1` (Dublin), next to the Supabase database in eu-west-1 (Ireland).
+**Production:** https://gameclaw.win. This is the Cloudflare Worker `gameclaw`, built with `@opennextjs/cloudflare`. Supabase Postgres is in eu-west-1 (Ireland).
 
-## What's already configured
+Plan: **Workers Paid ($5/month) is required.** The Worker is ~4.9 MiB gzipped (the free limit is 3 MiB), and the free plan's 10 ms CPU per request is too little for server-rendered Next.js. The paid plan includes Hyperdrive, Cron Triggers and Workers Logs.
 
-| Piece | How it works |
+## How it fits together
+
+| Piece | Where |
 |---|---|
-| Build | `vercel.json` → install `pnpm install --frozen-lockfile`, build `pnpm run vercel-build` (= `prisma generate` → migrations → `next build`) |
-| pnpm / Node | `packageManager: pnpm@12.3.4` via Corepack (`ENABLE_EXPERIMENTAL_COREPACK=1`); Node `24.x` via `engines` |
-| Migrations | `scripts/migrate-on-deploy.mjs` runs `prisma migrate deploy` with `DIRECT_URL` on **production** deploys only. Preview deploys never touch the DB, and `migrate dev` is never used. If `DIRECT_URL` is missing, it warns and skips. |
-| Cron | `/api/v1/cron/cleanup` runs daily at 03:30 GMT, protected by `CRON_SECRET` (Vercel sends it automatically) |
-| Local uploads | `.vercelignore` keeps `.env*` and local-only folders out of `vercel deploy` uploads |
+| Worker config | `wrangler.jsonc`: custom domains `gameclaw.win` and `www.gameclaw.win`, Smart Placement, logs, cron, public vars |
+| Entry point | `worker.ts`: wraps the OpenNext output; `www` → apex 308; daily cron → `/api/v1/cron/cleanup` with `CRON_SECRET` |
+| Build | `pnpm cf:build` → Workers Prisma client → `opennextjs-cloudflare build`, with `NEXT_PUBLIC_*` taken from `wrangler.jsonc` vars (so `.env.local` can't leak into production) |
+| Cache | `open-next.config.ts`: static-assets incremental cache. There's no ISR, so no R2/KV bucket is needed. |
+| Database | `lib/db.ts`: one Prisma client **per request** on Workers, via Hyperdrive if bound, else `DATABASE_URL`. One client per process on Node (`pnpm dev`, tests, scripts). |
+| Prisma client | `scripts/prisma-generate.mjs`: the Workers build generates `runtime = "cloudflare"`; everything else uses the Node client |
+| Auth guards | Each protected section has a `layout.tsx` guard (`requireAdultPage`), with its `loading.tsx` inside, so signed-out visitors get a real 307. A client `SessionKeeper` refreshes sessions. There's no `proxy.ts`; Node middleware is experimental on OpenNext. |
+| Migrations | `scripts/migrate-on-deploy.mjs`: `prisma migrate deploy` (never `migrate dev`), only in production-branch builds or with `MIGRATE=1` |
 
-## Environment variables (Vercel → Project → Settings → Environment Variables)
+## Commands
 
-✅ = already set on Production. ⬜ = you still need to add it.
-
-| Variable | Scope | Status | Value / where from |
-|---|---|---|---|
-| `NEXT_PUBLIC_SITE_URL` | public | ✅ | `https://gameclaw.win`. Change it when you add a custom domain. |
-| `NEXT_PUBLIC_SUPABASE_URL` | public | ✅ | Supabase → Project Settings → API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | ✅ | Supabase → Project Settings → API (anon key; RLS protects data) |
-| `IP_HASH_SALT` | server | ✅ | Generated for production |
-| `CRON_SECRET` | server | ✅ | Generated for production |
-| `SPORTYBET_MODE`, `BETWAY_MODE` | server | ✅ | `mock` (until live adapters are built) |
-| `STATS_MODE` | server | ✅ | `auto` |
-| `ENABLE_EXPERIMENTAL_COREPACK` | build | ✅ | `1` |
-| `DATABASE_URL` | server | ⬜ | Supabase → **Connect → ORMs → Prisma** → Transaction pooler (port **6543**) |
-| `DIRECT_URL` | server | ⬜ | Same screen → Session pooler (port **5432**). Used for migrations on deploy. |
-| `ANTHROPIC_API_KEY` | server | ⬜ | console.anthropic.com → API Keys. Set a monthly spend limit there too. |
-| `PAYSTACK_SECRET_KEY` | server | ⬜ | Paystack → Settings → API Keys & Webhooks (`sk_test_…` first) |
-| `API_FOOTBALL_KEY` | server | ⬜ optional | dashboard.api-football.com. Without it, stats use labelled sample data. |
-| `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | public | optional | Not needed today (hosted checkout) |
-
-Never add the Supabase **service_role** key; the app doesn't use it. Every non-`NEXT_PUBLIC_` value above must stay server-only.
-
-Add variables from the dashboard (tick **Production** and **Preview**; for Preview use test keys), or from the CLI:
 ```bash
-vercel env add DATABASE_URL production      # paste the value when prompted
+pnpm dev            # Next.js dev server on Node, as before
+pnpm cf:preview     # production build on the real Workers runtime at http://localhost:8787 (uses .dev.vars)
+pnpm cf:deploy      # from your machine: migrate → build → deploy (needs `npx wrangler login` once)
+pnpm cf:typegen     # regenerate cloudflare-env.d.ts after changing wrangler.jsonc
 ```
-Any env change needs a redeploy: `vercel deploy --prod`, or Deployments → ⋯ → Redeploy.
 
-## Domain: gameclaw.win (Cloudflare DNS → Vercel)
+For local preview secrets, copy `.dev.vars.example` to `.dev.vars` (git-ignored). Keep a dummy Paystack key there.
 
-`gameclaw.win` is registered and hosted on Cloudflare DNS, and points at Vercel. These records are already created:
+## Configuration
 
-| Type | Name | Content | Proxy |
-|---|---|---|---|
-| A | `gameclaw.win` | `76.76.21.21` | DNS only (grey cloud) |
-| CNAME | `www` | `cname.vercel-dns.com` | DNS only (grey cloud) |
+### Public values: `wrangler.jsonc` → `vars` (committed)
+`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`, `SPORTYBET_MODE`, `BETWAY_MODE` and `STATS_MODE`. These are safe to publish: the anon key is protected by RLS, and `pk_` keys are public by design.
 
-- **In Vercel:** Project → Settings → Domains lists both domains as verified, with `www.gameclaw.win` set to redirect (308) to `gameclaw.win`. Vercel issues and renews the HTTPS certificates.
-- **Keep them grey-clouded.** Vercel recommends DNS-only; turning on the orange-cloud proxy gets in the way of certificate renewal and Vercel's own edge.
-  - With DNS-only, Cloudflare's WAF, rate limiting and "Always Use HTTPS" don't touch traffic, and they aren't needed.
-  - Vercel already forces HTTPS (http → https 308) and has built-in DDoS protection.
-  - The app rate-limits every free tool per user, and the Paystack webhook is signature-checked.
-- **The old URL:** production requests to `*.vercel.app` are redirected to `NEXT_PUBLIC_SITE_URL` by `proxy.ts`. That keeps cookies, the installed app and SEO on a single origin. Preview deploys aren't redirected.
+### Secrets: `npx wrangler secret put <NAME>` (server-only, never committed)
 
-## Step 1: Database password and migrations
+| Secret | Value |
+|---|---|
+| `DATABASE_URL` | Supabase transaction pooler, port 6543. Used if Hyperdrive isn't bound. |
+| `IP_HASH_SALT` | `openssl rand -hex 32` |
+| `CRON_SECRET` | `openssl rand -hex 32` |
+| `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys |
+| `PAYSTACK_SECRET_KEY` | Paystack → Settings → API Keys (`sk_live_…`) |
+| `API_FOOTBALL_KEY` | optional; dashboard.api-football.com |
 
-1. Supabase → Project Settings → Database → **Reset database password**. Save it in a password manager.
-2. Supabase → **Connect → ORMs → Prisma**. Copy the two connection strings and put the password in both.
-   - If the password has special characters, URL-encode them (`@` → `%40`, `#` → `%23`).
-3. Paste both into your local `.env.local` (`DATABASE_URL`, `DIRECT_URL`) and into Vercel (table above).
-4. From your machine:
-   ```bash
-   pnpm db:migrate && pnpm db:seed
-   ```
-   Future production deploys apply new migrations automatically.
+The Supabase service_role key is never used. Don't add it.
 
-## Step 2: Supabase Auth URLs
+### Workers Builds (automatic deploys from GitHub)
+1. Make `github.com/isaacgyampoh/betting` **private**, then push `main`.
+2. Cloudflare dashboard → **Workers & Pages → gameclaw → Settings → Builds → Connect** → pick the repo. Production branch: `main`.
+3. **Build command:** `pnpm cf:build:ci`. **Deploy command:** `pnpm exec opennextjs-cloudflare deploy`.
+4. **Build variables:**
+   - `DIRECT_URL`: Supabase session pooler, port 5432, for migrations; mark it as a secret.
+   - `ENABLE_EXPERIMENTAL_COREPACK`: `1`
+5. Runtime secrets are the ones in the table above; builds reuse the Worker's secrets.
 
-Supabase → Authentication → **URL Configuration**:
+Every push to `main` then migrates, builds and deploys. Other branches get preview builds without migrating.
 
-- **Site URL:** `https://gameclaw.win`
-- **Redirect URLs** (add all four):
-  - `https://gameclaw.win/auth/callback`
-  - `https://gameclaw-*-isaacs-projects-7cdab31a.vercel.app/auth/callback` (preview deploys)
-  - `http://localhost:3000/auth/callback`
-  - your custom domain's `/auth/callback`, when you have one
+### Hyperdrive (recommended)
+Without it, every request opens a new TLS connection to Ireland. With it, pooled connections sit next to the database.
+```bash
+npx wrangler hyperdrive create gameclaw-db \
+  --connection-string="postgresql://postgres.qefedcphkmxuxjetmtqw:<PASSWORD>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
+```
+Add the returned id to `wrangler.jsonc` as `"hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<id>" }]`, run `pnpm cf:typegen`, then deploy. `lib/db.ts` picks it up automatically.
 
-Then under Authentication → **SMTP Settings**, add a real email provider (Resend, Postmark, Brevo…). The built-in sender only allows a few magic-link emails an hour.
+## Domain: gameclaw.win
 
-## Step 2b: Sign-in email from noreply@gameclaw.win (Resend)
+The Worker owns `gameclaw.win` and `www.gameclaw.win` as **Custom Domains** (`routes` in `wrangler.jsonc`). Cloudflare creates the DNS records and certificates. `www` redirects to the apex in `worker.ts`.
 
-Supabase's built-in sender allows only **2 emails an hour**. Resend's free tier gives 3,000 a month.
+**Cutover from Vercel (one time):**
+1. In Cloudflare DNS, delete the Vercel records: `A gameclaw.win 76.76.21.21` and `CNAME www cname.vercel-dns.com`.
+2. Run `pnpm cf:deploy`, or trigger Workers Builds. This attaches both custom domains.
+3. Check `https://gameclaw.win/api/v1/health` returns `ok`, then remove the domains from the Vercel project and delete it.
 
-1. At resend.com, sign up and go to **Domains → Add domain → `gameclaw.win`**. Pick the region **Ireland (eu-west-1)**, next to the database.
-2. Resend shows the DNS records to add. With a Cloudflare token that has DNS edit access, Claude can add them. Otherwise add them in Cloudflare → DNS, all **DNS only**:
+**Recommended Cloudflare security settings** (traffic is proxied through Cloudflare now, so these apply):
+- **SSL/TLS:** set to Full (strict), and turn on **Always Use HTTPS**.
+- **Security → WAF → Rate limiting rules:**
+  - When: URI Path starts with `/api/v1/` **and** URI Path does not start with `/api/v1/webhooks/`
+  - Limit: 60 requests per 1 minute, counted per IP
+  - Action: Block for 1 minute
+- **Security → Bots:** turn on **Bot Fight Mode**. It can't exempt paths, so add a WAF custom rule:
+  - When: URI Path equals `/api/v1/webhooks/paystack`
+  - Action: **Skip** (remaining custom rules, rate limiting, Bot Fight Mode)
+  - Paystack's own server calls then always get through. They're verified by HMAC signature in the app anyway.
 
-   | Type | Name | Content | Notes |
-   |---|---|---|---|
-   | MX | `send` | `feedback-smtp.eu-west-1.amazonses.com`, priority 10 | bounce handling |
-   | TXT | `send` | `v=spf1 include:amazonses.com ~all` | SPF |
-   | TXT | `resend._domainkey` | the `p=MIGfMA0…` value from Resend | DKIM, unique to your domain |
-   | TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:dmarc@gameclaw.win` | start with `p=none`; move to `p=quarantine` once mail is flowing |
+## Third-party settings for gameclaw.win
 
-3. In Resend, click **Verify** and wait for all three to show Verified. That usually takes a few minutes.
-4. In Resend, go to **API Keys → Create** with *Sending access* for `gameclaw.win` only.
-5. In Supabase → Authentication → **SMTP Settings → Enable custom SMTP**:
+**Supabase → Authentication → URL Configuration**
+- Site URL: `https://gameclaw.win`
+- Redirect URLs: `https://gameclaw.win/**`, `http://localhost:3000/**`, `http://localhost:8787/**`
 
-   | Field | Value |
-   |---|---|
-   | Sender email | `noreply@gameclaw.win` |
-   | Sender name | `gameclaw` |
-   | Host | `smtp.resend.com` |
-   | Port | `465` |
-   | Username | `resend` |
-   | Password | the Resend API key |
+**Google Cloud → Credentials → OAuth client**
+- Authorized JavaScript origins: `https://gameclaw.win`
+- Authorized redirect URIs: `https://qefedcphkmxuxjetmtqw.supabase.co/auth/v1/callback`
+- OAuth consent screen:
+  - Authorized domains: `gameclaw.win` and `supabase.co`
+  - Homepage `https://gameclaw.win`; privacy `https://gameclaw.win/privacy`; terms `https://gameclaw.win/terms`
+  - Then **Publish app**.
 
-6. In Supabase → Authentication → **Rate Limits**, raise "emails sent per hour" to about 100.
+**Paystack → Settings → API Keys & Webhooks**
+- Webhook URL: `https://gameclaw.win/api/v1/webhooks/paystack`. **Only if this Paystack account isn't already sending webhooks to another app**, since there is one webhook URL per account. The app works without it: `/billing/callback` verifies every payment with Paystack.
+- Callback URL: leave empty. The app sends `https://gameclaw.win/billing/callback` with each payment.
 
-## Step 3: Google sign-in (optional)
+**Email via Resend (noreply@gameclaw.win)**
+1. At resend.com, go to Domains → Add `gameclaw.win` (region: Ireland).
+2. Add the DNS records Resend shows, all DNS-only:
 
-1. Google Cloud Console → APIs & Services → **Credentials → Create credentials → OAuth client ID** → *Web application*.
-2. **Authorized JavaScript origins:** `https://gameclaw.win`
-3. **Authorized redirect URIs:** `https://qefedcphkmxuxjetmtqw.supabase.co/auth/v1/callback`. This is the *Supabase* callback, not the app's.
-4. Copy the client ID and secret into Supabase → Authentication → **Providers → Google** → Enable → Save.
-5. OAuth consent screen → **Publish app**. Until you do, only listed test users can sign in.
+   | Type | Name | Content |
+   |---|---|---|
+   | MX | `send` | `feedback-smtp.eu-west-1.amazonses.com` (priority 10) |
+   | TXT | `send` | `v=spf1 include:amazonses.com ~all` |
+   | TXT | `resend._domainkey` | the DKIM value from Resend |
+   | TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:dmarc@gameclaw.win` |
 
-## Step 4: Paystack (test mode first)
+3. Once verified, go to Supabase → Authentication → **SMTP Settings**:
+   - Host `smtp.resend.com`, port `465`, username `resend`, password = the Resend API key
+   - Sender `noreply@gameclaw.win`, name `gameclaw`
+4. Raise the email rate limit to about 100 per hour.
 
-1. Paystack dashboard → switch to **Test Mode** (toggle, top right).
-2. Settings → **API Keys & Webhooks**:
-   - Copy the **Test Secret Key** into Vercel as `PAYSTACK_SECRET_KEY`.
-   - **Test Webhook URL:** `https://gameclaw.win/api/v1/webhooks/paystack` → Save.
-   - **Test Callback URL:** leave empty. The app sends its own (`/billing/callback`).
-3. Redeploy, then buy the Day Pass using Paystack's test card or test mobile money number (shown on the checkout page in test mode).
-4. **Going live:** verify your business in Paystack, switch to Live Mode, and set the **Live Webhook URL** to the same address. Put the `sk_live_…` key in Vercel (Production only; keep Preview on test), then redeploy.
-
-## Step 5: GitHub and automatic deploys
-
-The deploys so far were made from this machine with `vercel deploy --prod`. To deploy on every push:
-
-1. **Make the repo private first.** `github.com/isaacgyampoh/betting` is currently **public**. Go to GitHub → the repo → Settings → General → Danger Zone → **Change visibility → Private**.
-2. Push:
-   ```bash
-   git push -u origin main
-   ```
-3. Vercel → Project `gameclaw` → Settings → **Git** → Connect Git Repository → pick `isaacgyampoh/betting`. Production branch: `main`.
-
-Every push to `main` then deploys to production (running migrations). Pull requests get preview URLs, and those never migrate. GitHub Actions (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests, integration tests (against a throwaway Postgres) and a build on each push.
-
-## Step 6: Post-deploy checklist
-
-Run through this after steps 1–4:
+## After each deploy
 
 - [ ] `https://gameclaw.win/api/v1/health` returns `{"data":{"status":"ok",…}}`
-- [ ] **Sign in by magic link.** The email arrives within a minute, and the link lands you on **/welcome**.
-- [ ] **/welcome:** tick both boxes, press Continue, and you land where you were going. `/account` shows the Free plan and 5 AI requests.
-- [ ] **Load a mock slip:** on `/slip`, SportyBet + `BC7K2Q` shows 8 games and total odds.
-- [ ] **Convert:** press Convert, choose Betway. You get a new `BW…` code, 7 games carried over, and *Nations FC* listed as not found.
-- [ ] **Edit:** Edit → Trim odds → 5 gives a new code with total ≤ 5.
-- [ ] **AI chat** (needs `ANTHROPIC_API_KEY`): *"Convert SportyBet BC7K2Q to Betway and remove anything above 2.0"*. The reply includes a Betway code and the counter shows 4 left.
-- [ ] **Paystack test payment:** `/pricing` → Get Day Pass → pay with the test card or MoMo. You should see *You're all set*, Paystack → Webhooks shows a 200 delivery, and `/account` lists the payment.
-- [ ] **Install as an app on your phone:**
-  - Android: open the site in Chrome → ⋮ → *Add to Home screen* / *Install app*.
-  - iPhone: open it in Safari → Share → *Add to Home Screen*.
-  - It should open full-screen with the green claw icon.
-- [ ] **RLS spot check.** This should return `[]`:
-  ```bash
-  curl "https://qefedcphkmxuxjetmtqw.supabase.co/rest/v1/profiles" -H "apikey: <anon key>"
-  ```
+- [ ] Sign in with an email link or code, then the 18+ step, then `/slip`
+- [ ] Load `BC7K2Q` → convert to Betway → trim to 5
+- [ ] AI chat: *"Convert SportyBet BC7K2Q to Betway and remove anything above 2.0"*
+- [ ] `/pricing` → Day Pass → Paystack checkout opens (GHS 5)
+- [ ] Install the app on your phone
 
 ## Operating it
-
-- **Logs:** Vercel → Logs. Lines are JSON. Search on `msg`:
-  - `api.unhandled`: bugs
-  - `bookmaker.unmapped_market`: markets the adapters don't know yet
-  - `paystack.`: payments
-  - `ai.`: the assistant
-  - `[migrate]`: migrations (these appear in the **build** logs)
+- **Logs:** Cloudflare → Workers & Pages → gameclaw → **Logs**. JSON lines are searchable by `msg`:
+  - `api.unhandled`, `ai.*`, `paystack.*`, `bookmaker.*`
+  - `cron.cleanup_triggered`
 - **AI spend per day:**
   ```sql
   select date_trunc('day', created_at) d, sum(cost_micro_usd)/1e6 usd from usage_logs group by 1 order by 1 desc;
   ```
 - **Prices and limits:** edit the `plans` table. No deploy is needed.
-- **Custom domain:** Vercel → Settings → Domains. Then update `NEXT_PUBLIC_SITE_URL`, the Supabase URLs (step 2), Google origins (step 3) and the Paystack webhook (step 4), and redeploy.
-- **Live bookmakers:** follow `docs/capturing-bookmaker-requests.md`, implement the live branch in `lib/bookmakers/<name>.ts`, then set `<NAME>_MODE=live`.

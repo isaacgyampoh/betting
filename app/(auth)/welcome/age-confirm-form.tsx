@@ -26,7 +26,7 @@ export function AgeConfirmForm({ next }: { next: string }) {
     });
     if (!res.ok) {
       setPending(false);
-      const body = await res.json().catch(() => null);
+      const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
       toast.error(body?.error?.message ?? "Could not save. Please try again.");
       return;
     }

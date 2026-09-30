@@ -2,7 +2,7 @@
 
 Betting slip assistant for Ghana. Load a booking code, convert it between bookmakers, edit it (remove, safest N, trim to odds, split), check match stats, or ask the AI assistant to do it in plain English. 18+.
 
-**Stack:** Next.js 16 (App Router) · TypeScript · Tailwind v4 + shadcn/ui · Supabase (Postgres, Auth) · Prisma 7 · Anthropic API · API-Football · Paystack · PWA
+**Stack:** Next.js 16 (App Router) · TypeScript · Tailwind v4 + shadcn/ui · Supabase (Postgres, Auth) · Prisma 7 · Anthropic API · API-Football · Paystack · PWA · Cloudflare Workers (OpenNext)
 
 ## Layout
 ```
@@ -29,7 +29,7 @@ cp .env.example .env.local        # fill in Supabase + DB values
 pnpm db:migrate && pnpm db:seed
 pnpm dev
 ```
-Deploying: see [docs/deploy.md](docs/deploy.md).
+Deploying to Cloudflare Workers: see [docs/deploy.md](docs/deploy.md). `pnpm cf:preview` runs the production build on the Workers runtime locally.
 
 ## API conventions
 - Success: `{ "data": ... }`. Error: `{ "error": { "code", "message", "details?" } }` (codes in `lib/errors.ts`).
@@ -67,4 +67,4 @@ pnpm test:int    # integration tests against a disposable Postgres, see tests/in
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, both suites and a build.
 
 ## Scripts
-`dev` · `build` · `lint` · `typecheck` · `test` · `test:int` · `db:migrate` · `db:seed` · `db:studio`
+`dev` · `build` · `lint` · `typecheck` · `test` · `test:int` · `db:migrate` · `db:seed` · `db:studio` · `cf:preview` · `cf:deploy` · `cf:typegen`

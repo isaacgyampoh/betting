@@ -1,0 +1,7 @@
+# Local secrets for `pnpm cf:preview` (wrangler dev). Copy to .dev.vars. Never commit .dev.vars.
+DATABASE_URL=postgresql://postgres.PROJECT:PASSWORD@aws-1-eu-west-1.pooler.supabase.com:6543/postgres
+IP_HASH_SALT=
+CRON_SECRET=
+ANTHROPIC_API_KEY=
+PAYSTACK_SECRET_KEY=
+API_FOOTBALL_KEY=

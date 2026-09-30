@@ -8,7 +8,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<Api
       ...init,
       headers: { "content-type": "application/json", ...init?.headers },
     });
-    const body = await res.json().catch(() => null);
+    const body = (await res.json().catch(() => null)) as { data?: T; error?: ApiError } | null;
     if (res.ok && body && "data" in body) return { ok: true, data: body.data as T };
     return {
       ok: false,
