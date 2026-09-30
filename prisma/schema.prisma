@@ -1,0 +1,413 @@
+// gameclaw database schema.
+// Tables and columns are snake_case in Postgres; RLS policies, the auth trigger and
+// the auth.users foreign key live in hand-written SQL migrations (see prisma/migrations).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Users & billing
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+/// One row per Supabase auth user. `id` equals auth.users.id and is created by a DB trigger.
+model Profile {
+  id             String    @id @db.Uuid
+  email          String?
+  displayName    String?   @map("display_name")
+  avatarUrl      String?   @map("avatar_url")
+  role           UserRole  @default(USER)
+  ageConfirmedAt DateTime? @map("age_confirmed_at") @db.Timestamptz
+  /// Trial AI requests for users without an active subscription.
+  freeAiCredits  Int       @default(5) @map("free_ai_credits")
+  telegramChatId String?   @unique @map("telegram_chat_id")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  subscriptions Subscription[]
+  payments      Payment[]
+  slips         Slip[]
+  usageLogs     UsageLog[]
+
+  @@map("profiles")
+}
+
+/// Prices and limits live here so they can change without a deploy.
+model Plan {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code              String   @unique // daily | weekly | monthly
+  name              String
+  description       String?
+  /// Price in pesewas (1 GHS = 100 pesewas) to avoid float rounding.
+  pricePesewas      Int      @map("price_pesewas")
+  currency          String   @default("GHS")
+  durationDays      Int      @map("duration_days")
+  dailyAiRequests   Int      @map("daily_ai_requests")
+  dailyTokenLimit   Int      @map("daily_token_limit")
+  allowDeepAnalysis Boolean  @default(false) @map("allow_deep_analysis")
+  isActive          Boolean  @default(true) @map("is_active")
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  subscriptions Subscription[]
+  payments      Payment[]
+
+  @@map("plans")
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Subscription {
+  id                       String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                   String             @map("user_id") @db.Uuid
+  planId                   String             @map("plan_id") @db.Uuid
+  status                   SubscriptionStatus @default(PENDING)
+  startsAt                 DateTime?          @map("starts_at") @db.Timestamptz
+  endsAt                   DateTime?          @map("ends_at") @db.Timestamptz
+  paystackSubscriptionCode String?            @unique @map("paystack_subscription_code")
+  createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  user     Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan     Plan      @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  @@index([userId, status, endsAt])
+  @@map("subscriptions")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  ABANDONED
+}
+
+model Payment {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  planId         String        @map("plan_id") @db.Uuid
+  subscriptionId String?       @map("subscription_id") @db.Uuid
+  /// Paystack transaction reference; unique so webhooks are idempotent.
+  reference      String        @unique
+  amountPesewas  Int           @map("amount_pesewas")
+  currency       String        @default("GHS")
+  status         PaymentStatus @default(PENDING)
+  channel        String? // mobile_money | card
+  paidAt         DateTime?     @map("paid_at") @db.Timestamptz
+  raw            Json?
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  user         Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         Plan          @relation(fields: [planId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("payments")
+}
+
+// ---------------------------------------------------------------------------
+// Bookmakers, teams & events
+// ---------------------------------------------------------------------------
+
+model Bookmaker {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug      String   @unique // sportybet | betway | betpawa | 1xbet | msport
+  name      String
+  country   String   @default("GH")
+  website   String?
+  isEnabled Boolean  @default(false) @map("is_enabled")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  teamAliases     TeamAlias[]
+  bookmakerEvents BookmakerEvent[]
+  marketMappings  MarketMapping[]
+  slips           Slip[]
+  codeCache       CodeCache[]
+
+  @@map("bookmakers")
+}
+
+model Team {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String
+  /// Lowercased, accent/punctuation-stripped name used for matching.
+  normalizedName    String   @map("normalized_name")
+  country           String?
+  apiFootballTeamId Int?     @unique @map("api_football_team_id")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  aliases    TeamAlias[]
+  homeEvents Event[]     @relation("HomeTeam")
+  awayEvents Event[]     @relation("AwayTeam")
+
+  @@index([normalizedName])
+  @@map("teams")
+}
+
+/// Alternative spellings of a team. bookmakerId = null means the alias applies everywhere.
+model TeamAlias {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId      String   @map("team_id") @db.Uuid
+  bookmakerId String?  @map("bookmaker_id") @db.Uuid
+  alias       String
+  normalized  String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  bookmaker Bookmaker? @relation(fields: [bookmakerId], references: [id], onDelete: Cascade)
+
+  @@unique([normalized, bookmakerId])
+  @@index([normalized])
+  @@map("team_aliases")
+}
+
+/// Canonical fixture, shared across bookmakers and linked to API-Football.
+model Event {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sport                String   @default("football")
+  homeTeamId           String   @map("home_team_id") @db.Uuid
+  awayTeamId           String   @map("away_team_id") @db.Uuid
+  kickoffAt            DateTime @map("kickoff_at") @db.Timestamptz
+  competition          String?
+  country              String?
+  apiFootballFixtureId Int?     @unique @map("api_football_fixture_id")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  homeTeam        Team             @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam        Team             @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  bookmakerEvents BookmakerEvent[]
+  selections      Selection[]
+
+  @@unique([homeTeamId, awayTeamId, kickoffAt])
+  @@index([kickoffAt])
+  @@map("events")
+}
+
+/// An event as a specific bookmaker lists it (their id, their team spelling).
+model BookmakerEvent {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookmakerId String   @map("bookmaker_id") @db.Uuid
+  externalId  String   @map("external_id")
+  eventId     String?  @map("event_id") @db.Uuid
+  homeName    String   @map("home_name")
+  awayName    String   @map("away_name")
+  kickoffAt   DateTime @map("kickoff_at") @db.Timestamptz
+  competition String?
+  raw         Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  bookmaker  Bookmaker   @relation(fields: [bookmakerId], references: [id], onDelete: Cascade)
+  event      Event?      @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  selections Selection[]
+
+  @@unique([bookmakerId, externalId])
+  @@index([eventId])
+  @@index([kickoffAt])
+  @@map("bookmaker_events")
+}
+
+// ---------------------------------------------------------------------------
+// Markets
+// ---------------------------------------------------------------------------
+
+/// Shared internal market model. Every adapter maps to and from these.
+enum MarketType {
+  MATCH_RESULT // 1X2
+  DOUBLE_CHANCE
+  DRAW_NO_BET
+  OVER_UNDER
+  BTTS
+  HANDICAP // European / 3-way
+  ASIAN_HANDICAP
+  CORRECT_SCORE
+  HT_FT
+  ODD_EVEN
+  TEAM_OVER_UNDER
+}
+
+enum MarketPeriod {
+  FT // full time (regular time)
+  H1 // first half
+  H2 // second half
+}
+
+/// Translates a bookmaker's market/outcome ids to the internal model (and back).
+model MarketMapping {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookmakerId       String       @map("bookmaker_id") @db.Uuid
+  externalMarketId  String       @map("external_market_id")
+  externalOutcomeId String       @map("external_outcome_id")
+  /// Bookmaker's line/specifier as they send it (e.g. "total=2.5"); "" when none.
+  specifier         String       @default("")
+  marketType        MarketType   @map("market_type")
+  period            MarketPeriod @default(FT)
+  /// Internal outcome key, e.g. HOME | DRAW | AWAY | 1X | OVER | YES | 2:1
+  outcome           String
+  line              Decimal?     @db.Decimal(6, 2)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  bookmaker Bookmaker @relation(fields: [bookmakerId], references: [id], onDelete: Cascade)
+
+  @@unique([bookmakerId, externalMarketId, externalOutcomeId, specifier])
+  @@index([bookmakerId, marketType, period, outcome, line])
+  @@map("market_mappings")
+}
+
+// ---------------------------------------------------------------------------
+// Slips
+// ---------------------------------------------------------------------------
+
+enum SlipKind {
+  LOADED // loaded from a booking code
+  CONVERTED // produced by converting another slip
+  EDITED // result of remove / trim / safest-N
+  SPLIT // one part of a split
+}
+
+model Slip {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Null for anonymous users (free tools work without sign-in).
+  userId       String?   @map("user_id") @db.Uuid
+  bookmakerId  String    @map("bookmaker_id") @db.Uuid
+  kind         SlipKind
+  /// Null until a code has been created at the bookmaker.
+  bookingCode  String?   @map("booking_code")
+  parentSlipId String?   @map("parent_slip_id") @db.Uuid
+  totalOdds    Decimal?  @map("total_odds") @db.Decimal(14, 3)
+  expiresAt    DateTime? @map("expires_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user       Profile?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookmaker  Bookmaker   @relation(fields: [bookmakerId], references: [id])
+  parent     Slip?       @relation("SlipLineage", fields: [parentSlipId], references: [id], onDelete: SetNull)
+  children   Slip[]      @relation("SlipLineage")
+  selections Selection[]
+
+  @@index([userId, createdAt])
+  @@index([bookmakerId, bookingCode])
+  @@map("slips")
+}
+
+enum SelectionStatus {
+  OK // present on this bookmaker as-is
+  EVENT_NOT_FOUND // conversion: game not found on target bookmaker
+  MARKET_NOT_FOUND // conversion: game found but market/outcome not offered
+}
+
+model Selection {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slipId           String          @map("slip_id") @db.Uuid
+  position         Int
+  eventId          String?         @map("event_id") @db.Uuid
+  bookmakerEventId String?         @map("bookmaker_event_id") @db.Uuid
+  // Snapshot so a slip always renders, even if event matching failed.
+  homeTeam         String          @map("home_team")
+  awayTeam         String          @map("away_team")
+  kickoffAt        DateTime        @map("kickoff_at") @db.Timestamptz
+  competition      String?
+  // Internal market model
+  marketType       MarketType      @map("market_type")
+  period           MarketPeriod    @default(FT)
+  outcome          String
+  line             Decimal?        @db.Decimal(6, 2)
+  odds             Decimal?        @db.Decimal(10, 3)
+  // Bookmaker's own labels, for display and debugging
+  rawMarketName    String?         @map("raw_market_name")
+  rawOutcomeName   String?         @map("raw_outcome_name")
+  raw              Json?
+  status           SelectionStatus @default(OK)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  slip           Slip            @relation(fields: [slipId], references: [id], onDelete: Cascade)
+  event          Event?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  bookmakerEvent BookmakerEvent? @relation(fields: [bookmakerEventId], references: [id], onDelete: SetNull)
+
+  @@index([slipId, position])
+  @@map("selections")
+}
+
+// ---------------------------------------------------------------------------
+// Caches & metering
+// ---------------------------------------------------------------------------
+
+/// Normalized result of loading a booking code, to avoid re-hitting bookmakers.
+model CodeCache {
+  bookmakerId String   @map("bookmaker_id") @db.Uuid
+  code        String
+  payload     Json
+  fetchedAt   DateTime @default(now()) @map("fetched_at") @db.Timestamptz
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz
+
+  bookmaker Bookmaker @relation(fields: [bookmakerId], references: [id], onDelete: Cascade)
+
+  @@id([bookmakerId, code])
+  @@index([expiresAt])
+  @@map("code_cache")
+}
+
+/// API-Football response cache. key = sha256(endpoint + sorted params).
+model StatsCache {
+  key       String   @id
+  endpoint  String
+  params    Json
+  payload   Json
+  fetchedAt DateTime @default(now()) @map("fetched_at") @db.Timestamptz
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+
+  @@index([expiresAt])
+  @@map("stats_cache")
+}
+
+enum UsageKind {
+  SLIP_LOAD
+  SLIP_CONVERT
+  SLIP_EDIT
+  STATS
+  AI_CHAT
+  AI_ANALYSIS
+}
+
+/// One row per metered request. Drives rate limits, plan limits and cost tracking.
+model UsageLog {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String?   @map("user_id") @db.Uuid
+  /// sha256(ip + salt) for anonymous rate limiting; never the raw IP.
+  ipHash          String?   @map("ip_hash")
+  kind            UsageKind
+  model           String?
+  inputTokens     Int       @default(0) @map("input_tokens")
+  outputTokens    Int       @default(0) @map("output_tokens")
+  cacheReadTokens Int       @default(0) @map("cache_read_tokens")
+  /// Estimated provider cost in micro-USD (1e-6 USD).
+  costMicroUsd    Int       @default(0) @map("cost_micro_usd")
+  success         Boolean   @default(true)
+  errorCode       String?   @map("error_code")
+  meta            Json?
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user Profile? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, createdAt])
+  @@index([ipHash, kind, createdAt])
+  @@map("usage_logs")
+}
