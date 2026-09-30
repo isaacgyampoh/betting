@@ -2,12 +2,14 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { AuthUser } from "@/lib/auth";
+import { getAdapter } from "@/lib/bookmakers/registry";
 import { BOOKMAKER_SLUGS } from "@/lib/bookmakers/types";
 import { AppError } from "@/lib/errors";
 import type { EditOp } from "@/lib/slips/edit";
 import type { SlipView } from "@/lib/slips/view";
 import { analyzeMatch } from "@/lib/ai/analysis";
 import { compactMatch, compactMatchDetail, compactSlip } from "@/lib/ai/compact";
+import { buildToTarget } from "@/lib/services/build-slip";
 import { convertSlip } from "@/lib/services/convert";
 import { editSlip } from "@/lib/services/edit";
 import { getSlip, listRecentSlips, loadSlip } from "@/lib/services/slips";
@@ -24,6 +26,22 @@ export const TOOLS: Anthropic.Tool[] = [
     description:
       "Deep AI analysis of a match from its stats (paid plans only). Use only when the user asks for an analysis, prediction or 'what do you think' about a specific match. Needs match_id from find_matches.",
     input_schema: { type: "object", properties: { match_id: { type: "integer" }, date: { type: "string" } }, required: ["match_id"] },
+  },
+  {
+    name: "build_target_slip",
+    description:
+      "Build a new slip from an existing slip that reaches a target total odds, choosing the combination with the best estimated chance, and book it. Use for 'make a 2 odds from this', 'give me a 5 odds', 'make it safer'. Returns per-pick reasons, a confidence level and the games left out.",
+    input_schema: {
+      type: "object",
+      properties: { slip_id: { type: "string" }, target: { type: "number" }, max_games: { type: "integer" } },
+      required: ["slip_id", "target"],
+    },
+  },
+  {
+    name: "build_slip_from_fixtures",
+    description:
+      "Build a slip from today's fixtures when the user has no slip ('make me a 5 odds for today'). Needs real prices from a connected bookmaker; returns a clear reason when none is connected yet.",
+    input_schema: { type: "object", properties: { target: { type: "number" }, date: { type: "string" } }, required: ["target"] },
   },
   {
     name: "convert_slip",
@@ -105,6 +123,8 @@ const SCHEMAS = {
     parts: z.number().int().min(2).max(10).optional(),
   }),
   get_slip: z.object({ slip_id: uuid }),
+  build_slip_from_fixtures: z.object({ target: z.number().min(1.01).max(100_000), date: z.iso.date().optional() }),
+  build_target_slip: z.object({ slip_id: uuid, target: z.number().min(1.01).max(100_000), max_games: z.number().int().min(1).max(12).optional() }),
   list_recent_slips: z.object({}),
   find_matches: z.object({ team: z.string().min(2).max(60), opponent: z.string().max(60).optional() }),
   get_match_stats: z.object({ match_id: z.number().int().positive(), date: z.iso.date().optional() }),
@@ -114,7 +134,13 @@ const SCHEMAS = {
 
 export type ToolName = keyof typeof SCHEMAS;
 
-export type ToolContext = { user: AuthUser; ipHash: string | null; slips: Map<string, SlipView> };
+export type ToolContext = {
+  user: AuthUser;
+  ipHash: string | null;
+  slips: Map<string, SlipView>;
+  /** Slip ids already shown earlier in this conversation; those cards aren't repeated. */
+  seenSlipIds?: Set<string>;
+};
 
 async function toEditOp(input: z.infer<(typeof SCHEMAS)["edit_slip"]>, ctx: ToolContext): Promise<EditOp> {
   const need = <T,>(v: T | undefined, field: string): T => {
@@ -141,7 +167,7 @@ async function toEditOp(input: z.infer<(typeof SCHEMAS)["edit_slip"]>, ctx: Tool
 }
 
 function remember(ctx: ToolContext, ...slips: SlipView[]) {
-  for (const s of slips) ctx.slips.set(s.id, s);
+  for (const s of slips) if (!ctx.seenSlipIds?.has(s.id)) ctx.slips.set(s.id, s);
 }
 
 /** Runs one tool call. Returns JSON for the model; AppErrors become is_error results the model can explain. */
@@ -186,6 +212,32 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
       const slips = await editSlip({ user, ipHash, slipId: i.slip_id, op: await toEditOp(i, ctx), book: true });
       remember(ctx, ...slips);
       return slips.map(compactSlip);
+    }
+    case "build_slip_from_fixtures": {
+      // Building from scratch needs live prices; the mock adapters have none for arbitrary fixtures.
+      const connected = BOOKMAKER_SLUGS.filter((s) => getAdapter(s).mode === "live");
+      if (connected.length === 0) {
+        return {
+          built: false,
+          reason:
+            "No bookmaker is connected to live prices yet, so we can't price a slip from scratch. The user can paste a booking code instead and we'll build a target slip from it.",
+        };
+      }
+      throw new AppError("BAD_REQUEST", "Building from today's fixtures isn't available yet. Paste a booking code and I'll build from that.");
+    }
+    case "build_target_slip": {
+      const i = input as z.infer<(typeof SCHEMAS)["build_target_slip"]>;
+      const built = await buildToTarget({ user, ipHash, slipId: i.slip_id, target: i.target, maxPicks: i.max_games });
+      remember(ctx, built.slip);
+      return {
+        ...compactSlip(built.slip),
+        target: built.target,
+        reached_target: built.reachedTarget,
+        confidence: built.confidence,
+        estimated_chance: built.chance,
+        reasons: built.reasons,
+        left_out: built.dropped,
+      };
     }
     case "get_slip": {
       const slip = await getSlip(user, (input as { slip_id: string }).slip_id);

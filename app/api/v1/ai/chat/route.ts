@@ -12,10 +12,11 @@ const bodySchema = z.object({
     .min(1)
     .max(40),
   matchId: z.number().int().positive().optional(),
+  seenSlipIds: z.array(z.uuid()).max(50).optional(),
 });
 
 export const POST = route(async (req) => {
   const { user } = await requireAdult(req.headers.get("authorization"));
   const body = await parseBody(req, bodySchema);
-  return ok(await runChat({ user, history: body.messages, matchId: body.matchId, ipHash: clientIpHash(req) }));
+  return ok(await runChat({ user, history: body.messages, matchId: body.matchId, seenSlipIds: body.seenSlipIds, ipHash: clientIpHash(req) }));
 });

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeftRight, ArrowRight, BarChart3, MessageSquare, ReceiptText, Scissors } from "lucide-react";
+import { redirect } from "next/navigation";
 import { ExampleConversion } from "@/components/landing/example-conversion";
 import { Button } from "@/components/ui/button";
+import { getAuthUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: { absolute: "gameclaw: convert, trim and check betting slips in Ghana" },
@@ -17,7 +19,7 @@ const FEATURES = [
   { icon: ArrowLeftRight, title: "Convert between bookmakers", text: "Nine bookmakers used in Ghana, with a fresh code. Games that can't be matched are listed, not dropped." },
   { icon: Scissors, title: "Cut it down", text: "Remove games, keep the safest picks, trim to a target total, or split one slip into several." },
   { icon: BarChart3, title: "Check the numbers", text: "Head-to-head and fixtures from API-Football before you commit." },
-  { icon: MessageSquare, title: "Or just ask", text: "\"Convert this to Betway and drop anything above 2.0.\" Answers use real prices and results only." },
+  { icon: MessageSquare, title: "Just ask", text: "\"Convert this to Betway.\" \"Make a 2 odds from it.\" Upload a screenshot of a slip and it reads it." },
 ];
 
 const FAQ = [
@@ -27,7 +29,10 @@ const FAQ = [
   { q: "Which bookmakers work?", a: "SportyBet, Betway, 1xBet, betPawa, MSport, Football.com, Betwinner, 22Bet and PariPesa. Paste any code and we detect the bookmaker. Some still run on sample data while their live connection is finished; those slips are clearly marked." },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Signed-in users land in the conversation; the landing page is for visitors.
+  if (await getAuthUser()) redirect("/chat");
+
   return (
     <div className="space-y-16 pb-4">
       <section className="grid items-center gap-10 pt-6 md:pt-12 lg:grid-cols-[1.1fr_1fr]">
