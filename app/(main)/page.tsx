@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeftRight, ArrowRight, BarChart3, MessageCircle, ReceiptText, Scissors, ShieldCheck, Smartphone } from "lucide-react";
+import { ExampleConversion } from "@/components/landing/example-conversion";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -34,24 +35,28 @@ const FAQ = [
 export default function HomePage() {
   return (
     <div className="space-y-14 pb-4">
-      <section className="space-y-5 pt-6 text-center md:pt-12">
-        <p className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs text-muted-foreground">
-          <ShieldCheck className="size-3.5 text-primary" /> Built for Ghanaian bettors · 18+
-        </p>
-        <h1 className="text-4xl font-bold tracking-tight text-balance md:text-5xl">Your betting slips, sorted.</h1>
-        <p className="mx-auto max-w-xl text-balance text-muted-foreground">
-          Convert booking codes between SportyBet and Betway, trim them to the odds you want, and check the stats first, all in one place.
-        </p>
-        <div className="flex flex-col justify-center gap-2 sm:flex-row">
-          <Button asChild size="lg" className="h-12 px-6">
-            <Link href="/slip">
-              Load a booking code <ArrowRight data-icon="inline-end" />
-            </Link>
-          </Button>
-          <Button asChild size="lg" variant="outline" className="h-12 px-6">
-            <Link href="/convert">Convert a code</Link>
-          </Button>
+      <section className="grid items-center gap-10 pt-6 md:pt-12 lg:grid-cols-[1.1fr_1fr]">
+        <div className="space-y-5 text-center lg:text-left">
+          <p className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs text-muted-foreground">
+            <ShieldCheck className="size-3.5 text-primary" /> Built for Ghanaian bettors · 18+
+          </p>
+          <h1 className="text-4xl font-bold tracking-tight text-balance md:text-5xl">Your betting slips, sorted.</h1>
+          <p className="mx-auto max-w-xl text-balance text-muted-foreground lg:mx-0">
+            Convert booking codes between SportyBet and Betway, trim them to the odds you want, and check the stats first, all in one place.
+          </p>
+          <div className="flex flex-col justify-center gap-2 sm:flex-row lg:justify-start">
+            <Button asChild size="lg" className="h-12 px-6">
+              <Link href="/slip">
+                Load a booking code <ArrowRight data-icon="inline-end" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="h-12 px-6">
+              <Link href="/convert">Convert a code</Link>
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">Free slip tools · No card needed · Works on any phone</p>
         </div>
+        <ExampleConversion className="mx-auto w-full max-w-md" />
       </section>
 
       <section aria-labelledby="how" className="space-y-4">

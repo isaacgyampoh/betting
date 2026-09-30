@@ -74,7 +74,9 @@ export function LoginForm({ next, callbackError }: { next: string; callbackError
       <CardContent className="space-y-4">
         {callbackError && (
           <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            That sign-in link is invalid or has expired. Please request a new one.
+            {callbackError === "unavailable"
+              ? "You're signed in, but we couldn't load your account right now. Please try again in a few minutes."
+              : "That sign-in link is invalid or has expired. Please request a new one."}
           </p>
         )}
         <Button variant="outline" size="lg" className="w-full" onClick={signInWithGoogle} disabled={pending !== null}>

@@ -4,6 +4,7 @@ import { CheckoutButton } from "@/components/billing/checkout-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAuthUser } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import { listActivePlans } from "@/lib/services/plans";
 
@@ -18,8 +19,14 @@ export const dynamic = "force-dynamic";
 const ghs = (n: number) => `GHS ${n.toLocaleString("en-GH", { minimumFractionDigits: n % 1 ? 2 : 0 })}`;
 
 export default async function PricingPage() {
-  const [plans, user] = await Promise.all([listActivePlans(), getAuthUser()]);
-  const bestValue = plans.at(-1)?.code;
+  const [plans, user] = await Promise.all([
+    listActivePlans().catch((err) => {
+      logger.error("pricing.plans_unavailable", { err });
+      return null;
+    }),
+    getAuthUser().catch(() => null),
+  ]);
+  const bestValue = plans?.at(-1)?.code;
 
   return (
     <div className="space-y-6">
@@ -30,8 +37,14 @@ export default async function PricingPage() {
         </p>
       </div>
 
+      {!plans?.length && (
+        <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+          Plans are temporarily unavailable. Please check back shortly. Slip tools remain free.
+        </p>
+      )}
+
       <div className="grid gap-3 md:grid-cols-3">
-        {plans.map((p) => (
+        {plans?.map((p) => (
           <Card key={p.code} className={cn(p.code === bestValue && "border-primary")}>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
