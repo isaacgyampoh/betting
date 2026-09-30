@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   description: "Slip tools are free. AI assistant and deep match analysis from GHS 5 a day. Pay with mobile money or card.",
 };
 
+// Prices live in the database; render per request so builds never need a DB connection.
+export const dynamic = "force-dynamic";
+
 const ghs = (n: number) => `GHS ${n.toLocaleString("en-GH", { minimumFractionDigits: n % 1 ? 2 : 0 })}`;
 
 export default async function PricingPage() {
