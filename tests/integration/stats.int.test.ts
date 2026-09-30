@@ -94,7 +94,7 @@ describe("API-Football plan limits (Free plan)", () => {
       teams: { home: { id: 33, name: "Man United", logo: null }, away: { id: 47, name: "Tottenham", logo: null } },
       goals: short === "FT" ? { home: 1, away: 0 } : { home: null, away: null },
     });
-    const fetchMock = vi.fn(async (_url: string) =>
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () =>
       new Response(JSON.stringify({ errors: [], response: [fx(1, "2024-01-01T15:00:00Z", "FT"), fx(2, "2026-02-07T15:00:00Z", "FT"), fx(3, "2026-12-01T15:00:00Z", "NS"), fx(4, "2025-05-21T15:00:00Z", "FT")] })),
     );
     vi.stubGlobal("fetch", fetchMock);

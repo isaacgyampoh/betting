@@ -171,6 +171,8 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
       <Section title="Recent form (last 5)">
         {d.unavailable.includes("form") ? (
           <PlanNote what="Recent results for each team" />
+        ) : d.busy && d.form.home.matches.length === 0 && d.form.away.matches.length === 0 ? (
+          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Recent results are loading slowly right now. Refresh in a minute.</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             <FormCard form={d.form.home} />
