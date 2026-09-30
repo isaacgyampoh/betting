@@ -46,16 +46,20 @@ For local preview secrets, copy `.dev.vars.example` to `.dev.vars` (git-ignored)
 
 The Supabase service_role key is never used. Don't add it.
 
-### Workers Builds (automatic deploys from GitHub)
-1. Make `github.com/isaacgyampoh/betting` **private**, then push `main`.
-2. Cloudflare dashboard → **Workers & Pages → gameclaw → Settings → Builds → Connect** → pick the repo. Production branch: `main`.
-3. **Build command:** `pnpm cf:build:ci`. **Deploy command:** `pnpm exec opennextjs-cloudflare deploy`.
-4. **Build variables:**
-   - `DIRECT_URL`: Supabase session pooler, port 5432, for migrations; mark it as a secret.
-   - `ENABLE_EXPERIMENTAL_COREPACK`: `1`
-5. Runtime secrets are the ones in the table above; builds reuse the Worker's secrets.
+### Automatic deploys (GitHub Actions)
+Every push to `main` of the private repo `isaacgyampoh/betting` runs `.github/workflows/ci.yml`:
+1. **check:** lint, typecheck, unit tests, integration tests (against a throwaway Postgres), `next build`, `pnpm cf:build`.
+2. **deploy:** runs only after check passes, one at a time. It runs `prisma migrate deploy`, then `pnpm cf:build`, then `opennextjs-cloudflare deploy`, then a health check of `https://gameclaw.win`.
 
-Every push to `main` then migrates, builds and deploys. Other branches get preview builds without migrating.
+GitHub → repo → Settings → Secrets and variables → Actions holds three secrets:
+
+| Secret | Value |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | restricted token **gameclaw-deploy (GitHub Actions)**: Workers Scripts/Routes edit, Hyperdrive read, Tail read, account/user read. Not the Global API Key. |
+| `CLOUDFLARE_ACCOUNT_ID` | `d5c6a14614d6735d517c542ca2c15611` |
+| `DIRECT_URL` | Supabase session pooler (port 5432), for migrations |
+
+Pull requests run the checks but never deploy. For a manual deploy from your machine, run `CLOUDFLARE_API_TOKEN=… pnpm cf:deploy`.
 
 ### Hyperdrive (recommended)
 Without it, every request opens a new TLS connection to Ireland. With it, pooled connections sit next to the database.

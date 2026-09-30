@@ -41,3 +41,39 @@ jobs:
       - run: pnpm build
       - name: Cloudflare Workers build
         run: pnpm cf:build
+
+  # Production deploy to Cloudflare Workers: only for pushes to main, only after every check passed.
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      WORKERS_CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply database migrations (prisma migrate deploy)
+        run: MIGRATE=1 node scripts/migrate-on-deploy.mjs
+      - name: Build for Cloudflare Workers
+        run: pnpm cf:build
+      - name: Deploy
+        run: pnpm exec opennextjs-cloudflare deploy
+      - name: Smoke test
+        run: |
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://gameclaw.win/api/v1/health) && [ "$code" = "200" ] && echo "health ok" && exit 0
+            sleep 10
+          done
+          echo "health check failed ($code)"; exit 1
