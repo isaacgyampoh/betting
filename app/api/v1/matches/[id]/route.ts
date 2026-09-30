@@ -8,5 +8,5 @@ export const GET = route<RouteContext<"/api/v1/matches/[id]">>(async (req, { par
   const { user } = await requireAdult(req.headers.get("authorization"));
   const id = z.coerce.number().int().positive().safeParse((await params).id);
   if (!id.success) throw new AppError("NOT_FOUND", "We couldn't find that match.");
-  return ok(await getMatchDetail(user, id.data));
+  return ok(await getMatchDetail(user, id.data, req.nextUrl.searchParams.get("date") ?? undefined));
 });

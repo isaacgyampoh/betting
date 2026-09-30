@@ -39,7 +39,7 @@ export function MatchList({ groups }: { groups: Group[] }) {
           <ul className="divide-y">
             {g.matches.map((m) => (
               <li key={m.id}>
-                <Link href={`/matches/${m.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-accent">
+                <Link href={`/matches/${m.id}?d=${m.kickoffAt.slice(0, 10)}`} className="flex items-center gap-3 px-4 py-3 hover:bg-accent">
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="flex items-center gap-2 text-sm font-medium">
                       <TeamBadge team={m.home} size={20} /> <span className="truncate">{m.home.name}</span>

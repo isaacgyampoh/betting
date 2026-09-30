@@ -23,7 +23,7 @@ export const TOOLS: Anthropic.Tool[] = [
     name: "analyze_match",
     description:
       "Deep AI analysis of a match from its stats (paid plans only). Use only when the user asks for an analysis, prediction or 'what do you think' about a specific match. Needs match_id from find_matches.",
-    input_schema: { type: "object", properties: { match_id: { type: "integer" } }, required: ["match_id"] },
+    input_schema: { type: "object", properties: { match_id: { type: "integer" }, date: { type: "string" } }, required: ["match_id"] },
   },
   {
     name: "convert_slip",
@@ -60,8 +60,8 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_match_stats",
-    description: "Recent form, head-to-head, standings and key numbers for a match_id. Use for any stats question.",
-    input_schema: { type: "object", properties: { match_id: { type: "integer" } }, required: ["match_id"] },
+    description: "Recent form, head-to-head, standings and key numbers for a match_id. Use for any stats question. Pass date (YYYY-MM-DD of the kickoff from find_matches) when known.",
+    input_schema: { type: "object", properties: { match_id: { type: "integer" }, date: { type: "string" } }, required: ["match_id"] },
   },
   {
     name: "get_slip",
@@ -107,9 +107,9 @@ const SCHEMAS = {
   get_slip: z.object({ slip_id: uuid }),
   list_recent_slips: z.object({}),
   find_matches: z.object({ team: z.string().min(2).max(60), opponent: z.string().max(60).optional() }),
-  get_match_stats: z.object({ match_id: z.number().int().positive() }),
+  get_match_stats: z.object({ match_id: z.number().int().positive(), date: z.iso.date().optional() }),
   stats_for_slip_game: z.object({ home: z.string().min(1), away: z.string().min(1), kickoff: z.iso.datetime({ offset: true }) }),
-  analyze_match: z.object({ match_id: z.number().int().positive() }),
+  analyze_match: z.object({ match_id: z.number().int().positive(), date: z.iso.date().optional() }),
 } as const;
 
 export type ToolName = keyof typeof SCHEMAS;
@@ -200,15 +200,17 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
       return matches.length ? matches.map(compactMatch) : { found: 0, note: "No matching fixtures in the next few days." };
     }
     case "get_match_stats":
-      return compactMatchDetail(await getMatchDetail(user, (input as { match_id: number }).match_id));
+      const i = input as { match_id: number; date?: string };
+      return compactMatchDetail(await getMatchDetail(user, i.match_id, i.date));
     case "stats_for_slip_game": {
       const i = input as z.infer<(typeof SCHEMAS)["stats_for_slip_game"]>;
       const match = await lookupMatch(i.home, i.away, new Date(i.kickoff));
       if (!match) throw new AppError("NOT_FOUND", "No stats found for this game (league may not be covered).");
-      return compactMatchDetail(await getMatchDetail(user, match.id));
+      return compactMatchDetail(await getMatchDetail(user, match.id, match.kickoffAt.slice(0, 10)));
     }
     case "analyze_match": {
-      const r = await analyzeMatch(user, (input as { match_id: number }).match_id);
+      const i = input as { match_id: number; date?: string };
+      const r = await analyzeMatch(user, i.match_id, i.date);
       return { analysis: r.analysis, data_source: r.source === "sample" ? "SAMPLE DATA" : "API-Football" };
     }
   }

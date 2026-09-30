@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { createApiFootballProvider, StatsPlanLimitError } from "@/lib/stats/api-football";
+import { createApiFootballProvider, StatsPlanLimitError, StatsRateLimitError } from "@/lib/stats/api-football";
 import { sampleStatsProvider } from "@/lib/stats/sample";
 import { getMatchDetail, listMatches, lookupMatch } from "@/lib/services/stats";
 import { createSportyBetAdapter } from "@/lib/bookmakers/sportybet";
@@ -55,6 +55,35 @@ describe("API-Football plan limits (Free plan)", () => {
     await expect(provider.lastFixtures(33, 5)).rejects.toBeInstanceOf(StatsPlanLimitError);
     await expect(provider.lastFixtures(33, 5)).rejects.toBeInstanceOf(StatsPlanLimitError);
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("remembers a plan gap for every team, not just the one that was asked", async () => {
+    await db.statsCache.deleteMany();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ errors: { plan: "Free plans do not have access to the Last parameter." }, response: [] })));
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = createApiFootballProvider("k");
+    await expect(provider.lastFixtures(33, 5)).rejects.toBeInstanceOf(StatsPlanLimitError);
+    await expect(provider.lastFixtures(47, 5)).rejects.toBeInstanceOf(StatsPlanLimitError); // different team
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("per-minute rate limit: busy error with nothing cached, stale data when cached", async () => {
+    await db.statsCache.deleteMany();
+    const limited = () => new Response(JSON.stringify({ errors: { rateLimit: "Too many requests." }, response: [] }));
+    vi.stubGlobal("fetch", vi.fn(async () => limited()));
+    await expect(createApiFootballProvider("k").fixturesByDate("2026-10-01")).rejects.toBeInstanceOf(StatsRateLimitError);
+
+    const day = { errors: [], response: [{
+      fixture: { id: 7, date: "2026-10-01T19:00:00Z", status: { short: "NS", long: "Not Started", elapsed: null } },
+      league: { id: 39, name: "Premier League", country: "England", logo: null, season: 2026 },
+      teams: { home: { id: 1, name: "Arsenal", logo: null }, away: { id: 2, name: "Chelsea", logo: null } },
+      goals: { home: null, away: null },
+    }] };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(day))));
+    await createApiFootballProvider("k").fixturesByDate("2026-10-01");
+    await db.statsCache.updateMany({ data: { expiresAt: new Date(0) } });
+    vi.stubGlobal("fetch", vi.fn(async () => limited()));
+    expect((await createApiFootballProvider("k").fixturesByDate("2026-10-01"))[0].id).toBe(7);
   });
 
   it("requests head-to-head without the `last` parameter and keeps the latest finished meetings", async () => {

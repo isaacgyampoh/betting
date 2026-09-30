@@ -10,5 +10,5 @@ export const POST = route<RouteContext<"/api/v1/matches/[id]/analysis">>(async (
   const { user } = await requireAdult(req.headers.get("authorization"));
   const id = z.coerce.number().int().positive().safeParse((await params).id);
   if (!id.success) throw new AppError("NOT_FOUND", "We couldn't find that match.");
-  return ok(await analyzeMatch(user, id.data));
+  return ok(await analyzeMatch(user, id.data, req.nextUrl.searchParams.get("date") ?? undefined));
 });

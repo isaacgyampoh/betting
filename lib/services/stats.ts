@@ -4,7 +4,7 @@ import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { bestMatch } from "@/lib/matching/similarity";
-import { createApiFootballProvider, StatsPlanLimitError } from "@/lib/stats/api-football";
+import { createApiFootballProvider, StatsPlanLimitError, StatsRateLimitError } from "@/lib/stats/api-football";
 import { buildTeamForm } from "@/lib/stats/form";
 import { sampleStatsProvider } from "@/lib/stats/sample";
 import type { MatchDetail, MatchSummary, StatsProvider } from "@/lib/stats/types";
@@ -41,9 +41,21 @@ const PRIORITY: [country: string, league: string][] = [
 
 export type LeagueGroup = { league: MatchSummary["league"]; matches: MatchSummary[] };
 
+const BUSY_MESSAGE = "Match stats are busy right now. Please try again in a minute.";
+
+async function orBusy<T>(p: Promise<T>): Promise<T> {
+  try {
+    return await p;
+  } catch (err) {
+    if (err instanceof StatsRateLimitError) throw new AppError("STATS_UNAVAILABLE", BUSY_MESSAGE, { cause: err });
+    if (err instanceof StatsPlanLimitError) throw new AppError("STATS_UNAVAILABLE", "Stats for that date aren't available on our current plan.", { cause: err });
+    throw err;
+  }
+}
+
 export async function listMatches(date: string): Promise<{ groups: LeagueGroup[]; source: StatsProvider["source"] }> {
   const provider = statsProvider();
-  const matches = await provider.fixturesByDate(date);
+  const matches = await orBusy(provider.fixturesByDate(date));
   const byLeague = new Map<number, LeagueGroup>();
   for (const m of matches) {
     const g = byLeague.get(m.league.id) ?? { league: m.league, matches: [] };
@@ -60,20 +72,33 @@ export async function listMatches(date: string): Promise<{ groups: LeagueGroup[]
   return { groups, source: provider.source };
 }
 
-export async function getMatchDetail(user: AuthUser, fixtureId: number): Promise<MatchDetail> {
+/**
+ * @param dateHint kickoff date (YYYY-MM-DD) when known (from a match list or search): the fixture is
+ *   then read from that day's cached list instead of costing another API request.
+ */
+export async function getMatchDetail(user: AuthUser, fixtureId: number, dateHint?: string): Promise<MatchDetail> {
   await enforceRateLimit({ userId: user.id, kind: "STATS", ...STATS_LIMIT });
   const provider = statsProvider();
-  const match = await provider.fixture(fixtureId);
+  const fromDay =
+    dateHint && /^\d{4}-\d{2}-\d{2}$/.test(dateHint)
+      ? (await provider.fixturesByDate(dateHint).catch(() => [])).find((m) => m.id === fixtureId)
+      : undefined;
+  const match = fromDay ?? (await orBusy(provider.fixture(fixtureId)));
   if (!match) throw new AppError("NOT_FOUND", "We couldn't find that match.");
 
   // Each section is optional: a plan limit marks it unavailable instead of failing the page.
   const unavailable = new Set<MatchDetail["unavailable"][number]>();
+  let busy = false;
   const section = async <T,>(name: MatchDetail["unavailable"][number], load: () => Promise<T>, empty: T): Promise<T> => {
     try {
       return await load();
     } catch (err) {
       if (err instanceof StatsPlanLimitError) {
         unavailable.add(name);
+        return empty;
+      }
+      if (err instanceof StatsRateLimitError) {
+        busy = true;
         return empty;
       }
       if (name === "standings") {
@@ -99,6 +124,7 @@ export async function getMatchDetail(user: AuthUser, fixtureId: number): Promise
     h2h: h2h.filter((m) => m.status === "FINISHED").sort((a, b) => b.kickoffAt.localeCompare(a.kickoffAt)),
     standings,
     unavailable: [...unavailable],
+    busy,
     source: provider.source,
   };
 }

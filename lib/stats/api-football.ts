@@ -21,6 +21,14 @@ export class StatsPlanLimitError extends Error {
   }
 }
 
+/** The per-minute request limit was hit and nothing is cached: try again shortly. */
+export class StatsRateLimitError extends Error {
+  constructor(readonly endpoint: string) {
+    super("API-Football per-minute rate limit reached");
+    this.name = "StatsRateLimitError";
+  }
+}
+
 const PLAN_LIMITED = "__plan_limited__";
 
 function cacheKey(endpoint: string, params: Params) {
@@ -64,7 +72,27 @@ export function toMatchSummary(f: ApiFixture): MatchSummary {
 }
 
 export function createApiFootballProvider(apiKey: string): StatsProvider {
-  async function call<T>(endpoint: string, params: Params, ttlMs: number): Promise<T[]> {
+  /** A plan limit applies to a whole kind of query (e.g. every team's `last=` form), not one request. */
+  async function capabilityBlocked(capability: string): Promise<void> {
+    const hit = await db.statsCache.findUnique({ where: { key: `capability:${capability}` } });
+    const marker = hit?.payload as Record<string, unknown> | undefined;
+    if (hit && hit.expiresAt > new Date() && marker && PLAN_LIMITED in marker) {
+      throw new StatsPlanLimitError(capability, String(marker[PLAN_LIMITED]));
+    }
+  }
+
+  async function rememberPlanLimit(key: string, endpoint: string, params: Params, message: string) {
+    const marker = { [PLAN_LIMITED]: message } as unknown as Prisma.InputJsonValue;
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60_000);
+    await db.statsCache.upsert({
+      where: { key },
+      create: { key, endpoint, params, payload: marker, expiresAt },
+      update: { payload: marker, expiresAt, fetchedAt: new Date() },
+    });
+  }
+
+  async function call<T>(endpoint: string, params: Params, ttlMs: number, capability?: string): Promise<T[]> {
+    if (capability) await capabilityBlocked(capability);
     const key = cacheKey(endpoint, params);
     const hit = await db.statsCache.findUnique({ where: { key } });
     if (hit && hit.expiresAt > new Date()) {
@@ -92,15 +120,15 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
     const planError = (body.errors as Record<string, unknown> | undefined)?.plan;
     if (typeof planError === "string") {
       // Not an outage: this key's plan excludes the data. Remember for a day to save quota and latency.
-      logger.warn("stats.plan_limited", { endpoint, params, message: planError });
-      const marker = { [PLAN_LIMITED]: planError } as unknown as Prisma.InputJsonValue;
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60_000);
-      await db.statsCache.upsert({
-        where: { key },
-        create: { key, endpoint, params, payload: marker, expiresAt },
-        update: { payload: marker, expiresAt, fetchedAt: new Date() },
-      });
+      logger.warn("stats.plan_limited", { endpoint, params, capability, message: planError });
+      await rememberPlanLimit(key, endpoint, params, planError);
+      if (capability) await rememberPlanLimit(`capability:${capability}`, endpoint, params, planError);
       throw new StatsPlanLimitError(endpoint, planError);
+    }
+    if ((body.errors as Record<string, unknown> | undefined)?.rateLimit) {
+      logger.warn("stats.rate_limited", { endpoint, params });
+      if (hit) return hit.payload as unknown as T[]; // stale beats nothing
+      throw new StatsRateLimitError(endpoint);
     }
     if (errors.length) {
       logger.error("stats.api_error", { endpoint, params, errors: body.errors });
@@ -134,7 +162,7 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
       return rows[0] ? toMatchSummary(rows[0]) : null;
     },
     async lastFixtures(teamId, count) {
-      return (await call<ApiFixture>("/fixtures", { team: teamId, last: count }, 6 * HOUR)).map(toMatchSummary);
+      return (await call<ApiFixture>("/fixtures", { team: teamId, last: count }, 6 * HOUR, "fixtures-last")).map(toMatchSummary);
     },
     async headToHead(homeId, awayId, count) {
       // No `last` parameter: it isn't available on every plan. Fetch all meetings, keep the latest.
@@ -146,7 +174,7 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
         .slice(0, count);
     },
     async standings(leagueId, season) {
-      const rows = await call<{ league: { standings: ApiStanding[][] } }>("/standings", { league: leagueId, season }, 6 * HOUR);
+      const rows = await call<{ league: { standings: ApiStanding[][] } }>("/standings", { league: leagueId, season }, 6 * HOUR, `standings-season-${season}`);
       const table = rows[0]?.league.standings.flat();
       if (!table?.length) return null;
       return table.map(

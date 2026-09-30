@@ -97,15 +97,16 @@ function Standings({ d }: { d: MatchDetail }) {
   );
 }
 
-export default async function MatchPage({ params }: PageProps<"/matches/[id]">) {
+export default async function MatchPage({ params, searchParams }: PageProps<"/matches/[id]">) {
   const { id: rawId } = await params;
+  const dateHint = typeof (await searchParams).d === "string" ? ((await searchParams).d as string) : undefined;
   const { user } = await requireAdultPage(`/matches/${rawId}`);
   const id = z.coerce.number().int().positive().safeParse(rawId);
   if (!id.success) notFound();
 
   let d: MatchDetail;
   try {
-    d = await getMatchDetail(user, id.data);
+    d = await getMatchDetail(user, id.data, dateHint);
   } catch (err) {
     if (err instanceof AppError) return <ApiErrorNotice code={err.code} message={err.message} />;
     throw err;
@@ -147,8 +148,13 @@ export default async function MatchPage({ params }: PageProps<"/matches/[id]">) 
       </header>
 
       {d.source === "sample" && <SampleDataNotice />}
+      {d.busy && (
+        <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+          Some stats are busy right now (high demand). Refresh in a minute to fill them in.
+        </p>
+      )}
 
-      <AnalysisPanel matchId={m.id} />
+      <AnalysisPanel matchId={m.id} date={m.kickoffAt.slice(0, 10)} />
 
       {insights.length > 0 && (
         <Section title="Key numbers">

@@ -14,7 +14,7 @@ export default async function MatchLookupPage({ searchParams }: PageProps<"/matc
   await requireAdultPage(`/matches/lookup?${new URLSearchParams(params as Record<string, string>)}`);
   const q = querySchema.safeParse(params);
   const match = q.success ? await lookupMatch(q.data.home, q.data.away, new Date(q.data.kickoff)) : null;
-  if (match) redirect(`/matches/${match.id}`);
+  if (match) redirect(`/matches/${match.id}?d=${match.kickoffAt.slice(0, 10)}`);
   return (
     <ApiErrorNotice
       code="NOT_FOUND"

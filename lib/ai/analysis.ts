@@ -25,13 +25,13 @@ End with: "Stats, not guarantees. Bet responsibly."`;
  * Deep match analysis with the larger model. Results are cached per match for a few hours and
  * shared between users (same data in, same analysis out), so repeat requests cost nothing.
  */
-export async function analyzeMatch(user: AuthUser, matchId: number): Promise<{ analysis: string; cached: boolean; source: string }> {
+export async function analyzeMatch(user: AuthUser, matchId: number, dateHint?: string): Promise<{ analysis: string; cached: boolean; source: string }> {
   const allowance = await getAiAllowance(user.id);
   if (!allowance.allowDeepAnalysis) {
     throw new AppError("PLAN_LIMIT_REACHED", "Deep match analysis is included in the Weekly and Monthly plans.");
   }
 
-  const detail = await getMatchDetail(user, matchId);
+  const detail = await getMatchDetail(user, matchId, dateHint);
   if (detail.unavailable.includes("form") && detail.h2h.length === 0) {
     throw new AppError("BAD_REQUEST", "There isn't enough data for a useful analysis of this match yet.");
   }

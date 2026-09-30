@@ -45,6 +45,8 @@ export type MatchDetail = {
   standings: StandingRow[] | null;
   /** Sections the stats provider's plan doesn't include (shown as a note, never faked). */
   unavailable: ("form" | "h2h" | "standings")[];
+  /** Some sections hit the provider's per-minute limit; a refresh shortly will fill them. */
+  busy: boolean;
   source: StatsSource;
 };
 

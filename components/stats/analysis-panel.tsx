@@ -7,7 +7,7 @@ import { ApiErrorAlert } from "@/components/slips/api-error-alert";
 import { RichText } from "@/components/chat/rich-text";
 import { apiFetch, type ApiError } from "@/lib/api-client";
 
-export function AnalysisPanel({ matchId }: { matchId: number }) {
+export function AnalysisPanel({ matchId, date }: { matchId: number; date?: string }) {
   const [pending, setPending] = useState(false);
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
@@ -15,7 +15,7 @@ export function AnalysisPanel({ matchId }: { matchId: number }) {
   async function run() {
     setPending(true);
     setError(null);
-    const res = await apiFetch<{ analysis: string }>(`/api/v1/matches/${matchId}/analysis`, { method: "POST" });
+    const res = await apiFetch<{ analysis: string }>(`/api/v1/matches/${matchId}/analysis${date ? `?date=${date}` : ""}`, { method: "POST" });
     setPending(false);
     if (!res.ok) return setError(res.error);
     setText(res.data.analysis);
