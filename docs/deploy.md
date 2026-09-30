@@ -1,6 +1,6 @@
 # Deploying gameclaw (Vercel + Supabase)
 
-**Live:** https://gameclaw-smoky.vercel.app. This is Vercel project `gameclaw` in team *isaac's projects*, running in region `dub1` (Dublin), next to the Supabase database in eu-west-1 (Ireland).
+**Live:** https://gameclaw.win (`www` and the old `gameclaw-smoky.vercel.app` address 308-redirect here). This is Vercel project `gameclaw` in team *isaac's projects*, running in region `dub1` (Dublin), next to the Supabase database in eu-west-1 (Ireland).
 
 ## What's already configured
 
@@ -18,7 +18,7 @@
 
 | Variable | Scope | Status | Value / where from |
 |---|---|---|---|
-| `NEXT_PUBLIC_SITE_URL` | public | ✅ | `https://gameclaw-smoky.vercel.app`. Change it when you add a custom domain. |
+| `NEXT_PUBLIC_SITE_URL` | public | ✅ | `https://gameclaw.win`. Change it when you add a custom domain. |
 | `NEXT_PUBLIC_SUPABASE_URL` | public | ✅ | Supabase → Project Settings → API |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | ✅ | Supabase → Project Settings → API (anon key; RLS protects data) |
 | `IP_HASH_SALT` | server | ✅ | Generated for production |
@@ -41,6 +41,22 @@ vercel env add DATABASE_URL production      # paste the value when prompted
 ```
 Any env change needs a redeploy: `vercel deploy --prod`, or Deployments → ⋯ → Redeploy.
 
+## Domain: gameclaw.win (Cloudflare DNS → Vercel)
+
+`gameclaw.win` is registered and hosted on Cloudflare DNS, and points at Vercel. These records are already created:
+
+| Type | Name | Content | Proxy |
+|---|---|---|---|
+| A | `gameclaw.win` | `76.76.21.21` | DNS only (grey cloud) |
+| CNAME | `www` | `cname.vercel-dns.com` | DNS only (grey cloud) |
+
+- **In Vercel:** Project → Settings → Domains lists both domains as verified, with `www.gameclaw.win` set to redirect (308) to `gameclaw.win`. Vercel issues and renews the HTTPS certificates.
+- **Keep them grey-clouded.** Vercel recommends DNS-only; turning on the orange-cloud proxy gets in the way of certificate renewal and Vercel's own edge.
+  - With DNS-only, Cloudflare's WAF, rate limiting and "Always Use HTTPS" don't touch traffic, and they aren't needed.
+  - Vercel already forces HTTPS (http → https 308) and has built-in DDoS protection.
+  - The app rate-limits every free tool per user, and the Paystack webhook is signature-checked.
+- **The old URL:** production requests to `*.vercel.app` are redirected to `NEXT_PUBLIC_SITE_URL` by `proxy.ts`. That keeps cookies, the installed app and SEO on a single origin. Preview deploys aren't redirected.
+
 ## Step 1: Database password and migrations
 
 1. Supabase → Project Settings → Database → **Reset database password**. Save it in a password manager.
@@ -57,19 +73,48 @@ Any env change needs a redeploy: `vercel deploy --prod`, or Deployments → ⋯ 
 
 Supabase → Authentication → **URL Configuration**:
 
-- **Site URL:** `https://gameclaw-smoky.vercel.app`
+- **Site URL:** `https://gameclaw.win`
 - **Redirect URLs** (add all four):
-  - `https://gameclaw-smoky.vercel.app/auth/callback`
+  - `https://gameclaw.win/auth/callback`
   - `https://gameclaw-*-isaacs-projects-7cdab31a.vercel.app/auth/callback` (preview deploys)
   - `http://localhost:3000/auth/callback`
   - your custom domain's `/auth/callback`, when you have one
 
 Then under Authentication → **SMTP Settings**, add a real email provider (Resend, Postmark, Brevo…). The built-in sender only allows a few magic-link emails an hour.
 
+## Step 2b: Sign-in email from noreply@gameclaw.win (Resend)
+
+Supabase's built-in sender allows only **2 emails an hour**. Resend's free tier gives 3,000 a month.
+
+1. At resend.com, sign up and go to **Domains → Add domain → `gameclaw.win`**. Pick the region **Ireland (eu-west-1)**, next to the database.
+2. Resend shows the DNS records to add. With a Cloudflare token that has DNS edit access, Claude can add them. Otherwise add them in Cloudflare → DNS, all **DNS only**:
+
+   | Type | Name | Content | Notes |
+   |---|---|---|---|
+   | MX | `send` | `feedback-smtp.eu-west-1.amazonses.com`, priority 10 | bounce handling |
+   | TXT | `send` | `v=spf1 include:amazonses.com ~all` | SPF |
+   | TXT | `resend._domainkey` | the `p=MIGfMA0…` value from Resend | DKIM, unique to your domain |
+   | TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:dmarc@gameclaw.win` | start with `p=none`; move to `p=quarantine` once mail is flowing |
+
+3. In Resend, click **Verify** and wait for all three to show Verified. That usually takes a few minutes.
+4. In Resend, go to **API Keys → Create** with *Sending access* for `gameclaw.win` only.
+5. In Supabase → Authentication → **SMTP Settings → Enable custom SMTP**:
+
+   | Field | Value |
+   |---|---|
+   | Sender email | `noreply@gameclaw.win` |
+   | Sender name | `gameclaw` |
+   | Host | `smtp.resend.com` |
+   | Port | `465` |
+   | Username | `resend` |
+   | Password | the Resend API key |
+
+6. In Supabase → Authentication → **Rate Limits**, raise "emails sent per hour" to about 100.
+
 ## Step 3: Google sign-in (optional)
 
 1. Google Cloud Console → APIs & Services → **Credentials → Create credentials → OAuth client ID** → *Web application*.
-2. **Authorized JavaScript origins:** `https://gameclaw-smoky.vercel.app`
+2. **Authorized JavaScript origins:** `https://gameclaw.win`
 3. **Authorized redirect URIs:** `https://qefedcphkmxuxjetmtqw.supabase.co/auth/v1/callback`. This is the *Supabase* callback, not the app's.
 4. Copy the client ID and secret into Supabase → Authentication → **Providers → Google** → Enable → Save.
 5. OAuth consent screen → **Publish app**. Until you do, only listed test users can sign in.
@@ -79,7 +124,7 @@ Then under Authentication → **SMTP Settings**, add a real email provider (Rese
 1. Paystack dashboard → switch to **Test Mode** (toggle, top right).
 2. Settings → **API Keys & Webhooks**:
    - Copy the **Test Secret Key** into Vercel as `PAYSTACK_SECRET_KEY`.
-   - **Test Webhook URL:** `https://gameclaw-smoky.vercel.app/api/v1/webhooks/paystack` → Save.
+   - **Test Webhook URL:** `https://gameclaw.win/api/v1/webhooks/paystack` → Save.
    - **Test Callback URL:** leave empty. The app sends its own (`/billing/callback`).
 3. Redeploy, then buy the Day Pass using Paystack's test card or test mobile money number (shown on the checkout page in test mode).
 4. **Going live:** verify your business in Paystack, switch to Live Mode, and set the **Live Webhook URL** to the same address. Put the `sk_live_…` key in Vercel (Production only; keep Preview on test), then redeploy.
@@ -101,7 +146,7 @@ Every push to `main` then deploys to production (running migrations). Pull reque
 
 Run through this after steps 1–4:
 
-- [ ] `https://gameclaw-smoky.vercel.app/api/v1/health` returns `{"data":{"status":"ok",…}}`
+- [ ] `https://gameclaw.win/api/v1/health` returns `{"data":{"status":"ok",…}}`
 - [ ] **Sign in by magic link.** The email arrives within a minute, and the link lands you on **/welcome**.
 - [ ] **/welcome:** tick both boxes, press Continue, and you land where you were going. `/account` shows the Free plan and 5 AI requests.
 - [ ] **Load a mock slip:** on `/slip`, SportyBet + `BC7K2Q` shows 8 games and total odds.
