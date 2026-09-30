@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Prose } from "@/components/prose";
 
-export const metadata: Metadata = { title: "Privacy policy" };
+export const metadata: Metadata = { title: "Privacy policy", alternates: { canonical: "/privacy" } };
 
 // Draft policy. Review against Ghana's Data Protection Act, 2012 (Act 843) before launch.
 export default function PrivacyPage() {

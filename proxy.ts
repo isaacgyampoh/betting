@@ -5,7 +5,20 @@ import { updateSession } from "@/lib/supabase/proxy";
 // before any streaming starts. Pages still check age confirmation themselves.
 const PROTECTED_PREFIXES = ["/slip", "/convert", "/matches", "/chat", "/account", "/welcome", "/billing"];
 
+// Production traffic on *.vercel.app goes to the canonical domain (one origin for cookies, PWA, SEO).
+const CANONICAL = process.env.NEXT_PUBLIC_SITE_URL ? new URL(process.env.NEXT_PUBLIC_SITE_URL) : null;
+
 export async function proxy(request: NextRequest) {
+  if (
+    CANONICAL &&
+    process.env.VERCEL_ENV === "production" &&
+    request.nextUrl.hostname.endsWith(".vercel.app") &&
+    request.nextUrl.hostname !== CANONICAL.hostname
+  ) {
+    const url = new URL(request.nextUrl.pathname + request.nextUrl.search, CANONICAL);
+    return NextResponse.redirect(url, 308);
+  }
+
   const { response, userId } = await updateSession(request);
   const { pathname, search } = request.nextUrl;
 

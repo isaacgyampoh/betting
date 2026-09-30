@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   title: { absolute: "gameclaw: convert, split and check betting slips in Ghana" },
   description:
     "Paste a SportyBet or Betway booking code, convert it to another bookmaker, trim it to your target odds, and check form and head-to-head before you bet. Free slip tools, optional AI assistant. 18+.",
+  alternates: { canonical: "/" },
+  openGraph: { url: "/" },
 };
 
 const FEATURES = [

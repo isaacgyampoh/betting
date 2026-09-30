@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Prose } from "@/components/prose";
 
-export const metadata: Metadata = { title: "Terms of use" };
+export const metadata: Metadata = { title: "Terms of use", alternates: { canonical: "/terms" } };
 
 // Draft terms. Have them reviewed by a Ghanaian lawyer before launch.
 export default function TermsPage() {

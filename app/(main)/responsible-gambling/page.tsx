@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Prose } from "@/components/prose";
 
-export const metadata: Metadata = { title: "Responsible gambling" };
+export const metadata: Metadata = { title: "Responsible gambling", alternates: { canonical: "/responsible-gambling" } };
 
 export default function ResponsibleGamblingPage() {
   return (

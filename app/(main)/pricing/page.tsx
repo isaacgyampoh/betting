@@ -11,6 +11,7 @@ import { listActivePlans } from "@/lib/services/plans";
 export const metadata: Metadata = {
   title: "Pricing",
   description: "Slip tools are free. AI assistant and deep match analysis from GHS 5 a day. Pay with mobile money or card.",
+  alternates: { canonical: "/pricing" },
 };
 
 // Prices live in the database; render per request so builds never need a DB connection.
