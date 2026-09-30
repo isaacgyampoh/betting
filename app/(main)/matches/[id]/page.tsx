@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { MessageCircle } from "lucide-react";
 import { z } from "zod";
 import { ApiErrorNotice } from "@/components/api-error-notice";
+import { AnalysisPanel } from "@/components/stats/analysis-panel";
 import { FormChips } from "@/components/stats/form-chips";
 import { SampleDataNotice } from "@/components/stats/sample-badge";
 import { TeamBadge } from "@/components/stats/team-badge";
@@ -138,6 +139,8 @@ export default async function MatchPage({ params }: PageProps<"/matches/[id]">) 
       </header>
 
       {d.source === "sample" && <SampleDataNotice />}
+
+      <AnalysisPanel matchId={m.id} />
 
       {insights.length > 0 && (
         <Section title="Key numbers">

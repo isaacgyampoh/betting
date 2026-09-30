@@ -96,3 +96,18 @@ export async function lookupMatch(home: string, away: string, kickoff: Date): Pr
   const candidates = lists.flat().map((m) => ({ ...m, kickoffAt: new Date(m.kickoffAt), home: m.home.name, away: m.away.name, summary: m }));
   return bestMatch({ home, away, kickoffAt: kickoff }, candidates, aliases)?.candidate.summary ?? null;
 }
+
+/** Upcoming (and today's) matches involving the named team(s), across the next few days. */
+export async function searchMatches(team: string, opponent?: string, days = 4): Promise<MatchSummary[]> {
+  const { teamSimilarity } = await import("@/lib/matching/similarity");
+  const provider = statsProvider();
+  const aliases = await getAliasIndex();
+  const dates = Array.from({ length: days }, (_, i) => new Date(Date.now() + (i - 1) * 86_400_000).toISOString().slice(0, 10));
+  const lists = await Promise.all(dates.map((d) => provider.fixturesByDate(d)));
+  const hits = (m: MatchSummary, name: string) => Math.max(teamSimilarity(name, m.home.name, aliases), teamSimilarity(name, m.away.name, aliases)) >= 0.8;
+  return lists
+    .flat()
+    .filter((m) => hits(m, team) && (!opponent || hits(m, opponent)))
+    .sort((a, b) => a.kickoffAt.localeCompare(b.kickoffAt))
+    .slice(0, 5);
+}

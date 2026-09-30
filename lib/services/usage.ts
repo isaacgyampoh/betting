@@ -14,6 +14,8 @@ export type UsageEntry = {
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  cacheReadTokens?: number;
+  costMicroUsd?: number;
   meta?: Prisma.InputJsonValue;
 };
 

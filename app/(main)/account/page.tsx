@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAdultPage } from "@/lib/auth-pages";
 import { getMe } from "@/lib/services/profile";
+import { getAiAllowance } from "@/lib/services/ai-quota";
 
 export const metadata: Metadata = { title: "Account" };
 
 export default async function AccountPage() {
   const { user } = await requireAdultPage("/account");
-  const me = await getMe(user);
+  const [me, ai] = await Promise.all([getMe(user), getAiAllowance(user.id)]);
 
   return (
     <div className="space-y-4">
@@ -29,10 +30,15 @@ export default async function AccountPage() {
           </CardTitle>
           <CardDescription>
             {me.subscription
-              ? `Active until ${me.subscription.endsAt?.toLocaleDateString("en-GH")}`
+              ? `Active until ${me.subscription.endsAt?.toLocaleDateString("en-GH")} · ${ai.remaining} AI requests left today`
               : `${me.freeAiCredits} free AI requests left. Slip tools are always free.`}
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <Button asChild size="lg" variant={me.subscription ? "outline" : "default"}>
+            <Link href="/pricing">{me.subscription ? "Extend or change plan" : "See plans"}</Link>
+          </Button>
+        </CardContent>
       </Card>
       <Card>
         <CardContent className="flex flex-col gap-2 sm:flex-row">
