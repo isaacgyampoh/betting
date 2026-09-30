@@ -20,7 +20,7 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "test:int": "vitest run --config vitest.integration.config.mts",
-    "vercel-build": "node scripts/migrate-on-deploy.mjs && next build"
+    "vercel-build": "prisma generate && node scripts/migrate-on-deploy.mjs && next build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",

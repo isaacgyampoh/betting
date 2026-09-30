@@ -6,7 +6,7 @@
 
 | Piece | How it works |
 |---|---|
-| Build | `vercel.json` → install `pnpm install --frozen-lockfile`, build `pnpm run vercel-build` |
+| Build | `vercel.json` → install `pnpm install --frozen-lockfile`, build `pnpm run vercel-build` (= `prisma generate` → migrations → `next build`) |
 | pnpm / Node | `packageManager: pnpm@12.3.4` via Corepack (`ENABLE_EXPERIMENTAL_COREPACK=1`); Node `24.x` via `engines` |
 | Migrations | `scripts/migrate-on-deploy.mjs` runs `prisma migrate deploy` with `DIRECT_URL` on **production** deploys only. Preview deploys never touch the DB, and `migrate dev` is never used. If `DIRECT_URL` is missing, it warns and skips. |
 | Cron | `/api/v1/cron/cleanup` runs daily at 03:30 GMT, protected by `CRON_SECRET` (Vercel sends it automatically) |
