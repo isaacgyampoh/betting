@@ -2,6 +2,10 @@
   "name": "gameclaw",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "packageManager": "pnpm@12.3.4",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,7 +19,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "test:int": "vitest run --config vitest.integration.config.mts"
+    "test:int": "vitest run --config vitest.integration.config.mts",
+    "vercel-build": "node scripts/migrate-on-deploy.mjs && next build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
@@ -52,6 +57,5 @@
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.2"
-  },
-  "packageManager": "pnpm@12.3.4"
+  }
 }
