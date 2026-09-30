@@ -13,6 +13,16 @@ const BASE_URL = "https://v3.football.api-sports.io";
 
 type Params = Record<string, string | number>;
 
+/** The API key's plan doesn't include this data (e.g. current-season tables on the Free plan). */
+export class StatsPlanLimitError extends Error {
+  constructor(readonly endpoint: string, message: string) {
+    super(message);
+    this.name = "StatsPlanLimitError";
+  }
+}
+
+const PLAN_LIMITED = "__plan_limited__";
+
 function cacheKey(endpoint: string, params: Params) {
   const sorted = Object.keys(params).sort().map((k) => `${k}=${params[k]}`).join("&");
   return createHash("sha256").update(`${endpoint}?${sorted}`).digest("hex");
@@ -57,7 +67,13 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
   async function call<T>(endpoint: string, params: Params, ttlMs: number): Promise<T[]> {
     const key = cacheKey(endpoint, params);
     const hit = await db.statsCache.findUnique({ where: { key } });
-    if (hit && hit.expiresAt > new Date()) return hit.payload as unknown as T[];
+    if (hit && hit.expiresAt > new Date()) {
+      const cached = hit.payload as unknown;
+      if (cached && typeof cached === "object" && PLAN_LIMITED in cached) {
+        throw new StatsPlanLimitError(endpoint, String((cached as Record<string, unknown>)[PLAN_LIMITED]));
+      }
+      return cached as T[];
+    }
 
     const url = `${BASE_URL}${endpoint}?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`;
     let body: { response?: T[]; errors?: unknown };
@@ -73,6 +89,19 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
 
     // API-Football returns `errors` as [] when fine, or an object like { token: "..." } on failure.
     const errors: unknown[] = !body.errors ? [] : Array.isArray(body.errors) ? body.errors : Object.values(body.errors as object);
+    const planError = (body.errors as Record<string, unknown> | undefined)?.plan;
+    if (typeof planError === "string") {
+      // Not an outage: this key's plan excludes the data. Remember for a day to save quota and latency.
+      logger.warn("stats.plan_limited", { endpoint, params, message: planError });
+      const marker = { [PLAN_LIMITED]: planError } as unknown as Prisma.InputJsonValue;
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60_000);
+      await db.statsCache.upsert({
+        where: { key },
+        create: { key, endpoint, params, payload: marker, expiresAt },
+        update: { payload: marker, expiresAt, fetchedAt: new Date() },
+      });
+      throw new StatsPlanLimitError(endpoint, planError);
+    }
     if (errors.length) {
       logger.error("stats.api_error", { endpoint, params, errors: body.errors });
       if (hit) return hit.payload as unknown as T[];
@@ -108,8 +137,13 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
       return (await call<ApiFixture>("/fixtures", { team: teamId, last: count }, 6 * HOUR)).map(toMatchSummary);
     },
     async headToHead(homeId, awayId, count) {
+      // No `last` parameter: it isn't available on every plan. Fetch all meetings, keep the latest.
       const [a, b] = [homeId, awayId].sort((x, y) => x - y); // same cache entry either way round
-      return (await call<ApiFixture>("/fixtures/headtohead", { h2h: `${a}-${b}`, last: count }, 12 * HOUR)).map(toMatchSummary);
+      const all = (await call<ApiFixture>("/fixtures/headtohead", { h2h: `${a}-${b}` }, 12 * HOUR)).map(toMatchSummary);
+      return all
+        .filter((m) => m.status === "FINISHED")
+        .sort((x, y) => y.kickoffAt.localeCompare(x.kickoffAt))
+        .slice(0, count);
     },
     async standings(leagueId, season) {
       const rows = await call<{ league: { standings: ApiStanding[][] } }>("/standings", { league: leagueId, season }, 6 * HOUR);

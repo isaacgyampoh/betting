@@ -24,6 +24,7 @@ export function compactMatchDetail(d: MatchDetail) {
     h2h: d.h2h.map(score),
     table: table?.map((r) => ({ team: r.team.name, rank: r.rank, played: r.played, points: r.points, gd: r.goalsFor - r.goalsAgainst })),
     key_numbers: matchInsights(d),
+    ...(d.unavailable.length ? { not_available_on_stats_plan: d.unavailable } : {}),
   };
 }
 

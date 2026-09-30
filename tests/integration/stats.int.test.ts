@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { createApiFootballProvider } from "@/lib/stats/api-football";
+import { createApiFootballProvider, StatsPlanLimitError } from "@/lib/stats/api-football";
 import { sampleStatsProvider } from "@/lib/stats/sample";
 import { getMatchDetail, listMatches, lookupMatch } from "@/lib/services/stats";
 import { createSportyBetAdapter } from "@/lib/bookmakers/sportybet";
@@ -41,6 +41,37 @@ describe("API-Football client caching", () => {
     await db.statsCache.deleteMany();
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network down"); }));
     await expect(createApiFootballProvider("k").fixture(1)).rejects.toMatchObject({ code: "STATS_UNAVAILABLE" });
+  });
+});
+
+describe("API-Football plan limits (Free plan)", () => {
+  it("raises StatsPlanLimitError, caches it for a day, and doesn't call the API again", async () => {
+    await db.statsCache.deleteMany();
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ errors: { plan: "Free plans do not have access to the Last parameter." }, response: [] })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = createApiFootballProvider("k");
+    await expect(provider.lastFixtures(33, 5)).rejects.toBeInstanceOf(StatsPlanLimitError);
+    await expect(provider.lastFixtures(33, 5)).rejects.toBeInstanceOf(StatsPlanLimitError);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("requests head-to-head without the `last` parameter and keeps the latest finished meetings", async () => {
+    await db.statsCache.deleteMany();
+    const fx = (id: number, date: string, short: string) => ({
+      fixture: { id, date, status: { short, long: short, elapsed: null } },
+      league: { id: 39, name: "Premier League", country: "England", logo: null, season: 2025 },
+      teams: { home: { id: 33, name: "Man United", logo: null }, away: { id: 47, name: "Tottenham", logo: null } },
+      goals: short === "FT" ? { home: 1, away: 0 } : { home: null, away: null },
+    });
+    const fetchMock = vi.fn(async (_url: string) =>
+      new Response(JSON.stringify({ errors: [], response: [fx(1, "2024-01-01T15:00:00Z", "FT"), fx(2, "2026-02-07T15:00:00Z", "FT"), fx(3, "2026-12-01T15:00:00Z", "NS"), fx(4, "2025-05-21T15:00:00Z", "FT")] })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const h2h = await createApiFootballProvider("k").headToHead(47, 33, 2);
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain("last=");
+    expect(h2h.map((m) => m.id)).toEqual([2, 4]);
   });
 });
 

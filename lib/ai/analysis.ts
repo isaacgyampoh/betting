@@ -18,7 +18,7 @@ Write a concise analysis (max ~250 words) in plain English:
 1. What the data shows about each team (form, goals, table position).
 2. Which markets the numbers lean towards (1X2, double chance, over/under, BTTS), with the specific stats behind each lean.
 3. The main risks and what the data can't tell you (injuries, line-ups, motivation are NOT in the data).
-Rules: use only the numbers in the JSON; never invent stats, injuries or news. Do not state certainties or guarantees. No odds unless given.
+Rules: use only the numbers in the JSON; never invent stats, injuries or news. If "not_available_on_stats_plan" lists sections, say those numbers weren't available rather than guessing them. Do not state certainties or guarantees. No odds unless given.
 End with: "Stats, not guarantees. Bet responsibly."`;
 
 /**
@@ -32,6 +32,9 @@ export async function analyzeMatch(user: AuthUser, matchId: number): Promise<{ a
   }
 
   const detail = await getMatchDetail(user, matchId);
+  if (detail.unavailable.includes("form") && detail.h2h.length === 0) {
+    throw new AppError("BAD_REQUEST", "There isn't enough data for a useful analysis of this match yet.");
+  }
   const key = `analysis:${ANALYSIS_MODEL}:${matchId}`;
   const hit = await db.statsCache.findUnique({ where: { key } });
   if (hit && hit.expiresAt > new Date()) {

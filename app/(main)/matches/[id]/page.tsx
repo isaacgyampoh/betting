@@ -28,6 +28,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function PlanNote({ what }: { what: string }) {
+  return (
+    <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+      {what} aren&apos;t included in our current stats plan, so we don&apos;t show them rather than guess.
+    </p>
+  );
+}
+
 function ResultRow({ m }: { m: MatchSummary }) {
   return (
     <li className="flex items-center justify-between gap-2 px-4 py-2 text-sm">
@@ -155,24 +163,36 @@ export default async function MatchPage({ params }: PageProps<"/matches/[id]">) 
       )}
 
       <Section title="Recent form (last 5)">
-        <div className="grid gap-3 md:grid-cols-2">
-          <FormCard form={d.form.home} />
-          <FormCard form={d.form.away} />
-        </div>
+        {d.unavailable.includes("form") ? (
+          <PlanNote what="Recent results for each team" />
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormCard form={d.form.home} />
+            <FormCard form={d.form.away} />
+          </div>
+        )}
       </Section>
 
       <Section title="Head to head">
-        {d.h2h.length ? (
+        {d.unavailable.includes("h2h") ? (
+          <PlanNote what="Head-to-head results" />
+        ) : d.h2h.length ? (
           <ul className="divide-y rounded-xl border bg-card">{d.h2h.map((h) => <ResultRow key={h.id} m={h} />)}</ul>
         ) : (
           <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">No previous meetings found.</p>
         )}
       </Section>
 
-      {d.standings && (
+      {d.standings ? (
         <Section title="Standings">
           <Standings d={d} />
         </Section>
+      ) : (
+        d.unavailable.includes("standings") && (
+          <Section title="Standings">
+            <PlanNote what="Current league tables" />
+          </Section>
+        )
       )}
 
       <p className="text-center text-xs text-muted-foreground">

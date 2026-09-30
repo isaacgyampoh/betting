@@ -43,6 +43,8 @@ export type MatchDetail = {
   form: { home: TeamForm; away: TeamForm };
   h2h: MatchSummary[];
   standings: StandingRow[] | null;
+  /** Sections the stats provider's plan doesn't include (shown as a note, never faked). */
+  unavailable: ("form" | "h2h" | "standings")[];
   source: StatsSource;
 };
 

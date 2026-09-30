@@ -4,7 +4,7 @@ import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { bestMatch } from "@/lib/matching/similarity";
-import { createApiFootballProvider } from "@/lib/stats/api-football";
+import { createApiFootballProvider, StatsPlanLimitError } from "@/lib/stats/api-football";
 import { buildTeamForm } from "@/lib/stats/form";
 import { sampleStatsProvider } from "@/lib/stats/sample";
 import type { MatchDetail, MatchSummary, StatsProvider } from "@/lib/stats/types";
@@ -66,23 +66,39 @@ export async function getMatchDetail(user: AuthUser, fixtureId: number): Promise
   const match = await provider.fixture(fixtureId);
   if (!match) throw new AppError("NOT_FOUND", "We couldn't find that match.");
 
+  // Each section is optional: a plan limit marks it unavailable instead of failing the page.
+  const unavailable = new Set<MatchDetail["unavailable"][number]>();
+  const section = async <T,>(name: MatchDetail["unavailable"][number], load: () => Promise<T>, empty: T): Promise<T> => {
+    try {
+      return await load();
+    } catch (err) {
+      if (err instanceof StatsPlanLimitError) {
+        unavailable.add(name);
+        return empty;
+      }
+      if (name === "standings") {
+        // Cups and friendlies have no table; a failure here shouldn't hide the rest.
+        logger.warn("stats.standings_failed", { leagueId: match.league.id, err });
+        return empty;
+      }
+      throw err;
+    }
+  };
+
   const [homeLast, awayLast, h2h, standings] = await Promise.all([
-    provider.lastFixtures(match.home.id, 5),
-    provider.lastFixtures(match.away.id, 5),
-    provider.headToHead(match.home.id, match.away.id, 5),
-    // Cups and friendlies have no table; a failure here shouldn't hide the rest.
-    provider.standings(match.league.id, match.league.season).catch((err) => {
-      logger.warn("stats.standings_failed", { leagueId: match.league.id, err });
-      return null;
-    }),
+    section("form", () => provider.lastFixtures(match.home.id, 5), []),
+    section("form", () => provider.lastFixtures(match.away.id, 5), []),
+    section("h2h", () => provider.headToHead(match.home.id, match.away.id, 5), []),
+    section("standings", () => provider.standings(match.league.id, match.league.season), null),
   ]);
 
-  await logUsage({ userId: user.id, kind: "STATS", success: true, meta: { fixtureId, source: provider.source } });
+  await logUsage({ userId: user.id, kind: "STATS", success: true, meta: { fixtureId, source: provider.source, unavailable: [...unavailable] } });
   return {
     match,
     form: { home: buildTeamForm(match.home, homeLast), away: buildTeamForm(match.away, awayLast) },
     h2h: h2h.filter((m) => m.status === "FINISHED").sort((a, b) => b.kickoffAt.localeCompare(a.kickoffAt)),
     standings,
+    unavailable: [...unavailable],
     source: provider.source,
   };
 }
