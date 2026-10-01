@@ -19,6 +19,7 @@ export function BookmakerPicker({
   onChange,
   disabledSlug,
   withAuto,
+  hideUnavailableNote,
 }: {
   label: string;
   options: BookmakerOption[];
@@ -27,15 +28,20 @@ export function BookmakerPicker({
   disabledSlug?: string;
   /** Adds a first "Auto-detect" choice. */
   withAuto?: boolean;
+  /** Suppresses the "not connected yet" line, for when a sibling picker already shows it. */
+  hideUnavailableNote?: boolean;
 }) {
-  // Unconnected bookmakers stay visible but unselectable: hiding them entirely makes the list look
-  // wrong to someone who uses one, and "coming soon" is the honest answer.
-  const all = withAuto ? [{ slug: AUTO, name: "Auto-detect", available: true }, ...options] : options;
+  // Bookmakers we cannot use are named in a line underneath rather than shown as dead buttons.
+  // Six greyed-out options among nine made the grid look broken and squeezed the real ones until
+  // their names truncated; one sentence says the same thing and reads better.
+  const usable = options.filter((b) => b.available !== false);
+  const all = withAuto ? [{ slug: AUTO, name: "Auto-detect", available: true }, ...usable] : usable;
   const unavailable = options.filter((b) => b.available === false);
   return (
     <fieldset className="space-y-2">
       <legend className="mb-2 text-sm font-medium">{label}</legend>
-      <div role="radiogroup" className="grid grid-cols-3 gap-2">
+      {/* Two columns on a narrow phone: three left names like "Football.com" truncated. */}
+      <div role="radiogroup" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {all.map((b) => {
           const disabled = b.slug === disabledSlug || b.available === false;
           return (
@@ -57,10 +63,9 @@ export function BookmakerPicker({
           );
         })}
       </div>
-      {unavailable.length > 0 && (
+      {unavailable.length > 0 && !hideUnavailableNote && (
         <p className="text-xs text-muted-foreground">
-          {unavailable.map((b) => b.name).join(", ")} {unavailable.length === 1 ? "isn't" : "aren't"} connected yet, so we
-          can&apos;t use {unavailable.length === 1 ? "it" : "them"} here.
+          Not connected yet: {unavailable.map((b) => b.name).join(", ")}.
         </p>
       )}
     </fieldset>

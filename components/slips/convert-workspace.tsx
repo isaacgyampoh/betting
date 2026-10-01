@@ -73,7 +73,7 @@ export function ConvertWorkspace({ bookmakers, source }: { bookmakers: ConvertBo
           </div>
         ) : (
           <>
-            <BookmakerPicker label="From" options={sources} value={from} onChange={pickFrom} withAuto />
+            <BookmakerPicker label="From" options={sources} value={from} onChange={pickFrom} withAuto hideUnavailableNote />
             <CodeInput value={code} onChange={setCode} />
           </>
         )}
