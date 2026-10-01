@@ -8,6 +8,7 @@ import { apiFetch, type ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import type { SlipView } from "@/lib/slips/view";
 import type { ReadSlip } from "@/lib/services/read-slip";
+import { ChatGreeting } from "./chat-greeting";
 import { RichText } from "./rich-text";
 import { ChatSlipCard } from "./slip-card";
 import { ReadSlipConfirm } from "./read-slip-confirm";
@@ -20,13 +21,10 @@ type ChatResponse = { reply: string; slips: SlipView[]; allowance: Allowance; qu
 const STORAGE_KEY = "gameclaw.chat.v2";
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
-// Things that work without the user already having a code. Sample codes are deliberately not
-// suggested: they don't resolve in production, so suggesting one would send the user into an error.
-const STARTERS = [
-  "Build me a 5 odds for today",
-  "Give me a 2 odds with varied markets",
-  "Paste your booking code and I'll check it",
-];
+// Every starter must be something the app can actually do on a tap. "Paste your booking code" was
+// here and is not: it asks the user for something rather than doing anything, and sending it as a
+// message just confuses the assistant. That belongs in the input placeholder, where it now lives.
+const STARTERS = ["Build me a safe 5 odds for today", "Give me a 2 odds", "What looks good tonight?"];
 
 function loadStored(): Turn[] {
   try {
@@ -37,7 +35,16 @@ function loadStored(): Turn[] {
   }
 }
 
-export function ChatWorkspace({ initialAllowance, matchId }: { initialAllowance: Allowance; matchId?: number }) {
+export function ChatWorkspace({
+  initialAllowance,
+  matchId,
+  name,
+}: {
+  initialAllowance: Allowance;
+  matchId?: number;
+  /** First name for the greeting, when we have one. */
+  name?: string | null;
+}) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState(matchId ? "What do the numbers say about this match?" : "");
   const [pending, setPending] = useState<null | "reply" | "upload">(null);
@@ -124,8 +131,9 @@ export function ChatWorkspace({ initialAllowance, matchId }: { initialAllowance:
 
   return (
     <div className="flex min-h-[calc(100dvh-13rem)] flex-col">
-      <div className="mb-4 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className={cn(allowance.remaining === 0 && "text-loss")}>
+      {/* An empty chat stays bare, but a limit the user is about to hit is never hidden. */}
+      <div className="mb-4 flex min-h-8 items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className={cn(allowance.remaining === 0 && "text-loss", turns.length === 0 && allowance.remaining > 3 && "invisible")}>
           {allowance.kind === "trial"
             ? `${allowance.remaining} free ${allowance.remaining === 1 ? "message" : "messages"} left`
             : `${allowance.plan?.name} · ${allowance.remaining} left today`}
@@ -146,19 +154,19 @@ export function ChatWorkspace({ initialAllowance, matchId }: { initialAllowance:
 
       <div className="flex-1 space-y-5">
         {turns.length === 0 && (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Paste a booking code from any bookmaker, or upload a screenshot of a slip. Then ask for a conversion, a target odds, or the numbers behind
-              it.
-            </p>
-            <div className="flex flex-col gap-1.5">
+          <ChatGreeting name={name ?? null}>
+            <div className="flex flex-wrap justify-center gap-2">
               {STARTERS.map((s) => (
-                <button key={s} onClick={() => send(s)} className="rounded-md border bg-card px-3 py-2 text-left text-sm hover:bg-accent">
+                <button
+                  key={s}
+                  onClick={() => send(s)}
+                  className="rounded-full border bg-card px-4 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                >
                   {s}
                 </button>
               ))}
             </div>
-          </div>
+          </ChatGreeting>
         )}
 
         {turns.map((t, i) =>
@@ -236,7 +244,7 @@ export function ChatWorkspace({ initialAllowance, matchId }: { initialAllowance:
           }}
           rows={1}
           maxLength={2000}
-          placeholder="Paste a code or ask something"
+          placeholder="Paste a booking code, or ask for anything"
           className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none"
           aria-label="Message"
         />
