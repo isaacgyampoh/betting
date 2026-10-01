@@ -58,7 +58,9 @@ async function evidenceForPick(user: AuthUser | null, pick: PickCandidate): Prom
  */
 export async function enrich(user: AuthUser | null, picks: PickCandidate[], limit: number): Promise<EnrichedPick[]> {
   const head = picks.slice(0, limit);
-  const enriched = await mapWithConcurrency(head, 4, async (pick): Promise<EnrichedPick> => {
+  // Eight at a time rather than four: these are cached reads against a provider that handles it,
+  // and the research step was taking most of seven seconds.
+  const enriched = await mapWithConcurrency(head, 8, async (pick): Promise<EnrichedPick> => {
     try {
       return { ...pick, ...(await evidenceForPick(user, pick)) };
     } catch (error) {

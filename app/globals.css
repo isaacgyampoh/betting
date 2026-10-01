@@ -145,6 +145,35 @@
     font-variant-numeric: tabular-nums;
   }
 }
+/* Buttons, links and cards respond to touch. Transform and opacity only, so these stay on the
+   compositor and cost nothing on a mid-range phone, and the press is scaled small enough to read as
+   a response rather than a bounce. */
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled),
+  a[href],
+  [role="radio"]:not([disabled]) {
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      opacity 0.15s ease,
+      transform 0.1s ease;
+  }
+  button:not(:disabled):active,
+  [role="radio"]:not([disabled]):active {
+    transform: scale(0.97);
+  }
+}
+
+/* A new message should arrive rather than appear. */
+@keyframes gc-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gc-enter { animation: gc-enter 0.22s ease-out; }
+}
+
 /* Landing page demo: a walk-through of the real flow, staged with delays so it costs no
    JavaScript. It runs once rather than looping: a loop spends most of its cycle with the phone
    empty, and the first thing a visitor saw was a blank frame. */

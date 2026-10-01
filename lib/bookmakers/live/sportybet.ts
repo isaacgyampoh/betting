@@ -20,5 +20,5 @@ export const { fetchEvent, getEventMarkets, getEventOffersWithProbability, listU
 
 // Pure helpers, shared by every bookmaker on this platform; re-exported so existing imports and
 // tests keep working.
-export { INLINE_MARKET_IDS, parseSharedSelections, probabilityOf } from "@/lib/bookmakers/live/hopegaming";
+export { CORE_MARKET_IDS, INLINE_MARKET_IDS, parseSharedSelections, probabilityOf } from "@/lib/bookmakers/live/hopegaming";
 export type { FixtureOffer, FixtureWithOffers } from "@/lib/bookmakers/live/hopegaming";

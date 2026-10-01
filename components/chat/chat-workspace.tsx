@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ImagePlus, Loader2, RotateCcw } from "lucide-react";
+import { ArrowUp, ImagePlus, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ApiErrorAlert } from "@/components/slips/api-error-alert";
 import { apiFetch, type ApiError } from "@/lib/api-client";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import type { SlipView } from "@/lib/slips/view";
 import type { ReadSlip } from "@/lib/services/read-slip";
 import { ChatGreeting } from "./chat-greeting";
+import { Thinking, describeWork } from "./thinking";
 import { RichText } from "./rich-text";
 import { ChatSlipCard } from "./slip-card";
 import { ReadSlipConfirm } from "./read-slip-confirm";
@@ -48,6 +49,8 @@ export function ChatWorkspace({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState(matchId ? "What do the numbers say about this match?" : "");
   const [pending, setPending] = useState<null | "reply" | "upload">(null);
+  // What the current request is, so the wait can say something true about it.
+  const [work, setWork] = useState<{ label: string; note?: string }>({ label: "Checking" });
   const [error, setError] = useState<ApiError | null>(null);
   const [allowance, setAllowance] = useState(initialAllowance);
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
@@ -75,6 +78,7 @@ export function ChatWorkspace({
     const next: Turn[] = [...turns, { role: "user", content }];
     setTurns(next);
     setInput("");
+    setWork(describeWork(content));
     setPending("reply");
     setError(null);
     setQuickReplies([]);
@@ -104,6 +108,7 @@ export function ChatWorkspace({
       setError({ code: "BAD_REQUEST", message: "That file is too big. Please upload something under 4 MB." });
       return;
     }
+    setWork({ label: "Reading the slip in your screenshot" });
     setPending("upload");
     setError(null);
     setQuickReplies([]);
@@ -171,11 +176,11 @@ export function ChatWorkspace({
 
         {turns.map((t, i) =>
           t.role === "user" ? (
-            <div key={i} className="flex justify-end">
+            <div key={i} className="gc-enter flex justify-end">
               <p className="max-w-[85%] rounded-lg bg-secondary px-3.5 py-2.5 text-sm whitespace-pre-wrap">{t.content}</p>
             </div>
           ) : (
-            <div key={i} className="space-y-3">
+            <div key={i} className="gc-enter space-y-3">
               {t.content && <RichText text={t.content} />}
               {t.read && <ReadSlipConfirm read={t.read} onConfirm={() => confirmRead(t.read!)} />}
               {t.slips?.map((s) => (
@@ -185,11 +190,7 @@ export function ChatWorkspace({
           ),
         )}
 
-        {busy && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> {pending === "upload" ? "Reading the slip…" : "Checking…"}
-          </div>
-        )}
+        {busy && <Thinking work={work} />}
         {error && <ApiErrorAlert error={error} onRetry={() => send(input)} />}
         <div ref={bottomRef} />
       </div>

@@ -116,11 +116,17 @@ export async function buildFromToday(opts: {
 
   // Only SportyBet exposes a bulk fixtures-with-prices endpoint today; when a second bookmaker is
   // connected this should move behind a capability on the adapter.
-  const { listUpcomingWithOffers } = await import("@/lib/bookmakers/live/sportybet");
-  const fixtures = await listUpcomingWithOffers({ hours, pages: 3 }).catch((error: unknown) => {
-    logger.error("today.fixtures_failed", { error: String(error) });
-    throw new AppError("BOOKMAKER_UNAVAILABLE", `We couldn't read ${source.name}'s fixtures just now. Please try again in a moment.`);
-  });
+  const { listUpcomingWithOffers, CORE_MARKET_IDS } = await import("@/lib/bookmakers/live/sportybet");
+  const load = (marketIds?: readonly string[]) =>
+    listUpcomingWithOffers({ hours, pages: 3, ...(marketIds ? { marketIds } : {}) }).catch((error: unknown) => {
+      logger.error("today.fixtures_failed", { error: String(error) });
+      throw new AppError("BOOKMAKER_UNAVAILABLE", `We couldn't read ${source.name}'s fixtures just now. Please try again in a moment.`);
+    });
+
+  // Ask for the markets we can research first: it is a third faster than the full set and gives the
+  // same evidence-capable picks. Corners, cards and the rest are fetched only if the target needs
+  // them, which is the uncommon case.
+  const fixtures = await load(CORE_MARKET_IDS);
 
   const inWindow = window
     ? fixtures.filter((f) => f.event.kickoffAt >= window.from && f.event.kickoffAt <= window.to)
@@ -157,7 +163,12 @@ export async function buildFromToday(opts: {
   let slip = ranked.length ? build(ranked, true) : null;
   if (!slip?.reachedTarget) {
     // Widen to every market, including the ones no stats speak to, rather than miss the target.
-    const wider = build(candidates.filter((c) => !vetoed.has(pickKey(c))), false);
+    // This is where the heavier fetch is paid for, and only when it is needed.
+    const wide = toCandidates(
+      window ? (await load()).filter((f) => f.event.kickoffAt >= window.from && f.event.kickoffAt <= window.to) : await load(),
+      { exclude },
+    );
+    const wider = build(wide.filter((c) => !vetoed.has(pickKey(c))), false);
     if (wider && (!slip || wider.reachedTarget)) slip = wider;
   }
   if (!slip) throw new AppError("BAD_REQUEST", "We couldn't build a slip from today's games.");
