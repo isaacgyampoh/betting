@@ -7,7 +7,7 @@ import { createUser } from "./helpers";
 /** A plan with room for several builds a day. */
 async function proUser() {
   const user = await createUser();
-  const plan = await db.plan.findUniqueOrThrow({ where: { code: "pro" } });
+  const plan = await db.plan.findUniqueOrThrow({ where: { code: "pro_week" } });
   await db.subscription.create({
     data: { userId: user.id, planId: plan.id, status: "ACTIVE", startsAt: new Date(), endsAt: new Date(Date.now() + 7 * 86_400_000) },
   });

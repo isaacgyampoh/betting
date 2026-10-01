@@ -45,32 +45,52 @@ Assuming a fairly heavy user, 20 active days a month:
 | **Total now** | | **$6** | |
 | **Total at scale** | | **$90** | roughly 500+ users |
 
-## 4. Suggested prices
+## 4. Prices (live)
 
-Prices are stored in the `plans` table, so these are changeable without a deploy. The margin
-column assumes a user at the top of their tier's limits.
+Starter / Pro / VIP, each buyable by day, week or month. Limits are per tier and identical
+whichever duration is bought. Everything is in the `plans` table, so changing a price needs no deploy.
 
-| Tier | GHS | Period | Daily limits | AI cost | Margin |
+| Tier | Day | Week | Month | Daily limits |
+|---|---|---|---|---|
+| **Free** | — | — | — | 3 chats, 1 screenshot, 1 build |
+| **Starter** | GHS 5 | GHS 20 | GHS 60 | 15 chats, 3 screenshots, 2 builds |
+| **Pro** | GHS 10 | GHS 40 | GHS 120 | 40 chats, 10 screenshots, 10 builds, 3 analyses, daily picks |
+| **VIP** | GHS 15 | GHS 70 | GHS 200 | 100 chats, 30 screenshots, 30 builds, 10 analyses, daily picks |
+
+### Margin at **full** daily usage
+
+This is the worst case: a user who maxes every allowance, every day.
+
+| Tier | Period | GHS/day | Cost/day | Margin | Break-even usage |
 |---|---|---|---|---|---|
-| **Free** | 0 | — | 3 chats/day, 1 screenshot/day, no analysis, no picks | ¢75/mo | loss leader |
-| **Starter** | 10 | 1 day | 15 chats, 3 screenshots, 2 slip builds, no analysis | ¢60/day | ~94% |
-| **Pro** | 45 | 7 days | 40 chats, 10 screenshots, 10 builds, 3 analyses, daily picks | GHS 13/week | ~71% |
-| **VIP** | 120 | 30 days | 100 chats, 30 screenshots, unlimited builds, 10 analyses, daily picks, priority | GHS 98/mo | ~18% |
+| Starter | day | 5.00 | 1.17 | 77% | — |
+| Starter | week | 2.86 | 1.17 | 59% | — |
+| Starter | month | 2.00 | 1.17 | 42% | — |
+| Pro | day | 10.00 | 4.29 | 57% | — |
+| Pro | week | 5.71 | 4.29 | 25% | — |
+| **Pro** | **month** | 4.00 | 4.29 | **-7%** | 93% of allowance |
+| VIP | day | 15.00 | 11.19 | 25% | — |
+| **VIP** | **week** | 10.00 | 11.19 | **-12%** | 89% of allowance |
+| **VIP** | **month** | 6.67 | 11.19 | **-68%** | 60% of allowance |
 
-Why these numbers:
+### Why this is acceptable, and what to watch
 
-- **Starter at GHS 10** is about a day's transport fare and beats the current GHS 5 Day Pass,
-  which is thin once a user reaches its 30-message limit.
-- **Pro at GHS 45 a week** is the tier to push. It has the best margin and includes daily picks.
-- **VIP at GHS 120 a month** is cheaper per day than Pro, which is the point: it trades margin
-  for commitment and cash up front. Watch the heaviest VIP users; if many hit the limits every
-  day, raise the price or trim the limits rather than absorbing it.
-- Every tier stays well clear of its own cost even at full usage, because caching keeps chat
-  under a cent a message.
+Three rows lose money **only if a user maxes out every single day**, which almost nobody does.
+That is the normal shape of a monthly plan: it is a bet on average usage, not worst-case usage.
+Two things make the real picture better than the table:
 
-**A warning about VIP.** A VIP user who genuinely uses 100 chats and 10 analyses every day for
-30 days costs about GHS 98, against GHS 120 of revenue. That's fine on average, since almost
-nobody uses a full allowance, but it's the tier to watch first.
+1. **Match analyses are cached per match for 3 hours and shared across every user.** If fifty
+   people analyse the same match, we pay once. The table charges every user the full price, so it
+   materially overstates the cost of the analysis-heavy tiers.
+2. **Cache reads cost a tenth of fresh input tokens**, and the system prompt and tool definitions
+   are cached on every chat turn.
+
+The one change made to the requested prices: **VIP slip builds are 30 a day rather than unlimited.**
+Unlimited is the only item whose worst case has no ceiling, and a GHS 200 month cannot absorb it.
+Everything else is exactly as specified.
+
+**Watch this.** If the query below shows cost per active user climbing past about 30% of revenue
+per user, trim the monthly limits rather than raising prices.
 
 ## 5. Re-measuring
 

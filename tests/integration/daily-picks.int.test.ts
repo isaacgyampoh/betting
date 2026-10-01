@@ -49,7 +49,7 @@ describe("daily picks", () => {
     expect(locked[0].totalOdds).toBe(2.1); // the slip exists and its odds are visible
 
     const paid = await createUser();
-    const plan = await db.plan.findUniqueOrThrow({ where: { code: "pro" } });
+    const plan = await db.plan.findUniqueOrThrow({ where: { code: "pro_week" } });
     await db.subscription.create({
       data: { userId: paid.id, planId: plan.id, status: "ACTIVE", startsAt: new Date(), endsAt: new Date(Date.now() + 7 * 86_400_000) },
     });
