@@ -9,7 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "gameclaw",
     short_name: "gameclaw",
     description: "Load, convert and edit betting slips, check match stats and ask the AI assistant.",
-    start_url: `${site}/slip`,
+    start_url: `${site}/chat`,
     scope: `${site}/`,
     display: "standalone",
     orientation: "portrait",
@@ -22,6 +22,7 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
     shortcuts: [
+      { name: "Open chat", url: `${site}/chat` },
       { name: "Load a code", url: `${site}/slip` },
       { name: "Convert a code", url: `${site}/convert` },
     ],

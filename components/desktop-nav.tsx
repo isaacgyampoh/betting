@@ -8,13 +8,14 @@ import { DESKTOP_ONLY_ITEMS, NAV_ITEMS } from "@/components/nav-items";
 export function DesktopNav() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Main" className="hidden items-center gap-1 md:flex">
+    <nav aria-label="Sections" className="hidden items-center gap-1 md:flex">
       {[...NAV_ITEMS, ...DESKTOP_ONLY_ITEMS].filter((i) => i.href !== "/account").map(({ href, label }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}
             href={href}
+            prefetch
             className={cn(
               "rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground",
               active && "text-foreground",
