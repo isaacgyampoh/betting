@@ -37,7 +37,7 @@ describe.each(BOOKMAKER_SLUGS)("%s mock adapter", (slug) => {
   it("reports expired and outage codes", async () => {
     await expect(adapter.loadCode(expired)).rejects.toMatchObject({ code: "EXPIRED_CODE" });
     await expect(adapter.loadCode(down)).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE" });
-    await expect(adapter.loadCode("ZZZZZZ9")).rejects.toMatchObject({ code: "INVALID_CODE" });
+    await expect(adapter.loadCode("ZZZZZZ9")).rejects.toMatchObject({ code: "BOOKMAKER_NOT_CONNECTED" });
   });
 
   it("maps every offered market both ways (bookmaker format ⇄ internal model)", async () => {

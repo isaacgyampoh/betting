@@ -38,7 +38,7 @@ describe("bookmaker auto-detection", () => {
   it("reports the most useful error when no bookmaker has the code", async () => {
     await expect(detectBookmaker("WNEXP1", adapters, load)).rejects.toMatchObject({ code: "EXPIRED_CODE" });
     await expect(detectBookmaker("BCDOWN", adapters, load)).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE", message: expect.stringContaining("SportyBet") });
-    await expect(detectBookmaker("NOPE99", adapters, load)).rejects.toMatchObject({ code: "INVALID_CODE", message: expect.stringContaining("any supported bookmaker") });
+    await expect(detectBookmaker("NOPE99", adapters, load)).rejects.toMatchObject({ code: "BOOKMAKER_NOT_CONNECTED", message: expect.stringContaining("probably fine") });
     await expect(detectBookmaker("a!", adapters, load)).rejects.toMatchObject({ code: "INVALID_CODE", message: expect.stringContaining("doesn't look like") });
   });
 

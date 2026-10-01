@@ -41,7 +41,7 @@ describe("load slip", () => {
 
   it.each([
     ["BCEXP1", "EXPIRED_CODE"],
-    ["NOPE99", "INVALID_CODE"],
+    ["NOPE99", "BOOKMAKER_NOT_CONNECTED"],
     ["a!", "INVALID_CODE"],
     ["BCDOWN", "BOOKMAKER_UNAVAILABLE"],
   ])("%s → %s, and the failure is logged", async (code, errorCode) => {

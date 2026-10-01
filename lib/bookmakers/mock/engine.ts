@@ -27,6 +27,7 @@ export type MockCode =
 
 export type MockBackendConfig = {
   slug: BookmakerSlug;
+  name: string;
   margin: number;
   eventId: (fixture: MockFixture) => string;
   offers: (fixture: MockFixture, prices: MockPrices, names: [string, string]) => RawOffer[];
@@ -84,7 +85,13 @@ export function createMockBackend(config: MockBackendConfig, adapter: () => Adap
   async function loadCode(code: string): Promise<LoadedSlip> {
     await sleep(config.latencyMs);
     const entry = createdCodes.get(`${config.slug}:${code}`) ?? config.codes[code];
-    if (!entry) throw new AppError("INVALID_CODE", `We couldn't find booking code ${code}. Check it and try again.`);
+    if (!entry) {
+      // Sample data: an unknown code tells us nothing about whether the real code is valid.
+      throw new AppError(
+        "BOOKMAKER_NOT_CONNECTED",
+        `${config.name} isn't connected to real booking codes yet, so we can't open ${code}. Your code is probably fine.`,
+      );
+    }
     if (entry.kind === "expired") throw new AppError("EXPIRED_CODE", `Booking code ${code} has expired.`);
     if (entry.kind === "unavailable") {
       throw new AppError("BOOKMAKER_UNAVAILABLE", "The bookmaker isn't responding right now. Please try again shortly.");

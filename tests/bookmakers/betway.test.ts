@@ -73,7 +73,7 @@ describe("Betway mock loadCode", () => {
 
   it.each([
     ["BWEXP1", "EXPIRED_CODE"],
-    ["ZZZZ9", "INVALID_CODE"],
+    ["ZZZZ9", "BOOKMAKER_NOT_CONNECTED"],
     ["BWDOWN", "BOOKMAKER_UNAVAILABLE"],
   ])("code %s fails with %s", async (code, errorCode) => {
     await expect(adapter.loadCode(code)).rejects.toMatchObject({ code: errorCode });

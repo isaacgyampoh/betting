@@ -11,7 +11,7 @@ export type Detection<T> =
   | { kind: "ambiguous"; slugs: BookmakerSlug[] };
 
 // Which failure to report when no bookmaker returned a slip (most informative first).
-const ERROR_PRIORITY = ["EXPIRED_CODE", "BOOKMAKER_UNAVAILABLE", "INVALID_CODE"] as const;
+const ERROR_PRIORITY = ["EXPIRED_CODE", "BOOKMAKER_UNAVAILABLE", "BOOKMAKER_NOT_CONNECTED", "INVALID_CODE"] as const;
 
 export async function detectBookmaker<T>(
   rawCode: string,
@@ -42,6 +42,12 @@ export async function detectBookmaker<T>(
     if (code === "BOOKMAKER_UNAVAILABLE") {
       const down = candidates.filter((_, i) => errors[i] instanceof AppError && errors[i].code === code).map((c) => c.name);
       throw new AppError("BOOKMAKER_UNAVAILABLE", `We couldn't check ${down.join(", ")} right now, and no other bookmaker has this code. Try again shortly.`);
+    }
+    if (code === "BOOKMAKER_NOT_CONNECTED") {
+      throw new AppError(
+        "BOOKMAKER_NOT_CONNECTED",
+        "We can't open real booking codes yet while we finish connecting the bookmakers. Your code is probably fine.",
+      );
     }
     throw match;
   }

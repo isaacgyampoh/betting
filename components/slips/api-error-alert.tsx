@@ -10,6 +10,7 @@ const ERROR_UI: Record<string, { title: string; icon: typeof AlertCircle; retry?
   INVALID_CODE: { title: "Code not found", icon: AlertCircle, destructive: true },
   EXPIRED_CODE: { title: "Code expired", icon: CalendarX, destructive: true },
   BOOKMAKER_UNAVAILABLE: { title: "Bookmaker unavailable", icon: WifiOff, retry: true },
+  BOOKMAKER_NOT_CONNECTED: { title: "Not connected yet", icon: WifiOff },
   RATE_LIMITED: { title: "Slow down", icon: Timer },
   PLAN_LIMIT_REACHED: { title: "Limit reached", icon: CreditCard },
   NETWORK: { title: "You're offline", icon: WifiOff, retry: true },

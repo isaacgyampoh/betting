@@ -87,6 +87,7 @@ export function createBookmakerAdapter(def: BookmakerDefinition, mode: AdapterMo
   const mock = createMockBackend(
     {
       slug: def.slug,
+      name: def.name,
       margin: def.mock.margin,
       eventId: def.mock.eventId,
       offers: def.mock.offers ?? ((_f, prices, [home, away]) => standardOffers(prices, { home, away }, def.format)),

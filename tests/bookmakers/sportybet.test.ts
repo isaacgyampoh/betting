@@ -89,7 +89,7 @@ describe("SportyBet mock loadCode", () => {
 
   it.each([
     ["BCEXP1", "EXPIRED_CODE"],
-    ["NOPE99", "INVALID_CODE"],
+    ["NOPE99", "BOOKMAKER_NOT_CONNECTED"],
     ["BCDOWN", "BOOKMAKER_UNAVAILABLE"],
   ])("code %s fails with %s", async (code, errorCode) => {
     await expect(adapter.loadCode(code)).rejects.toMatchObject({ name: "AppError", code: errorCode });

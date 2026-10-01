@@ -142,6 +142,7 @@ export function createSportyBetAdapter(mode: AdapterMode, opts: { latencyMs?: nu
   const mock = createMockBackend(
     {
       slug: "sportybet",
+      name: "SportyBet",
       margin: 0.05,
       eventId: (f) => `sr:match:${stableNumber(f.key, 8)}`,
       offers: (_f, prices) => mockOffers(prices),
