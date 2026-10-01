@@ -111,7 +111,31 @@ Traps worth knowing, all of them easy to get silently wrong:
   apart. `createCode` therefore reads the code back to confirm it is not empty before returning it.
 - `bizCode` 19100 = expired, 19000 = invalid.
 
+## 1c. Football.com Ghana (football.com/gh) — done, nothing needed from you
+
+**Status: fully live.** Football.com runs the same platform as SportyBet with *identical* paths, so
+it needed no new client: `lib/bookmakers/live/hopegaming.ts` is shared and Football.com only supplies
+a base URL. Same Betradar market ids, same Sportradar event ids, so picks carry across by id.
+
+| Endpoint | Gives us | Verified |
+|---|---|---|
+| `GET https://www.football.com/api/gh/factsCenter/pcUpcomingEvents?...` | fixtures, markets inline | 2026-10-01 |
+| `GET .../factsCenter/event?eventId={id}&productId=3` | one event, every market | 2026-10-01 |
+| `GET .../orders/share/{code}` | read a booking code | 2026-10-01 |
+| `POST .../orders/share` | create a booking code | 2026-10-01 |
+
+Found by sending one normal request: `orders/share/ABC123` returned SportyBet's exact `bizCode`
+envelope. If a Ghanaian bookmaker answers that way, it is on this platform and connecting it is an
+afternoon's work, not a reverse-engineering project.
+
 ## 2. Betway Ghana (betway.com.gh)
+
+**Status: not connected, and harder than the others.** The site is a Nuxt app, but its sportsbook is
+an embedded third-party feed (`feeds-roa.ragingriver.io`), so the booking code is not resolved by
+Betway's own API. `/bookabet/{code}` and `/share-bet` are client routes, not endpoints: the first
+redirects to `/sport/soccer/?bookingCode=X`. API hosts are `api.betwayafrica.com/api` and
+`apic.betwayafrica.com/api`. The capture below is the way in.
+
 
 Repeat A, B and C:
 - **A:** Betslip, then the load/enter **booking code** box.

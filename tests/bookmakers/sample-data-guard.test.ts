@@ -97,9 +97,11 @@ describe("convert targets", () => {
     vi.stubEnv("ALLOW_SAMPLE_DATA", "0");
     vi.stubEnv("SPORTYBET_MODE", "live");
     vi.stubEnv("MSPORT_MODE", "live");
+    vi.stubEnv("FOOTBALLCOM_MODE", "live");
     const { getAdapter } = await registry();
     const bookable = BOOKMAKER_SLUGS.filter((s) => getAdapter(s).capabilities.createCode);
-    expect(bookable).toEqual(["sportybet", "msport"]);
+    // Order follows BOOKMAKER_SLUGS, not the order they were connected in.
+    expect(bookable).toEqual(["sportybet", "msport", "footballcom"]);
     // And every bookmaker we can book at, we can also read from: a one-way conversion is useless.
     for (const slug of bookable) expect(getAdapter(slug).capabilities.loadCode, slug).toBe(true);
   });

@@ -31,6 +31,7 @@
     "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "pk_live_9d21dd9b8bd208a10cd1a1195a0dbd1d477894b1",
     "SPORTYBET_MODE": "live",
     "MSPORT_MODE": "live",
+    "FOOTBALLCOM_MODE": "live",
     "BETWAY_MODE": "mock",
     "STATS_MODE": "auto",
     // Production never serves sample bookmaker data: an unconnected bookmaker refuses instead.
