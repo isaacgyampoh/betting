@@ -15,7 +15,10 @@ const GAMES = [
 // Only bookmakers we are actually connected to may appear here.
 const CONVERTED = [{ name: "MSport", code: "B3RTQ93" }];
 
-/** `delay` staggers each row along the shared 12s timeline. */
+/**
+ * `delay` staggers each row. The whole sequence finishes inside about one and a half seconds: an
+ * earlier version spread it over six, and the first thing anyone saw was an empty phone.
+ */
 function Step({ delay, className, children }: { delay: string; className?: string; children: React.ReactNode }) {
   return (
     <div className={cn("gc-demo-step", className)} style={{ animationDelay: delay }}>
@@ -39,13 +42,13 @@ export function PhoneDemo({ className }: { className?: string }) {
             </p>
           </div>
 
-          <Step delay="1.6s" className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Step delay="0.5s" className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <Check className="size-3 text-win" /> SportyBet · 3 games · 2.99
           </Step>
 
           <div className="divide-y overflow-hidden rounded-md border">
             {GAMES.map((g, i) => (
-              <Step key={g.home} delay={`${2 + i * 0.45}s`} className="flex items-center justify-between gap-2 bg-background px-2.5 py-2">
+              <Step key={g.home} delay={`${0.7 + i * 0.12}s`} className="flex items-center justify-between gap-2 bg-background px-2.5 py-2">
                 <div className="min-w-0">
                   <p className="truncate text-xs font-medium">
                     {g.home} <span className="text-muted-foreground">v</span> {g.away}
@@ -57,13 +60,13 @@ export function PhoneDemo({ className }: { className?: string }) {
             ))}
           </div>
 
-          <Step delay="4.2s" className="flex items-center gap-1.5 text-[11px] font-medium">
+          <Step delay="1.2s" className="flex items-center gap-1.5 text-[11px] font-medium">
             <ArrowRight className="size-3" /> Convert
           </Step>
 
           <div className="space-y-1.5">
             {CONVERTED.map((c, i) => (
-              <Step key={c.name} delay={`${4.8 + i * 0.5}s`} className="flex items-center justify-between rounded-md border bg-background px-2.5 py-1.5">
+              <Step key={c.name} delay={`${1.4 + i * 0.12}s`} className="flex items-center justify-between rounded-md border bg-background px-2.5 py-1.5">
                 <span className="text-xs text-muted-foreground">{c.name}</span>
                 <span className="font-mono text-xs font-semibold">{c.code}</span>
               </Step>
