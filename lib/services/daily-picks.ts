@@ -136,6 +136,11 @@ export type TrackRecord = {
 /**
  * Every daily pick ever published, with results. Public and unfiltered: losses are always included.
  * ROI assumes one unit staked per pick.
+ *
+ * A pick's games are shown once it has settled, which is what makes the record checkable. Today's
+ * still-running picks show their header but not their legs — those are the thing people pay for,
+ * and publishing them here handed the paid feature away for nothing. Nothing is hidden permanently:
+ * every pick opens up the moment it settles, and none is ever edited or removed.
  */
 export async function getTrackRecord(limit = 60): Promise<TrackRecord> {
   const picks = await db.dailyPick.findMany({ include: pickInclude, orderBy: { forDate: "desc" }, take: limit });
@@ -160,8 +165,8 @@ export async function getTrackRecord(limit = 60): Promise<TrackRecord> {
       const rows = settled.filter((p) => p.target === target);
       return { target, total: rows.length, won: rows.filter((p) => p.status === "WON").length, winRate: rateOf(rows), roi: roiOf(rows) };
     }),
-    // The public list shows every pick's games, whatever the viewer's plan: the record must be checkable.
-    picks: picks.map((p) => toView(p, true)),
+    // Settled picks are fully open to everyone; a pick still running keeps its games until it is.
+    picks: picks.map((p) => toView(p, p.status !== "PENDING")),
   };
 }
 

@@ -30,7 +30,8 @@ export default async function TrackRecordPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Track record</h1>
         <p className="text-sm text-muted-foreground">
-          Every daily pick we&apos;ve published, with its result. Losses included; nothing is edited or removed after publishing.
+          Every daily pick we&apos;ve published, with its result. Losses included; nothing is edited or removed after
+          publishing. A pick still running shows its games once it settles.
         </p>
       </div>
 

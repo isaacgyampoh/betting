@@ -244,7 +244,8 @@ export function ChatWorkspace({
           }}
           rows={1}
           maxLength={2000}
-          placeholder="Paste a booking code, or ask for anything"
+          // One line on a 390px phone: a longer placeholder wraps and the second line is clipped.
+          placeholder="Paste a code or ask anything"
           className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none"
           aria-label="Message"
         />
