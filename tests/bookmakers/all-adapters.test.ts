@@ -74,6 +74,7 @@ describe("live mode claims nothing it cannot do", () => {
   const VERIFIED: Partial<Record<BookmakerSlug, { loadCode: boolean; createCode: boolean; events: boolean }>> = {
     // Verified 2026-10-01 against the real API, including booking a code and reading it back.
     sportybet: { loadCode: true, createCode: true, events: true },
+    msport: { loadCode: true, createCode: true, events: true },
   };
 
   it.each(BOOKMAKER_SLUGS)("%s declares only verified capabilities", (slug) => {

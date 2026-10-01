@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, MessageSquare, Scissors, Sparkles } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Scissors, Sparkles } from "lucide-react";
 import { InstallGuide } from "@/components/landing/install-guide";
 import { PhoneDemo } from "@/components/landing/phone-demo";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,9 @@ import { getTrackRecord } from "@/lib/services/daily-picks";
 import { listActivePlans } from "@/lib/services/plans";
 
 export const metadata: Metadata = {
-  title: { absolute: "gameclaw: read your booking code and build a better slip" },
+  title: { absolute: "gameclaw: convert booking codes between Ghana's bookmakers" },
   description:
-    "Paste your SportyBet booking code to see every game, market and price on it. Then ask for a 2 or 5 odds built from today's real prices. Built in Ghana. 18+.",
+    "Paste a SportyBet or MSport booking code to see every game, market and price on it. Convert it to the other, or ask for a 2 or 5 odds built from today's real prices. Built in Ghana. 18+.",
   alternates: { canonical: "/" },
   openGraph: { url: "/" },
 };
@@ -20,12 +20,12 @@ export const metadata: Metadata = {
 // Shows live track record numbers, so it is rendered per request.
 export const dynamic = "force-dynamic";
 
-// Each line must describe something the app does today. Conversion between bookmakers needs the
-// other bookmakers connected first, so it is not promised here yet.
+// Each line must describe something the app does today, and name the bookmakers it really works
+// with. Do not write "every bookmaker" until every bookmaker is actually connected.
 const FEATURES = [
+  { icon: ArrowLeftRight, title: "Convert your code", text: "Between SportyBet and MSport today, with more being connected." },
   { icon: Sparkles, title: "Ask for a slip", text: "\"Build me a 5 odds\" — from today's real prices, across varied markets." },
   { icon: Scissors, title: "Cut it down", text: "Trim to the odds you want, or keep only the safest picks." },
-  { icon: MessageSquare, title: "Just ask", text: "Type it, or send a screenshot of a slip and it reads it." },
 ];
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "win" | "loss" }) {
@@ -57,8 +57,8 @@ export default async function HomePage() {
             Paste your code. Get a better slip.
           </h1>
           <p className="mx-auto max-w-md text-balance text-muted-foreground lg:mx-0">
-            See every game, market and price on your SportyBet code — then ask for a 2 or 5 odds built from today&apos;s
-            real prices.
+            See every game and price on your SportyBet or MSport code, convert it to the other, or ask for a 2 or 5 odds
+            built from today&apos;s real prices.
           </p>
           <div className="flex flex-col justify-center gap-2 sm:flex-row lg:justify-start">
             <Button asChild size="lg" className="h-12 px-6">

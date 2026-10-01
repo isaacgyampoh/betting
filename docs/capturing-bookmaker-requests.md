@@ -86,6 +86,31 @@ still never tells the user their real code is invalid.
 2. Find the request whose response contains that match's markets and odds.
 3. Also clear the log and use the site's **search** for a team name. Capture that request too.
 
+## 1b. MSport Ghana (msport.com) — done, nothing needed from you
+
+**Status: fully live.** MSport runs the same platform as SportyBet — both leak `com.hopegaming.*`
+class names — so it uses **the same Sportradar event ids and the same Betradar market ids**. That is
+what makes conversion between the two real: a pick carries across by id and only the price changes.
+
+| Endpoint | Gives us | Verified |
+|---|---|---|
+| `GET /api/gh/facts-center/query/frontend/all-matches/next-7-days?sportId=sr:sport:1&pageSize=50&pageNum=1` | upcoming fixtures | 2026-10-01 |
+| `GET /api/gh/facts-center/query/frontend/match/detail?eventId={sr:match:N}` | one event, ~240 markets | 2026-10-01 |
+| `GET /api/gh/orders/real-sports/order/share/{code}` | read a booking code | 2026-10-01 |
+| `POST /api/gh/orders/real-sports/order/share` | create a booking code | 2026-10-01 |
+
+Traps worth knowing, all of them easy to get silently wrong:
+
+- **`operId: 3` is a required header** on facts-center (3 = Ghana). Without it: `invalid operId`.
+- **`markets[].id` is a number**, not a string, and the line is in **`specifiers`** (plural). Labels
+  are `description`, not `desc`/`name`.
+- The facts-center wraps 404s *inside* a `bizCode: 10000` envelope, so a good `bizCode` is not enough
+  to tell success from failure — check for `data.error`.
+- **`POST .../share` returns a code even when it accepted nothing.** An empty selection list still
+  gets a code, and `originalSelectionCount` reads `0` even for good bookings, so it cannot tell them
+  apart. `createCode` therefore reads the code back to confirm it is not empty before returning it.
+- `bizCode` 19100 = expired, 19000 = invalid.
+
 ## 2. Betway Ghana (betway.com.gh)
 
 Repeat A, B and C:

@@ -72,11 +72,19 @@ export function standardMockCodes(codes: { valid: string; live: string; expired:
 const NOTHING_LIVE: BookmakerCapabilities = { loadCode: false, createCode: false, events: false };
 const ALL: BookmakerCapabilities = { loadCode: true, createCode: true, events: true };
 
+/** The live operations a connected bookmaker provides, loaded on demand (they are server-only). */
+export type LiveOps = Pick<BookmakerAdapter, "loadCode" | "createCode" | "searchEvent" | "getEventMarkets">;
+
 export type BookmakerDefinition = {
   slug: BookmakerSlug;
   name: string;
   codeFormat: RegExp;
   format: MarketFormat;
+  /** Present once real requests have been captured; absent means live mode refuses. */
+  live?: {
+    load: () => Promise<LiveOps>;
+    capabilities: BookmakerCapabilities;
+  };
   mock: {
     codes: Record<string, MockCode>;
     codePrefix: string;
@@ -100,23 +108,33 @@ export function createBookmakerAdapter(def: BookmakerDefinition, mode: AdapterMo
     },
     () => adapter,
   );
-  const live = (op: string) => liveNotImplemented(def.slug, op);
+  const notImplemented = (op: string) => liveNotImplemented(def.slug, op);
+  // Only claim what the definition declares; an undeclared capability must refuse, not guess.
+  const liveOp = <K extends keyof LiveOps>(op: K): LiveOps[K] => {
+    const needs: keyof BookmakerCapabilities =
+      op === "getEventMarkets" || op === "searchEvent" ? "events" : op === "loadCode" ? "loadCode" : "createCode";
+    const can = def.live?.capabilities[needs] === true;
+    if (!def.live || !can) return (() => notImplemented(op)) as LiveOps[K];
+    return (async (...args: unknown[]) => {
+      const ops = await def.live!.load();
+      return (ops[op] as (...a: unknown[]) => unknown)(...args);
+    }) as LiveOps[K];
+  };
 
   const adapter: BookmakerAdapter = {
     slug: def.slug,
     name: def.name,
     mode,
-    // No live requests have been captured for these bookmakers yet.
-    capabilities: mode === "mock" ? ALL : NOTHING_LIVE,
+    capabilities: mode === "mock" ? ALL : (def.live?.capabilities ?? NOTHING_LIVE),
     codeFormat: def.codeFormat,
     normalizeCode(code) {
       const c = code.replace(/[\s-]+/g, "").toUpperCase();
       return def.codeFormat.test(c) ? c : null;
     },
-    loadCode: (code) => (mode === "mock" ? mock.loadCode(code) : live("loadCode")),
-    createCode: (s) => (mode === "mock" ? mock.createCode(s) : live("createCode")),
-    searchEvent: (h, a, k) => (mode === "mock" ? mock.searchEvent(h, a, k) : live("searchEvent")),
-    getEventMarkets: (id) => (mode === "mock" ? mock.getEventMarkets(id) : live("getEventMarkets")),
+    loadCode: (code) => (mode === "mock" ? mock.loadCode(code) : liveOp("loadCode")(code)),
+    createCode: (s) => (mode === "mock" ? mock.createCode(s) : liveOp("createCode")(s)),
+    searchEvent: (h, a, k) => (mode === "mock" ? mock.searchEvent(h, a, k) : liveOp("searchEvent")(h, a, k)),
+    getEventMarkets: (id) => (mode === "mock" ? mock.getEventMarkets(id) : liveOp("getEventMarkets")(id)),
     mapMarket: (raw, event) => def.format.mapMarket(raw, event),
     unmapMarket: (market, event) => def.format.unmapMarket(market, event),
   };

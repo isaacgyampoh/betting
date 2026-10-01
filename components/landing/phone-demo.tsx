@@ -1,8 +1,7 @@
-import { Check, Sparkles } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// The real flow, in a phone frame: paste a SportyBet code, see the games, then have a slip built to
-// a target from today's prices.
+// The real flow, in a phone frame: paste a SportyBet code, see the games, convert it to MSport.
 //
 // This is an illustration, not live output, and it is labelled "Example" on the page. The teams and
 // markets are shown because they are the shape of what the app returns; the numbers are not quoted
@@ -13,12 +12,8 @@ const GAMES = [
   { home: "Kotoko", away: "Hearts of Oak", pick: "Over 1.5 goals", odds: "1.23" },
 ];
 
-// Varied markets, as the builder really spreads them.
-const BUILT = [
-  { pick: "Over 9.5 corners", odds: "1.40" },
-  { pick: "Both teams to score", odds: "1.58" },
-  { pick: "Under 3.5 cards", odds: "1.62" },
-];
+// Only bookmakers we are actually connected to may appear here.
+const CONVERTED = [{ name: "MSport", code: "B3RTQ93" }];
 
 /** `delay` staggers each row along the shared 12s timeline. */
 function Step({ delay, className, children }: { delay: string; className?: string; children: React.ReactNode }) {
@@ -63,14 +58,14 @@ export function PhoneDemo({ className }: { className?: string }) {
           </div>
 
           <Step delay="4.2s" className="flex items-center gap-1.5 text-[11px] font-medium">
-            <Sparkles className="size-3" /> Build me a 5 odds
+            <ArrowRight className="size-3" /> Convert
           </Step>
 
           <div className="space-y-1.5">
-            {BUILT.map((b, i) => (
-              <Step key={b.pick} delay={`${4.8 + i * 0.5}s`} className="flex items-center justify-between rounded-md border bg-background px-2.5 py-1.5">
-                <span className="truncate text-xs text-muted-foreground">{b.pick}</span>
-                <span className="font-mono text-xs font-semibold">{b.odds}</span>
+            {CONVERTED.map((c, i) => (
+              <Step key={c.name} delay={`${4.8 + i * 0.5}s`} className="flex items-center justify-between rounded-md border bg-background px-2.5 py-1.5">
+                <span className="text-xs text-muted-foreground">{c.name}</span>
+                <span className="font-mono text-xs font-semibold">{c.code}</span>
               </Step>
             ))}
           </div>

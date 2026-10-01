@@ -1,19 +1,16 @@
-import { createLabelFormat } from "@/lib/bookmakers/formats/label-format";
+import { mapBetradarMarket, unmapBetradarMarket } from "@/lib/bookmakers/formats/betradar-format";
 import { createBookmakerAdapter, stableNumber, standardMockCodes } from "@/lib/bookmakers/make-adapter";
 import type { AdapterMode, BookmakerAdapter } from "@/lib/bookmakers/types";
 
-// MSport (Ghana). Label-based mock format (market names as shown on the site); confirm from a live
-// capture before switching to live mode. Booking-code format assumed until confirmed.
+// MSport (Ghana).
+//
+// MSport runs the same platform as SportyBet, so it speaks the same Betradar market/outcome ids and
+// the same Sportradar event ids — which is what makes conversion between the two real rather than a
+// best-effort name match. Mock mode uses that same dialect so it behaves like live.
+//
+// Live requests are verified against the real API; see lib/bookmakers/live/msport.ts.
 
-const format = createLabelFormat({
-  "1X2": { type: "MATCH_RESULT", period: "FT" },
-  "Double Chance": { type: "DOUBLE_CHANCE", period: "FT" },
-  "Over/Under": { type: "OVER_UNDER", period: "FT" },
-  "GG/NG": { type: "BTTS", period: "FT" },
-  Handicap: { type: "HANDICAP", period: "FT" },
-  "1st Half 1X2": { type: "MATCH_RESULT", period: "H1" },
-  "1st Half Over/Under": { type: "OVER_UNDER", period: "H1" },
-});
+const format = { mapMarket: (raw: Parameters<typeof mapBetradarMarket>[0]) => mapBetradarMarket(raw), unmapMarket: unmapBetradarMarket };
 
 export const MOCK_CODES = standardMockCodes({ valid: "MS6120", live: "MSLIVE", expired: "MSEXP1", down: "MSDOWN" });
 
@@ -24,7 +21,17 @@ export function createMSportAdapter(mode: AdapterMode, opts: { latencyMs?: numbe
       name: "MSport",
       codeFormat: /^[A-Z0-9]{5,10}$/,
       format,
-      mock: { codes: MOCK_CODES, codePrefix: "MS", margin: 0.06, eventId: (f) => stableNumber("msport:" + f.key, 8) },
+      live: {
+        load: () => import("@/lib/bookmakers/live/msport"),
+        capabilities: { loadCode: true, createCode: true, events: true },
+      },
+      mock: {
+        codes: MOCK_CODES,
+        codePrefix: "MS",
+        margin: 0.06,
+        // Same Sportradar id space as the real site.
+        eventId: (f) => `sr:match:${stableNumber("msport:" + f.key, 8)}`,
+      },
     },
     mode,
     opts,
