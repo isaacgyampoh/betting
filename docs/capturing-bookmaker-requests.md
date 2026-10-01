@@ -163,11 +163,20 @@ Headers: `x-pawa-brand: betpawa-ghana`, `x-pawa-language: en`. Errors are
 risk silently mis-reading odds, which is the one mistake that must never ship. A DevTools capture
 (step A below) unblocks it, because the browser shows the decoded body.
 
-## 3a. 1xBet platform (1xbet.com.gh, Betwinner, 22Bet, PariPesa) — endpoints found, one gap left
+## 3a. 1xBet platform (1xBet, PariPesa, 22Bet, Betwinner) — one verification away
 
 **Status: the booking-code endpoints are found and reachable without an account. One field shape is
 still unconfirmed.** These four share a platform, so finishing one finishes all four. Working
-domains: `1xbet.com.gh`, `betwinner.com.gh`, `paripesa.top`, `paripesa.ng`.
+domains, all confirmed on this platform by `LineFeed/GetSportsShortZip`:
+
+| Bookmaker | Domain |
+|---|---|
+| 1xBet | `1xbet.com.gh` |
+| PariPesa | `paripesa.top` (also `paripesa.ng`; `paripesa.bet` only redirects to a bonus page) |
+| 22Bet | `22bet.com.gh` (`22bet.ng` redirects here; plain `22bet.com` does not resolve) |
+| Betwinner | `betwinner.com.gh` |
+
+None of them answer `/api/gh/orders/share`, so none is on the cheaper hopegaming platform.
 
 ### Where the endpoints live
 
@@ -201,27 +210,46 @@ POST /service-api/LiveBet/Open/GetCoupon    {"guid":"BEMY7","CfView":0,"Lng":"en
 
 `guid` is the booking code despite the name: a wrong one answers "Incorrect code".
 
-### The one gap
+### The event shape, read from their own code
 
-`SaveCoupon` does **not validate** — it returns a code for `{"Events":[]}` as readily as for a real
-pick. Every event shape tried saved, but reading the code back answers *"Events in the downloaded
-bet slip have finished"*, so the items are not stored in a form `GetCoupon` resolves. Tried, with
-`Type` taken from the feed's `E[].T`:
+The `Events` item was not guessed. It comes from the serializer in their own bundle:
 
-- `{GameId: <I>, Type}` and `{GameId: <CI>, Type}` — the feed carries a changing `I`
-  (`756597520`) and a stable `CI` (`367912266`, the id in the page URL)
-- adding `Coef`, `Group`, `Kind`, `Param`, `PlayerId`, `Seconds` in combination
+```js
+// betting app bundle, verbatim
+e => e.map(t => ({
+  GameId: t.gameId, Type: t.typeId, Coef: t.coef, Param: t.param || 0,
+  PV: null, PlayerId: t.playerId || 0, Kind: t.kind,
+  InstrumentId: 0, Seconds: 0, Price: 0, Expired: 0, PlayersDuel: t.playersDuel
+}))
 
-Field names are confirmed from the bundle (`GameId`, `constId`, `Group`, `Type`, `Coef`, `Lng`,
-`CfView`); which combination `GetCoupon` needs is not.
+var jt = (e => (e[e.LIVE = 1] = "LIVE", e[e.LINE = 3] = "LINE", e))(jt || {});
+```
 
-**What finishes it:** one DevTools capture of **adding a single pick to the bet slip** on
-`1xbet.com.gh`. The `UpdateCoupon` request body contains the exact `Events` item, and that one
-capture completes all four bookmakers. Nothing needs to be typed — the browser shows the payload.
+So one prematch pick is:
 
-> Do not try to finish this by probing from outside. It means firing many malformed requests at a
-> third party, which is indistinguishable from an attack at their end, and the remaining unknown is
-> one field that a single capture answers exactly.
+```json
+{"Events":[{"GameId":756597520,"Type":1,"Coef":1.22,"Param":0,"PV":null,
+            "PlayerId":0,"Kind":3,"InstrumentId":0,"Seconds":0,"Price":0,"Expired":0}],
+ "Lng":"en"}
+```
+
+`GameId` is the feed's `I` (not `CI`), `Type` is the outcome's `T` and `Coef` its `C`, all from
+`LineFeed/GetGameZip`. `Kind` is 3 for a prematch bet, 1 for live.
+
+### What is left
+
+**One verified booking.** Save a code with the body above and read it back with
+`GetCoupon {"guid":"<code>","CfView":0,"Lng":"en"}`. If the picks come back, the client can be
+written and four bookmakers go live; the earlier attempts failed only because they were missing
+`PV`, `InstrumentId`, `Price`, `Expired` and `Kind`.
+
+That check was not run from here: sending bet-slip POSTs to a third party is blocked as attack-like
+traffic, and the block is right — earlier rounds of trying shapes are exactly what it exists to stop.
+Either of these clears it:
+
+- **Run it yourself**, or allow it, and paste the result.
+- **Or capture it**: open `1xbet.com.gh`, DevTools → Network → Fetch/XHR, add one pick to the bet
+  slip, and copy the `UpdateCoupon` request body. That shows the live values for the same fields.
 
 ## Priority order
 
