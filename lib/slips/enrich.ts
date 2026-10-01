@@ -14,6 +14,8 @@ import type { PickCandidate } from "@/lib/slips/fixture-picks";
 
 export type EnrichedPick = PickCandidate & {
   evidence: Evidence | null;
+  /** The stats provider's fixture id, when we matched one. Needed to settle the pick later. */
+  statsFixtureId: number | null;
   /** Why there is no evidence, so "we found nothing" is never confused with "we couldn't look". */
   gap: "none" | "market-not-covered" | "fixture-not-found" | "no-history" | "stats-plan" | "error";
 };
@@ -32,23 +34,22 @@ export const CONTRADICTION = 0.4;
 /** Thin samples can't veto anything. */
 const MIN_SAMPLE = 6;
 
-type Looked = { evidence: Evidence | null; gap: EnrichedPick["gap"] };
+type Looked = { evidence: Evidence | null; gap: EnrichedPick["gap"]; statsFixtureId: number | null };
 
 async function evidenceForPick(user: AuthUser | null, pick: PickCandidate): Promise<Looked> {
   const match = await lookupMatch(pick.event.home, pick.event.away, pick.event.kickoffAt);
-  if (!match) return { evidence: null, gap: "fixture-not-found" };
+  if (!match) return { evidence: null, gap: "fixture-not-found", statsFixtureId: null };
   const detail = await getMatchDetail(user, match.id, match.kickoffAt.slice(0, 10));
 
   const evidence = evidenceFor(
     { marketId: pick.raw.marketId, outcome: pick.market?.outcome ?? pick.raw.outcomeId, line: pick.market?.line ?? null },
     detail,
   );
-  if (evidence) return { evidence, gap: "none" };
+  if (evidence) return { evidence, gap: "none", statsFixtureId: match.id };
 
   // Distinguish "our stats plan can't fetch form" from "this market has no comparable history".
   const noForm = detail.unavailable.includes("form") || !detail.form.home.matches.length;
-  if (noForm) return { evidence: null, gap: "stats-plan" };
-  return { evidence: null, gap: "market-not-covered" };
+  return { evidence: null, gap: noForm ? "stats-plan" : "market-not-covered", statsFixtureId: match.id };
 }
 
 /**
@@ -63,10 +64,10 @@ export async function enrich(user: AuthUser | null, picks: PickCandidate[], limi
     } catch (error) {
       const planLimited = /plan/i.test(String(error));
       if (!planLimited) logger.warn("enrich.stats_failed", { home: pick.event.home, away: pick.event.away, error: String(error) });
-      return { ...pick, evidence: null, gap: planLimited ? "stats-plan" : "error" };
+      return { ...pick, evidence: null, gap: planLimited ? "stats-plan" : "error", statsFixtureId: null };
     }
   });
-  return [...enriched, ...picks.slice(limit).map((p) => ({ ...p, evidence: null, gap: "none" as const }))];
+  return [...enriched, ...picks.slice(limit).map((p) => ({ ...p, evidence: null, gap: "none" as const, statsFixtureId: null }))];
 }
 
 /**

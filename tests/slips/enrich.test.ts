@@ -23,6 +23,7 @@ const pick = (over: Partial<EnrichedPick> = {}): EnrichedPick => ({
   favourite: true,
   evidence: null,
   gap: "none",
+  statsFixtureId: null,
   ...over,
 }) as EnrichedPick;
 

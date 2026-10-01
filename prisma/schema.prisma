@@ -496,6 +496,9 @@ model DailyPickLeg {
   apiFootballFixtureId Int?       @map("api_football_fixture_id")
   marketLabel          String     @map("market_label")
   pickLabel            String     @map("pick_label")
+  /// The internal market ({type, period, outcome, line}), so the leg can be settled from a score.
+  /// Null for markets we don't model (corners, cards): those are reported as needing a manual check.
+  market               Json?
   odds                 Decimal    @db.Decimal(10, 3)
   reason               String
   status               PickStatus @default(PENDING)

@@ -162,7 +162,10 @@ export async function buildFromToday(opts: {
   }
   const reasons = slip.picks.map((p) => {
     const found = byKey.get(pickKey(p));
-    return reasonWithEvidence({ ...p, evidence: found?.evidence ?? null, gap: found?.gap ?? "none" }, reasonFor(p, source.name));
+    return reasonWithEvidence(
+      { ...p, evidence: found?.evidence ?? null, gap: found?.gap ?? "none", statsFixtureId: null },
+      reasonFor(p, source.name),
+    );
   });
 
   const skippedCounts = new Map<FixtureKind, number>();

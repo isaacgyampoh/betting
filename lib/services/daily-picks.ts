@@ -218,7 +218,7 @@ export async function generateDailyPicks(now = new Date()): Promise<GenerationRe
   const pool = shortlistCandidates(evidenced.length ? evidenced : candidates, DAILY_SHORTLIST);
   const researched = await enrich(null, pool, DAILY_SHORTLIST).catch((error: unknown) => {
     logger.warn("daily.research_failed", { date, error: String(error) });
-    return pool.map((p) => ({ ...p, evidence: null, gap: "error" as const }));
+    return pool.map((p) => ({ ...p, evidence: null, gap: "error" as const, statsFixtureId: null }));
   });
   const { kept, dropped } = withoutContradicted(researched);
   if (dropped.length) logger.info("daily.dropped_on_form", { date, dropped: dropped.length });
@@ -255,10 +255,13 @@ export async function generateDailyPicks(now = new Date()): Promise<GenerationRe
             marketLabel: p.marketLabel,
             pickLabel: p.label,
             odds: p.odds,
+            // Stored so the pick can be settled from a final score, and checked against the record.
+            market: p.market ?? undefined,
+            apiFootballFixtureId: evidenceByKey.get(pickKey(p))?.statsFixtureId ?? null,
             reason: (() => {
               const found = evidenceByKey.get(pickKey(p));
               return reasonWithEvidence(
-                { ...p, evidence: found?.evidence ?? null, gap: found?.gap ?? "none" },
+                { ...p, evidence: found?.evidence ?? null, gap: found?.gap ?? "none", statsFixtureId: null },
                 reasonFor(p, source.name),
               );
             })(),
@@ -274,7 +277,13 @@ export async function generateDailyPicks(now = new Date()): Promise<GenerationRe
 
 /** Fills in results for picks whose games have finished. Never changes a settled pick. */
 export async function settleDailyPicks(
-  resultFor: (leg: { apiFootballFixtureId: number | null; homeTeam: string; awayTeam: string; kickoffAt: Date }) => Promise<{ status: PickStatus; resultText: string } | null>,
+  resultFor: (leg: {
+    apiFootballFixtureId: number | null;
+    homeTeam: string;
+    awayTeam: string;
+    kickoffAt: Date;
+    market: unknown;
+  }) => Promise<{ status: PickStatus; resultText: string } | null>,
 ): Promise<{ settled: number }> {
   const open = await db.dailyPick.findMany({ where: { status: "PENDING" }, include: pickInclude });
   let settled = 0;
