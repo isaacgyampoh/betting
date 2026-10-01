@@ -76,6 +76,24 @@ function softTokenScore(a: string[], b: string[]): number {
 }
 
 /**
+ * The squad level a competition name implies, for feeds that mark it there rather than on the teams.
+ * SportyBet lists "North Macedonia v Montenegro" in the "U21 UEFA European Championship", while the
+ * stats provider calls the same teams "North Macedonia U21". Without this they look like different
+ * squads and the fixture finds no history at all.
+ */
+export function levelFromCompetition(competition: string | null | undefined): string | null {
+  if (!competition) return null;
+  const normalized = normalizeTeamName(competition);
+  return squadLevel(normalized) === "senior" ? null : squadLevel(normalized);
+}
+
+/** Adds a squad marker to a team name when it is missing, e.g. "Montenegro" + u21. */
+export function withSquadLevel(team: string, level: string | null): string {
+  if (!level) return team;
+  return squadLevel(normalizeTeamName(team)) === "senior" ? `${team} ${level}` : team;
+}
+
+/**
  * The squad a name refers to: the senior side, an age group, a women's side or a B/reserve team.
  * These are different teams that share a name, and "North Macedonia" is wholly contained in
  * "North Macedonia U21", so without this they score as a near-certain match and we end up quoting

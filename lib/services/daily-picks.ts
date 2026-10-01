@@ -282,6 +282,7 @@ export async function settleDailyPicks(
     homeTeam: string;
     awayTeam: string;
     kickoffAt: Date;
+    competition: string | null;
     market: unknown;
   }) => Promise<{ status: PickStatus; resultText: string } | null>,
 ): Promise<{ settled: number }> {

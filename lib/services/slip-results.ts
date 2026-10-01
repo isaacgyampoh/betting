@@ -130,7 +130,7 @@ export async function getSlipResults(user: AuthUser, slipId: string): Promise<Sl
     };
     let match: MatchSummary | null = null;
     try {
-      match = await lookupMatch(s.home, s.away, new Date(s.kickoffAt));
+      match = await lookupMatch(s.home, s.away, new Date(s.kickoffAt), s.competition);
     } catch (error) {
       logger.warn("results.lookup_failed", { slipId, home: s.home, away: s.away, error: String(error) });
     }

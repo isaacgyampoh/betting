@@ -75,7 +75,7 @@ async function candidatesFromSlip(user: AuthUser, slipId: string) {
   const candidates: Candidate[] = await mapWithConcurrency(usable, 3, async (s) => {
     const base: Candidate = { position: s.position, odds: Number(s.odds) };
     try {
-      const match = await lookupMatch(s.homeTeam, s.awayTeam, s.kickoffAt);
+      const match = await lookupMatch(s.homeTeam, s.awayTeam, s.kickoffAt, s.competition);
       if (!match) return base;
       const detail = await getMatchDetail(user, match.id, match.kickoffAt.slice(0, 10));
       const view = statsView(detail, s.homeTeam, s.outcome);

@@ -3,7 +3,7 @@ import type { AuthUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
-import { bestMatch } from "@/lib/matching/similarity";
+import { bestMatch, levelFromCompetition, withSquadLevel } from "@/lib/matching/similarity";
 import { createApiFootballProvider, StatsPlanLimitError, StatsRateLimitError } from "@/lib/stats/api-football";
 import { buildTeamForm } from "@/lib/stats/form";
 import { sampleStatsProvider } from "@/lib/stats/sample";
@@ -144,15 +144,23 @@ export async function getMatchDetail(user: AuthUser | null, fixtureId: number, d
   };
 }
 
-/** Finds the stats fixture for a bookmaker game (team names differ between sources). */
-export async function lookupMatch(home: string, away: string, kickoff: Date): Promise<MatchSummary | null> {
+/**
+ * Finds the stats fixture for a bookmaker game (team names differ between sources).
+ *
+ * `competition` matters more than it looks: some feeds mark an age group or a women's side only in
+ * the competition name, so "North Macedonia v Montenegro" in the "U21 UEFA European Championship" is
+ * the U21 squad, and matching it against the senior teams finds nothing.
+ */
+export async function lookupMatch(home: string, away: string, kickoff: Date, competition?: string | null): Promise<MatchSummary | null> {
   const provider = statsProvider();
   const day = (d: Date) => d.toISOString().slice(0, 10);
   const dates = new Set([day(kickoff), day(new Date(kickoff.getTime() - 3 * 3600_000)), day(new Date(kickoff.getTime() + 3 * 3600_000))]);
   const [aliases, ...lists] = await Promise.all([getAliasIndex(), ...[...dates].map((d) => provider.fixturesByDate(d))]);
   await rememberLogos(lists.flat());
   const candidates = lists.flat().map((m) => ({ ...m, kickoffAt: new Date(m.kickoffAt), home: m.home.name, away: m.away.name, summary: m }));
-  return bestMatch({ home, away, kickoffAt: kickoff }, candidates, aliases)?.candidate.summary ?? null;
+  const level = levelFromCompetition(competition);
+  const source = { home: withSquadLevel(home, level), away: withSquadLevel(away, level), kickoffAt: kickoff };
+  return bestMatch(source, candidates, aliases)?.candidate.summary ?? null;
 }
 
 /** Upcoming (and today's) matches involving the named team(s), across the next few days. */

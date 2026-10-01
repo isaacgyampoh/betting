@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     // Picks published before the fixture id was stored still settle, by looking the game up.
     const match = leg.apiFootballFixtureId
       ? await provider.fixture(leg.apiFootballFixtureId)
-      : await lookupMatch(leg.homeTeam, leg.awayTeam, leg.kickoffAt);
+      : await lookupMatch(leg.homeTeam, leg.awayTeam, leg.kickoffAt, leg.competition);
     if (!match || match.status !== "FINISHED" || match.goals.home === null || match.goals.away === null) return null;
 
     const resultText = `${match.goals.home}-${match.goals.away}`;

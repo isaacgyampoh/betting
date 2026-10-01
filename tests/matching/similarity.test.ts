@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createBetwayAdapter } from "@/lib/bookmakers/betway";
 import { createSportyBetAdapter } from "@/lib/bookmakers/sportybet";
 import { sameMarket } from "@/lib/markets/types";
-import { bestMatch, buildAliasIndex, jaroWinkler, MATCH_THRESHOLD, teamSimilarity } from "@/lib/matching/similarity";
+import { bestMatch, buildAliasIndex, jaroWinkler, MATCH_THRESHOLD, teamSimilarity, levelFromCompetition, withSquadLevel } from "@/lib/matching/similarity";
 
 describe("teamSimilarity", () => {
   it.each([
@@ -147,5 +147,30 @@ describe("squad levels are different teams", () => {
   it("leaves ordinary senior matching alone", () => {
     expect(teamSimilarity("Newcastle", "Newcastle United")).toBeGreaterThan(0.8);
     expect(teamSimilarity("Man Utd", "Manchester United")).toBeGreaterThan(0.8);
+  });
+});
+
+// Some feeds mark an age group or a women's side only in the competition name. A published pick for
+// "North Macedonia v Montenegro" in the "U21 UEFA European Championship" had no history at all,
+// because the stats provider calls those teams "North Macedonia U21".
+describe("squad level taken from the competition", () => {
+  it("reads a level out of a competition name", () => {
+    expect(levelFromCompetition("U21 UEFA European Championship, Qualification")).toBe("u21");
+    expect(levelFromCompetition("UEFA Women's Champions League")).toBe("w");
+    expect(levelFromCompetition("UEFA Nations League")).toBeNull();
+    expect(levelFromCompetition(null)).toBeNull();
+  });
+
+  it("adds the marker only when the team name lacks one", () => {
+    expect(withSquadLevel("Montenegro", "u21")).toBe("Montenegro u21");
+    expect(withSquadLevel("Montenegro U21", "u21")).toBe("Montenegro U21");
+    expect(withSquadLevel("Montenegro", null)).toBe("Montenegro");
+  });
+
+  it("makes the competition-marked fixture match its own squad again", () => {
+    const level = levelFromCompetition("U21 UEFA European Championship");
+    expect(teamSimilarity(withSquadLevel("Montenegro", level), "Montenegro U21")).toBeGreaterThan(0.8);
+    // And still refuses the senior side.
+    expect(teamSimilarity(withSquadLevel("Montenegro", level), "Montenegro")).toBe(0);
   });
 });
