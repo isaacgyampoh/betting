@@ -174,12 +174,16 @@
 }
 .gc-demo-caret { animation: gc-caret 1s step-end 6; }
 
-/* Sections ease in as they are scrolled to, where the browser can do it without JavaScript.
-   Content is fully visible by default, so a browser without scroll-driven animations — or with
-   JavaScript-free rendering — simply shows everything. Nothing here can hide content. */
+/* Sections lift slightly as they are scrolled to, using scroll-driven CSS so it costs no
+   JavaScript on a mid-range phone.
+   This deliberately animates transform only. A fade needs `fill: both`, which holds the element at
+   its `from` state before it enters range — so every section below the fold sits at opacity 0 until
+   scrolled to, and anything that does not scroll (a crawler, a link preview, a browser that
+   supports the property but mishandles it) sees a blank page. That happened here. Motion is not
+   worth any chance of an invisible landing page, so nothing in this animation can hide content. */
 @keyframes gc-reveal {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: none; }
+  from { transform: translateY(14px); }
+  to { transform: none; }
 }
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
