@@ -37,6 +37,7 @@ export const OUTCOMES = {
   HANDICAP: ["HOME", "DRAW", "AWAY"],
   ASIAN_HANDICAP: ["HOME", "AWAY"],
   ODD_EVEN: ["ODD", "EVEN"],
+  TEAM_OVER_UNDER: ["HOME_OVER", "HOME_UNDER", "AWAY_OVER", "AWAY_UNDER"],
 } as const satisfies Partial<Record<MarketType, readonly string[]>>;
 
 /** A single pick in our internal model, e.g. { OVER_UNDER, H1, OVER, 1.5 }. */

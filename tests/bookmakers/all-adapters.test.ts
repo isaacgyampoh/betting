@@ -63,9 +63,38 @@ describe.each(BOOKMAKER_SLUGS)("%s mock adapter", (slug) => {
     expect(adapter.normalizeCode(" " + valid.toLowerCase() + " ")).toBe(valid);
   });
 
-  it("live mode is unavailable, never guessed", async () => {
+  it("declares every capability in mock mode", () => {
+    expect(adapter.capabilities).toEqual({ loadCode: true, createCode: true, events: true });
+  });
+});
+
+// A bookmaker is only allowed to claim a live capability once the matching real request has been
+// captured and verified. Anything it does not claim must fail loudly rather than invent data.
+describe("live mode claims nothing it cannot do", () => {
+  const VERIFIED: Partial<Record<BookmakerSlug, { loadCode: boolean; createCode: boolean; events: boolean }>> = {
+    // Verified 2026-10-01 against the real API; createCode is a POST we have not captured.
+    sportybet: { loadCode: true, createCode: false, events: true },
+  };
+
+  it.each(BOOKMAKER_SLUGS)("%s declares only verified capabilities", (slug) => {
+    const expected = VERIFIED[slug] ?? { loadCode: false, createCode: false, events: false };
+    expect(createAdapter(slug, "live").capabilities).toEqual(expected);
+  });
+
+  // Unconnected bookmakers: every operation must report unavailability instead of guessing.
+  const unconnected = BOOKMAKER_SLUGS.filter((s) => !VERIFIED[s]);
+  it.each(unconnected)("%s refuses every live operation", async (slug) => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    await expect(createAdapter(slug, "live").loadCode(valid)).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE" });
+    const a = createAdapter(slug, "live");
+    await expect(a.loadCode(CODES[slug][0])).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE" });
+    await expect(a.getEventMarkets("whatever")).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE" });
+    await expect(a.searchEvent("A", "B", new Date())).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE" });
     err.mockRestore();
+  });
+
+  it("no bookmaker claims it can book a code it has not captured", () => {
+    for (const slug of BOOKMAKER_SLUGS) {
+      expect(createAdapter(slug, "live").capabilities.createCode, slug).toBe(false);
+    }
   });
 });

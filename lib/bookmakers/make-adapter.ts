@@ -1,7 +1,7 @@
 import { createMockBackend, stableNumber, type MockCode, type RawOffer } from "@/lib/bookmakers/mock/engine";
 import type { MockFixture, MockPrices } from "@/lib/bookmakers/mock/fixtures";
 import { liveNotImplemented } from "@/lib/bookmakers/live-stub";
-import type { AdapterMode, BookmakerAdapter, BookmakerSlug, RawMarket } from "@/lib/bookmakers/types";
+import type { AdapterMode, BookmakerAdapter, BookmakerCapabilities, BookmakerSlug, RawMarket } from "@/lib/bookmakers/types";
 import type { Market, MarketPeriod, MarketType } from "@/lib/markets/types";
 
 // Builds a BookmakerAdapter from a market format, a booking-code pattern and mock data. Every
@@ -69,6 +69,9 @@ export function standardMockCodes(codes: { valid: string; live: string; expired:
   };
 }
 
+const NOTHING_LIVE: BookmakerCapabilities = { loadCode: false, createCode: false, events: false };
+const ALL: BookmakerCapabilities = { loadCode: true, createCode: true, events: true };
+
 export type BookmakerDefinition = {
   slug: BookmakerSlug;
   name: string;
@@ -103,6 +106,8 @@ export function createBookmakerAdapter(def: BookmakerDefinition, mode: AdapterMo
     slug: def.slug,
     name: def.name,
     mode,
+    // No live requests have been captured for these bookmakers yet.
+    capabilities: mode === "mock" ? ALL : NOTHING_LIVE,
     codeFormat: def.codeFormat,
     normalizeCode(code) {
       const c = code.replace(/[\s-]+/g, "").toUpperCase();

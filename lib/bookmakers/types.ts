@@ -67,10 +67,25 @@ export type CreateCodeSelection = { eventExternalId: string; market: Market };
 
 export type CreatedCode = { code: string; expiresAt: Date | null };
 
+/**
+ * What an adapter can really do against the bookmaker, so the UI can tell the user the truth
+ * instead of offering something that will fail. In mock mode everything is supported; in live mode
+ * a capability is true only once the matching request has been captured and verified.
+ */
+export type BookmakerCapabilities = {
+  /** Open a booking code the user pastes. */
+  loadCode: boolean;
+  /** Book a new slip and get a code back (needed to convert *to* this bookmaker). */
+  createCode: boolean;
+  /** List fixtures and read live odds (needed to price a conversion or build a slip). */
+  events: boolean;
+};
+
 export interface BookmakerAdapter {
   readonly slug: BookmakerSlug;
   readonly name: string;
   readonly mode: AdapterMode;
+  readonly capabilities: BookmakerCapabilities;
 
   /**
    * Booking-code format, used first when auto-detecting the bookmaker of a pasted code.

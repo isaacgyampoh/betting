@@ -14,7 +14,37 @@ The live adapters get built from what you capture here. Nothing about a bookmake
    - Click the **Fetch/XHR** filter.
 4. Click the 🚫 icon to clear the log before each capture below.
 
-## 1. SportyBet Ghana (sportybet.com/gh)
+## 1. SportyBet Ghana (sportybet.com/gh) — mostly done
+
+**Status: live for reading.** Three endpoints were found by probing the public site logged out, and
+are verified by `VERIFY_LIVE=1 pnpm vitest run tests/bookmakers/sportybet-real.test.ts`:
+
+| Endpoint | Gives us | Verified |
+|---|---|---|
+| `GET /api/gh/factsCenter/event?eventId={sr:match:N}&productId=3` | one event, every market and price | 2026-10-01 |
+| `GET /api/gh/factsCenter/pcUpcomingEvents?sportId=sr:sport:1&marketId=1&pageSize=100&pageNum=1&option=1&timeline=48` | upcoming fixtures | 2026-10-01 |
+| `GET /api/gh/orders/share/{code}` | a booking code | error paths only |
+
+Notes that matter:
+- Both need `user-agent` and `referer: https://www.sportybet.com/gh/sport/football`; without them the
+  API answers `bizCode 19003 Forbidden`.
+- `bizCode` is the real status: `10000` success, `19000` invalid, `19001` not found, `19003` forbidden.
+- Market and outcome ids are the Betradar/Sportradar set, mapped in
+  `lib/bookmakers/formats/betradar-format.ts`. A top fixture carries ~1,350 markets.
+- **Every outcome carries a `probability`, and they sum to 1.0 across a market.** That is SportyBet's
+  own margin-free probability, so "estimated chance" never has to be modelled or invented.
+
+### Still needed from you
+
+1. **One real, unexpired booking code.** `orders/share/{code}` is confirmed to answer
+   `{"bizCode":19000,"innerMsg":"The code is invalid."}` for a bad code, but no success body has been
+   seen, so the reader in `lib/bookmakers/live/sportybet.ts` is written defensively: it extracts only
+   the event id and market/outcome/specifier of each pick and then prices them from the verified
+   event endpoint. If it cannot read a slip it logs `sportybet.share_shape_unrecognised` with the
+   response shape and tells the user their code is fine — it never calls a real code invalid. Paste
+   one code and that log turns this into a one-line fix.
+2. **A captured "Book Bet" request** (step B below) if you want conversion *to* SportyBet. Booking is
+   a POST; `capabilities.createCode` is `false` until it is captured, so nothing pretends to book.
 
 ### A. Load a booking code
 1. Get a real code. Ask a friend for one, or make your own with step B first.

@@ -1,72 +1,27 @@
 import { createMockBackend, stableNumber, type MockCode, type RawOffer } from "@/lib/bookmakers/mock/engine";
 import type { MockPrices } from "@/lib/bookmakers/mock/fixtures";
+import {
+  BETRADAR_MARKETS,
+  formatSpecifier,
+  mapBetradarMarket,
+  unmapBetradarMarket,
+} from "@/lib/bookmakers/formats/betradar-format";
 import { liveNotImplemented } from "@/lib/bookmakers/live-stub";
 import type { AdapterMode, BookmakerAdapter, RawMarket } from "@/lib/bookmakers/types";
-import type { Market, MarketPeriod, MarketType } from "@/lib/markets/types";
 
 // SportyBet Ghana.
-// Market/outcome ids follow the Sportradar-style numbering SportyBet is believed to use
-// (1 = 1X2, 18 = Total, ...). Verify against captured live responses before switching to live mode.
+//
+// Market and outcome ids come from lib/bookmakers/formats/betradar-format.ts and were read off
+// real SportyBet responses on 2026-10-01, so mock and live speak exactly the same dialect.
+// Live reads (booking codes, fixtures, odds) are implemented in lib/bookmakers/live/sportybet.ts.
+//
+// createCode is still unimplemented: booking a slip is a POST we have not captured, and guessing
+// it would mean silently failing to place a real bet. Converting *to* SportyBet therefore still
+// reports the bookmaker as unavailable rather than pretending to have booked something.
 
-type LineKind = "none" | "total" | "hcp";
-
-const MARKETS: Record<string, { type: MarketType; period: MarketPeriod; line: LineKind; outcomes: Record<string, string> }> = {
-  "1": { type: "MATCH_RESULT", period: "FT", line: "none", outcomes: { "1": "HOME", "2": "DRAW", "3": "AWAY" } },
-  "10": { type: "DOUBLE_CHANCE", period: "FT", line: "none", outcomes: { "9": "HOME_DRAW", "10": "HOME_AWAY", "11": "DRAW_AWAY" } },
-  "18": { type: "OVER_UNDER", period: "FT", line: "total", outcomes: { "12": "OVER", "13": "UNDER" } },
-  "29": { type: "BTTS", period: "FT", line: "none", outcomes: { "74": "YES", "76": "NO" } },
-  "14": { type: "HANDICAP", period: "FT", line: "hcp", outcomes: { "1711": "HOME", "1712": "DRAW", "1713": "AWAY" } },
-  "60": { type: "MATCH_RESULT", period: "H1", line: "none", outcomes: { "1": "HOME", "2": "DRAW", "3": "AWAY" } },
-  "68": { type: "OVER_UNDER", period: "H1", line: "total", outcomes: { "12": "OVER", "13": "UNDER" } },
-};
-
-const MARKET_NAMES: Record<string, string> = {
-  "1": "1X2",
-  "10": "Double Chance",
-  "18": "Over/Under",
-  "29": "GG/NG",
-  "14": "Handicap",
-  "60": "1st Half - 1X2",
-  "68": "1st Half - Over/Under",
-};
-
-/** "total=2.5" → 2.5; "hcp=0:1" → -1 (home line = home goals − away goals). */
-export function parseSpecifier(kind: LineKind, specifier: string): number | null | undefined {
-  if (kind === "none") return specifier === "" ? null : undefined;
-  if (kind === "total") {
-    const m = specifier.match(/^total=(\d+(?:\.\d+)?)$/);
-    return m ? Number(m[1]) : undefined;
-  }
-  const m = specifier.match(/^hcp=(\d+):(\d+)$/);
-  return m ? Number(m[1]) - Number(m[2]) : undefined;
-}
-
-function formatSpecifier(kind: LineKind, line: number | null): string | undefined {
-  if (kind === "none") return line === null ? "" : undefined;
-  if (line === null) return undefined;
-  if (kind === "total") return `total=${line}`;
-  return line < 0 ? `hcp=0:${-line}` : `hcp=${line}:0`;
-}
-
-function mapMarket(raw: RawMarket): Market | null {
-  const def = MARKETS[raw.marketId];
-  const outcome = def?.outcomes[raw.outcomeId];
-  if (!def || !outcome) return null;
-  const line = parseSpecifier(def.line, raw.specifier);
-  if (line === undefined) return null;
-  return { type: def.type, period: def.period, outcome, line };
-}
-
-function unmapMarket(market: Market): RawMarket | null {
-  for (const [marketId, def] of Object.entries(MARKETS)) {
-    if (def.type !== market.type || def.period !== market.period) continue;
-    const outcomeId = Object.keys(def.outcomes).find((k) => def.outcomes[k] === market.outcome);
-    const specifier = formatSpecifier(def.line, market.line);
-    if (!outcomeId || specifier === undefined) return null;
-    return { marketId, outcomeId, specifier, marketName: MARKET_NAMES[marketId] };
-  }
-  return null;
-}
+const MARKET_NAMES: Record<string, string> = Object.fromEntries(
+  Object.entries(BETRADAR_MARKETS).map(([id, def]) => [id, def.name]),
+);
 
 // --- Mock data ---------------------------------------------------------------
 
@@ -95,7 +50,7 @@ function mockOffers(prices: MockPrices): RawOffer[] {
     offers.push(o("68", "12", `total=${line}`, over, `Over ${line}`), o("68", "13", `total=${line}`, under, `Under ${line}`));
   }
   for (const [line, [h, d, a]] of Object.entries(prices.handicap)) {
-    const spec = formatSpecifier("hcp", Number(line))!;
+    const spec = formatSpecifier("hcp3way", Number(line))!;
     const away = Number(line) > 0 ? `-${line}` : `+${-Number(line)}`;
     const home = Number(line) > 0 ? `+${line}` : line;
     offers.push(o("14", "1711", spec, h, `Home (${home})`), o("14", "1712", spec, d, `Draw (${home})`), o("14", "1713", spec, a, `Away (${away})`));
@@ -153,21 +108,28 @@ export function createSportyBetAdapter(mode: AdapterMode, opts: { latencyMs?: nu
     () => adapter,
   );
 
+  const live = () => import("@/lib/bookmakers/live/sportybet");
+
   const adapter: BookmakerAdapter = {
     slug: "sportybet",
     name: "SportyBet",
     mode,
+    // Live: reading codes, fixtures and odds is verified against the real API
+    // (tests/bookmakers/sportybet-real.test.ts). Booking a new code is a POST we have not
+    // captured, so it stays off rather than failing a user mid-conversion.
+    capabilities: mode === "mock" ? { loadCode: true, createCode: true, events: true } : { loadCode: true, createCode: false, events: true },
     codeFormat: SPORTYBET_CODE,
     normalizeCode(code) {
       const c = code.replace(/\s+/g, "").toUpperCase();
       return SPORTYBET_CODE.test(c) ? c : null;
     },
-    loadCode: (code) => (mode === "mock" ? mock.loadCode(code) : liveNotImplemented("sportybet", "loadCode")),
+    // The live client is server-only, so it is pulled in on demand rather than at module load.
+    loadCode: async (code) => (mode === "mock" ? mock.loadCode(code) : (await live()).loadCode(code)),
     createCode: (s) => (mode === "mock" ? mock.createCode(s) : liveNotImplemented("sportybet", "createCode")),
-    searchEvent: (h, a, k) => (mode === "mock" ? mock.searchEvent(h, a, k) : liveNotImplemented("sportybet", "searchEvent")),
-    getEventMarkets: (id) => (mode === "mock" ? mock.getEventMarkets(id) : liveNotImplemented("sportybet", "getEventMarkets")),
-    mapMarket: (raw) => mapMarket(raw),
-    unmapMarket: (market) => unmapMarket(market),
+    searchEvent: async (h, a, k) => (mode === "mock" ? mock.searchEvent(h, a, k) : (await live()).searchEvent(h, a, k)),
+    getEventMarkets: async (id) => (mode === "mock" ? mock.getEventMarkets(id) : (await live()).getEventMarkets(id)),
+    mapMarket: (raw) => mapBetradarMarket(raw),
+    unmapMarket: (market) => unmapBetradarMarket(market),
   };
   return adapter;
 }

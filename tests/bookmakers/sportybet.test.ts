@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSportyBetAdapter, parseSpecifier } from "@/lib/bookmakers/sportybet";
+import { createSportyBetAdapter } from "@/lib/bookmakers/sportybet";
+import { parseSpecifier } from "@/lib/bookmakers/formats/betradar-format";
 import { derivePrices, FIXTURES } from "@/lib/bookmakers/mock/fixtures";
 import type { Market } from "@/lib/markets/types";
 
@@ -30,9 +31,36 @@ describe("SportyBet market mapping", () => {
 
   it("parses specifiers", () => {
     expect(parseSpecifier("total", "total=3.5")).toBe(3.5);
-    expect(parseSpecifier("hcp", "hcp=2:0")).toBe(2);
-    expect(parseSpecifier("hcp", "hcp=0:2")).toBe(-2);
-    expect(parseSpecifier("hcp", "bogus")).toBeUndefined();
+    expect(parseSpecifier("hcp3way", "hcp=2:0")).toBe(2);
+    expect(parseSpecifier("hcp3way", "hcp=0:2")).toBe(-2);
+    expect(parseSpecifier("hcp3way", "bogus")).toBeUndefined();
+    // Market 16 states the line directly instead of as a head start.
+    expect(parseSpecifier("hcpAsian", "hcp=-3.5")).toBe(-3.5);
+    expect(parseSpecifier("hcpAsian", "hcp=+1.5")).toBe(1.5);
+    expect(parseSpecifier("hcpAsian", "hcp=0:1")).toBeUndefined();
+  });
+
+  // Ids verified against real SportyBet responses on 2026-10-01.
+  it.each<[string, string, string, Market]>([
+    ["11", "4", "", { type: "DRAW_NO_BET", period: "FT", outcome: "HOME", line: null }],
+    ["16", "1715", "hcp=-3.5", { type: "ASIAN_HANDICAP", period: "FT", outcome: "AWAY", line: -3.5 }],
+    ["19", "12", "total=1.5", { type: "TEAM_OVER_UNDER", period: "FT", outcome: "HOME_OVER", line: 1.5 }],
+    ["20", "13", "total=0.5", { type: "TEAM_OVER_UNDER", period: "FT", outcome: "AWAY_UNDER", line: 0.5 }],
+    ["26", "70", "", { type: "ODD_EVEN", period: "FT", outcome: "ODD", line: null }],
+    ["63", "9", "", { type: "DOUBLE_CHANCE", period: "H1", outcome: "HOME_DRAW", line: null }],
+    ["75", "76", "", { type: "BTTS", period: "H1", outcome: "NO", line: null }],
+    ["83", "1", "", { type: "MATCH_RESULT", period: "H2", outcome: "HOME", line: null }],
+    ["90", "12", "total=1", { type: "OVER_UNDER", period: "H2", outcome: "OVER", line: 1 }],
+  ])("maps the newly verified market %s / outcome %s / %s", (marketId, outcomeId, specifier, expected) => {
+    expect(adapter.mapMarket({ marketId, outcomeId, specifier }, teams)).toEqual(expected);
+  });
+
+  it("keeps home and away team totals apart when unmapping", () => {
+    const home = adapter.unmapMarket({ type: "TEAM_OVER_UNDER", period: "FT", outcome: "HOME_OVER", line: 1.5 }, teams);
+    const away = adapter.unmapMarket({ type: "TEAM_OVER_UNDER", period: "FT", outcome: "AWAY_OVER", line: 1.5 }, teams);
+    expect(home?.marketId).toBe("19");
+    expect(away?.marketId).toBe("20");
+    expect(adapter.mapMarket(away!, teams)).toEqual({ type: "TEAM_OVER_UNDER", period: "FT", outcome: "AWAY_OVER", line: 1.5 });
   });
 
   it("round-trips every mock offer: raw → internal → raw", () => {
