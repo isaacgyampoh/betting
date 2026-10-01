@@ -94,4 +94,41 @@ describe.skipIf(!live)("SportyBet live API", () => {
   it("reports an unknown booking code as invalid", async () => {
     await expect(adapter.loadCode("ZZZ999")).rejects.toMatchObject({ code: "INVALID_CODE" });
   }, 30_000);
+
+  // The full loop: book a real code at SportyBet, then read it back and check we get the same picks
+  // with prices. This is what proves convert, trim and split actually work.
+  it("books a code and reads back the same picks", async () => {
+    const mapped = offers.filter((o) => o.market);
+    const main = mapped.find((o) => o.raw.marketId === "1");
+    const total = mapped.find((o) => o.raw.marketId === "18"); // carries a specifier
+    expect(main, "needs a 1X2 offer").toBeDefined();
+    expect(total, "needs an over/under offer").toBeDefined();
+
+    const created = await adapter.createCode([
+      { eventExternalId: target.externalId, market: main!.market! },
+      { eventExternalId: target.externalId, market: total!.market! },
+    ]);
+    expect(created.code).toMatch(/^[A-Z0-9]{5,10}$/);
+    expect(created.expiresAt?.getTime()).toBeGreaterThan(Date.now());
+    console.log(`\n  booked ${created.code} (expires ${created.expiresAt?.toISOString()})`);
+
+    const slip = await adapter.loadCode(created.code);
+    expect(slip.code).toBe(created.code);
+    expect(slip.selections).toHaveLength(2);
+    for (const sel of slip.selections) {
+      expect(sel.event.externalId).toBe(target.externalId);
+      expect(sel.odds).toBeGreaterThan(1);
+      expect(sel.market).not.toBeNull();
+    }
+    // The line on the over/under pick must survive the round trip, or we would book a different bet.
+    const back = slip.selections.find((sel) => sel.raw.marketId === "18");
+    expect(back!.raw.specifier).toBe(total!.raw.specifier);
+    expect(back!.market).toEqual(total!.market);
+  }, 90_000);
+
+  it("refuses to book a market SportyBet does not offer", async () => {
+    await expect(
+      adapter.createCode([{ eventExternalId: target.externalId, market: { type: "CORRECT_SCORE", period: "FT", outcome: "2:1", line: null } }]),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  }, 30_000);
 });

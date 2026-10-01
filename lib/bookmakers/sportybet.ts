@@ -6,7 +6,6 @@ import {
   mapBetradarMarket,
   unmapBetradarMarket,
 } from "@/lib/bookmakers/formats/betradar-format";
-import { liveNotImplemented } from "@/lib/bookmakers/live-stub";
 import type { AdapterMode, BookmakerAdapter } from "@/lib/bookmakers/types";
 
 // SportyBet Ghana.
@@ -15,9 +14,8 @@ import type { AdapterMode, BookmakerAdapter } from "@/lib/bookmakers/types";
 // real SportyBet responses on 2026-10-01, so mock and live speak exactly the same dialect.
 // Live reads (booking codes, fixtures, odds) are implemented in lib/bookmakers/live/sportybet.ts.
 //
-// createCode is still unimplemented: booking a slip is a POST we have not captured, and guessing
-// it would mean silently failing to place a real bet. Converting *to* SportyBet therefore still
-// reports the bookmaker as unavailable rather than pretending to have booked something.
+// Booking a code is POST /api/gh/orders/share, verified by booking a slip and reading it back. A
+// booking code is a shareable selection list, not a placed bet, and needs no account.
 
 const MARKET_NAMES: Record<string, string> = Object.fromEntries(
   Object.entries(BETRADAR_MARKETS).map(([id, def]) => [id, def.name]),
@@ -114,10 +112,9 @@ export function createSportyBetAdapter(mode: AdapterMode, opts: { latencyMs?: nu
     slug: "sportybet",
     name: "SportyBet",
     mode,
-    // Live: reading codes, fixtures and odds is verified against the real API
-    // (tests/bookmakers/sportybet-real.test.ts). Booking a new code is a POST we have not
-    // captured, so it stays off rather than failing a user mid-conversion.
-    capabilities: mode === "mock" ? { loadCode: true, createCode: true, events: true } : { loadCode: true, createCode: false, events: true },
+    // Live: everything is verified against the real API, including booking a code and reading it
+    // back (tests/bookmakers/sportybet-real.test.ts).
+    capabilities: { loadCode: true, createCode: true, events: true },
     codeFormat: SPORTYBET_CODE,
     normalizeCode(code) {
       const c = code.replace(/\s+/g, "").toUpperCase();
@@ -125,7 +122,7 @@ export function createSportyBetAdapter(mode: AdapterMode, opts: { latencyMs?: nu
     },
     // The live client is server-only, so it is pulled in on demand rather than at module load.
     loadCode: async (code) => (mode === "mock" ? mock.loadCode(code) : (await live()).loadCode(code)),
-    createCode: (s) => (mode === "mock" ? mock.createCode(s) : liveNotImplemented("sportybet", "createCode")),
+    createCode: async (s) => (mode === "mock" ? mock.createCode(s) : (await live()).createCode(s)),
     searchEvent: async (h, a, k) => (mode === "mock" ? mock.searchEvent(h, a, k) : (await live()).searchEvent(h, a, k)),
     getEventMarkets: async (id) => (mode === "mock" ? mock.getEventMarkets(id) : (await live()).getEventMarkets(id)),
     mapMarket: (raw) => mapBetradarMarket(raw),

@@ -72,8 +72,8 @@ describe.each(BOOKMAKER_SLUGS)("%s mock adapter", (slug) => {
 // captured and verified. Anything it does not claim must fail loudly rather than invent data.
 describe("live mode claims nothing it cannot do", () => {
   const VERIFIED: Partial<Record<BookmakerSlug, { loadCode: boolean; createCode: boolean; events: boolean }>> = {
-    // Verified 2026-10-01 against the real API; createCode is a POST we have not captured.
-    sportybet: { loadCode: true, createCode: false, events: true },
+    // Verified 2026-10-01 against the real API, including booking a code and reading it back.
+    sportybet: { loadCode: true, createCode: true, events: true },
   };
 
   it.each(BOOKMAKER_SLUGS)("%s declares only verified capabilities", (slug) => {
@@ -92,9 +92,9 @@ describe("live mode claims nothing it cannot do", () => {
     err.mockRestore();
   });
 
-  it("no bookmaker claims it can book a code it has not captured", () => {
+  it("only a verified bookmaker claims it can book a code", () => {
     for (const slug of BOOKMAKER_SLUGS) {
-      expect(createAdapter(slug, "live").capabilities.createCode, slug).toBe(false);
+      expect(createAdapter(slug, "live").capabilities.createCode, slug).toBe(VERIFIED[slug]?.createCode ?? false);
     }
   });
 });

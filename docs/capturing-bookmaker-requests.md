@@ -14,16 +14,43 @@ The live adapters get built from what you capture here. Nothing about a bookmake
    - Click the **Fetch/XHR** filter.
 4. Click the 🚫 icon to clear the log before each capture below.
 
-## 1. SportyBet Ghana (sportybet.com/gh) — mostly done
+## 1. SportyBet Ghana (sportybet.com/gh) — done, nothing needed from you
 
-**Status: live for reading.** Three endpoints were found by probing the public site logged out, and
-are verified by `VERIFY_LIVE=1 pnpm vitest run tests/bookmakers/sportybet-real.test.ts`:
+**Status: fully live.** Found by probing the public site logged out, with no account. All verified by
+`VERIFY_LIVE=1 pnpm vitest run tests/bookmakers/sportybet-real.test.ts`, which books a real code and
+reads it back:
 
 | Endpoint | Gives us | Verified |
 |---|---|---|
 | `GET /api/gh/factsCenter/event?eventId={sr:match:N}&productId=3` | one event, every market and price | 2026-10-01 |
-| `GET /api/gh/factsCenter/pcUpcomingEvents?sportId=sr:sport:1&marketId=1&pageSize=100&pageNum=1&option=1&timeline=48` | upcoming fixtures | 2026-10-01 |
-| `GET /api/gh/orders/share/{code}` | a booking code | error paths only |
+| `GET /api/gh/factsCenter/pcUpcomingEvents?sportId=sr:sport:1&marketId={ids}&pageSize=20&pageNum=1&option=1&timeline=48` | upcoming fixtures, with any markets priced inline | 2026-10-01 |
+| `GET /api/gh/orders/share/{code}` | read a booking code | 2026-10-01 |
+| `POST /api/gh/orders/share` | **create** a booking code | 2026-10-01 |
+
+### Booking a code
+
+```
+POST /api/gh/orders/share
+{"selections":[{"eventId":"sr:match:68931524","marketId":"18","outcomeId":"12","specifier":"total=2.5"}]}
+
+-> {"bizCode":10000,"data":{"shareCode":"E2745T","deadline":1791744300000,
+     "ticket":{"selections":[...]},"outcomes":[...],"unavailableOutcomes":[]}}
+```
+
+- No account, no login, no money: a booking code is a shareable selection list.
+- `specifier` is required for markets with a line (18, 166, 139, 900342) and absent otherwise.
+  Omitting it on a lined market books a **different line**, so it is carried through unchanged.
+- `deadline` is the expiry, in epoch ms.
+- `data.outcomes` is an array of full event objects — the same shape as the fixtures endpoints, with
+  the picked market priced. Reading a code therefore needs no further requests.
+- `unavailableOutcomes` holds picks that have dropped off (suspended market, started game).
+- Discovered by POSTing `{}` and following the validation errors: the API names the field it wants.
+
+### The inline-markets trick, which matters for cost
+
+`pcUpcomingEvents` accepts **any** market ids in `marketId` and embeds them in the fixture list. That
+is ~20 KB per fixture across eleven market groups, against **1.3 MB** for one fixture's full market
+list. The slip builder and daily picks depend on this; see `INLINE_MARKET_IDS`.
 
 Notes that matter:
 - Both need `user-agent` and `referer: https://www.sportybet.com/gh/sport/football`; without them the
@@ -34,17 +61,12 @@ Notes that matter:
 - **Every outcome carries a `probability`, and they sum to 1.0 across a market.** That is SportyBet's
   own margin-free probability, so "estimated chance" never has to be modelled or invented.
 
-### Still needed from you
+### If SportyBet ever changes shape
 
-1. **One real, unexpired booking code.** `orders/share/{code}` is confirmed to answer
-   `{"bizCode":19000,"innerMsg":"The code is invalid."}` for a bad code, but no success body has been
-   seen, so the reader in `lib/bookmakers/live/sportybet.ts` is written defensively: it extracts only
-   the event id and market/outcome/specifier of each pick and then prices them from the verified
-   event endpoint. If it cannot read a slip it logs `sportybet.share_shape_unrecognised` with the
-   response shape and tells the user their code is fine — it never calls a real code invalid. Paste
-   one code and that log turns this into a one-line fix.
-2. **A captured "Book Bet" request** (step B below) if you want conversion *to* SportyBet. Booking is
-   a POST; `capabilities.createCode` is `false` until it is captured, so nothing pretends to book.
+`loadCode` reads `data.outcomes` directly. If that key ever disappears, it falls back to a reader
+that extracts only the event id and market/outcome/specifier of each pick and prices them from the
+event endpoint, logs `sportybet.share_outcomes_missing` with the shape it actually received, and
+still never tells the user their real code is invalid.
 
 ### A. Load a booking code
 1. Get a real code. Ask a friend for one, or make your own with step B first.

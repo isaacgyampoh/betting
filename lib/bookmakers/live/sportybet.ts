@@ -1,8 +1,10 @@
 import "server-only";
 import { cachedGet } from "@/lib/bookmakers/live/cached-get";
-import { mapBetradarMarket, betradarMarketName } from "@/lib/bookmakers/formats/betradar-format";
+import { betradarMarketName, mapBetradarMarket, unmapBetradarMarket } from "@/lib/bookmakers/formats/betradar-format";
 import type {
   BookmakerEventInfo,
+  CreateCodeSelection,
+  CreatedCode,
   EventMarkets,
   EventStatus,
   LoadedSelection,
@@ -279,15 +281,63 @@ export async function searchEvent(home: string, away: string, kickoff: Date): Pr
 }
 
 // --- Booking codes -----------------------------------------------------------
+//
+// Verified end to end on 2026-10-01 by booking a code and reading it back:
+//
+//   POST /api/gh/orders/share   {"selections":[{eventId, marketId, outcomeId, specifier?}]}
+//     -> {bizCode:10000, data:{shareCode, shareURL, deadline, ticket:{selections}, outcomes,
+//         unavailableOutcomes}}
+//   GET  /api/gh/orders/share/{code}  -> the same `data` shape
+//
+// `data.outcomes` is an array of full event objects, identical in shape to the fixtures endpoints
+// and carrying the picked market with its odds and probability. So reading a code needs no further
+// requests: everything a slip needs is in that one response.
+//
+// `specifier` is sent and returned only for markets that have a line (18, 166, ...). Omitting it on
+// a market that needs one books a different line, so it is always carried through unchanged.
+
+type ShareData = {
+  shareCode?: string;
+  shareURL?: string;
+  /** Epoch ms after which the code stops working. */
+  deadline?: number;
+  ticket?: { selections?: unknown[] };
+  /** Full event objects, one per picked market, with the chosen outcome priced. */
+  outcomes?: SportyEvent[];
+  /** Picks SportyBet can no longer offer (suspended market, started game). */
+  unavailableOutcomes?: SportyEvent[];
+};
 
 /**
- * SHARE_SHAPE_UNVERIFIED.
- * We know `GET orders/share/{code}` answers `{bizCode:19000, innerMsg:"The code is invalid."}`
- * for a bad code and `bizCode:10000` with a body for a good one, but not what that body looks
- * like. Rather than guess a full slip shape, we extract only what every plausible shape must
- * carry — the event id and the market/outcome/specifier of each pick — and then price each pick
- * from factsCenter/event, which is verified. If we cannot find any picks we log the keys we were
- * given and surface a service error, never "your code is invalid".
+ * Picks from `data.outcomes`: each entry is an event carrying only the chosen market and outcome.
+ * `available` is false for entries from `unavailableOutcomes`, which are kept so the user is told a
+ * pick has dropped off rather than silently losing it.
+ */
+function selectionsFromOutcomes(events: SportyEvent[] | undefined, available: boolean): LoadedSelection[] {
+  const out: LoadedSelection[] = [];
+  for (const e of events ?? []) {
+    const event = toEventInfo(e);
+    for (const m of e.markets ?? []) {
+      for (const o of m.outcomes ?? []) {
+        const raw = toRawMarket(m, o);
+        const odds = Number(o.odds);
+        out.push({
+          event,
+          raw,
+          market: mapBetradarMarket(raw),
+          // An unavailable pick has no price we can stand behind.
+          odds: available && Number.isFinite(odds) && odds > 1 ? odds : null,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Fallback reader, kept for the day SportyBet changes `data.outcomes`. It extracts only the event
+ * id and market/outcome/specifier of each pick — the minimum any shape must carry — so a slip can
+ * still be priced from the verified event endpoint. Exported for tests.
  */
 export function parseSharedSelections(data: unknown): { eventId: string; raw: RawMarket }[] {
   const out: { eventId: string; raw: RawMarket }[] = [];
@@ -322,12 +372,11 @@ export function parseSharedSelections(data: unknown): { eventId: string; raw: Ra
   };
 
   visit(data);
-  // The same pick can appear in more than one nesting; keep one of each.
   const key = (s: { eventId: string; raw: RawMarket }) => `${s.eventId}|${s.raw.marketId}|${s.raw.outcomeId}|${s.raw.specifier}`;
   return [...new Map(out.map((s) => [key(s), s])).values()];
 }
 
-/** Keys of an object graph, a few levels deep, for diagnosing an unknown response shape. */
+/** Keys of an object graph, a few levels deep, for diagnosing an unexpected response shape. */
 function shapeOf(value: unknown, depth = 3): unknown {
   if (Array.isArray(value)) return depth <= 0 ? `[${value.length}]` : [shapeOf(value[0], depth - 1)];
   if (value && typeof value === "object") {
@@ -337,47 +386,13 @@ function shapeOf(value: unknown, depth = 3): unknown {
   return typeof value;
 }
 
-export async function loadCode(code: string): Promise<LoadedSlip> {
-  const res = await cachedGet<Envelope<unknown> & { isAvailable?: boolean }>({
-    scope: "sportybet",
-    baseUrl: BASE_URL,
-    endpoint: `orders/share/${encodeURIComponent(code)}`,
-    ttlSeconds: 20,
-    headers: HEADERS,
-    timeoutMs: 12_000,
-    cacheable: (p) => (p as Envelope<unknown>).bizCode === BIZ_OK,
-  });
-
-  if (res.bizCode === BIZ_INVALID) {
-    const msg = (res.innerMsg ?? res.message ?? "").toLowerCase();
-    if (msg.includes("expire")) throw new AppError("EXPIRED_CODE", `Booking code ${code} has expired on SportyBet.`);
-    throw new AppError("INVALID_CODE", `SportyBet doesn't recognise booking code ${code}.`);
-  }
-  if (res.bizCode !== BIZ_OK) {
-    logger.warn("sportybet.share_biz_error", { code, bizCode: res.bizCode, message: res.innerMsg ?? res.message });
-    throw new AppError("BOOKMAKER_UNAVAILABLE", "SportyBet couldn't open that code right now. Please try again in a moment.");
-  }
-
-  const picks = parseSharedSelections(res.data);
-  if (!picks.length) {
-    // Our reader, not the user's code. Log the shape so this is a one-line fix.
-    logger.error("sportybet.share_shape_unrecognised", { code, shape: JSON.stringify(shapeOf(res.data)).slice(0, 2000) });
-    throw new AppError(
-      "BOOKMAKER_UNAVAILABLE",
-      "We reached SportyBet but couldn't read that slip. We're on it — your code is fine.",
-    );
-  }
-
-  // Price every pick from the verified event endpoint, one request per distinct event.
-  const byEvent = new Map<string, { raw: RawMarket }[]>();
-  for (const p of picks) {
-    const list = byEvent.get(p.eventId) ?? [];
-    list.push({ raw: p.raw });
-    byEvent.set(p.eventId, list);
-  }
+/** Prices picks through the verified event endpoint. Only used if `data.outcomes` ever disappears. */
+async function priceViaEvents(code: string, picks: { eventId: string; raw: RawMarket }[]): Promise<LoadedSelection[]> {
+  const byEvent = new Map<string, RawMarket[]>();
+  for (const p of picks) byEvent.set(p.eventId, [...(byEvent.get(p.eventId) ?? []), p.raw]);
 
   const selections: LoadedSelection[] = [];
-  for (const [eventId, list] of byEvent) {
+  for (const [eventId, raws] of byEvent) {
     let event: BookmakerEventInfo | null = null;
     let offers: EventMarkets["offers"] = [];
     try {
@@ -386,26 +401,135 @@ export async function loadCode(code: string): Promise<LoadedSlip> {
       offers = markets.offers;
     } catch (error) {
       logger.warn("sportybet.share_event_unavailable", { code, eventId, error: String(error) });
+      continue;
     }
-    for (const { raw } of list) {
+    for (const raw of raws) {
       const offer = offers.find(
         (o) => o.raw.marketId === raw.marketId && o.raw.outcomeId === raw.outcomeId && o.raw.specifier === raw.specifier,
       );
-      // A pick whose event we couldn't load is still shown, without a price, rather than dropped.
-      if (!event) continue;
-      selections.push({
-        event,
-        raw: offer?.raw ?? raw,
-        market: mapBetradarMarket(offer?.raw ?? raw),
-        odds: offer ? offer.odds : null,
-      });
+      selections.push({ event, raw: offer?.raw ?? raw, market: mapBetradarMarket(offer?.raw ?? raw), odds: offer?.odds ?? null });
     }
+  }
+  return selections;
+}
+
+export async function loadCode(code: string): Promise<LoadedSlip> {
+  const res = await cachedGet<Envelope<ShareData> & { isAvailable?: boolean }>({
+    scope: "sportybet",
+    baseUrl: BASE_URL,
+    endpoint: `orders/share/${encodeURIComponent(code)}`,
+    ttlSeconds: 20,
+    headers: HEADERS,
+    timeoutMs: 12_000,
+    cacheable: (p) => (p as Envelope<ShareData>).bizCode === BIZ_OK,
+  });
+
+  if (res.bizCode === BIZ_INVALID) {
+    const msg = (res.innerMsg ?? res.message ?? "").toLowerCase();
+    if (msg.includes("expire")) throw new AppError("EXPIRED_CODE", `Booking code ${code} has expired on SportyBet.`);
+    throw new AppError("INVALID_CODE", `SportyBet doesn't recognise booking code ${code}.`);
+  }
+  if (res.bizCode !== BIZ_OK || !res.data) {
+    logger.warn("sportybet.share_biz_error", { code, bizCode: res.bizCode, message: res.innerMsg ?? res.message });
+    throw new AppError("BOOKMAKER_UNAVAILABLE", "SportyBet couldn't open that code right now. Please try again in a moment.");
+  }
+
+  const data = res.data;
+  const expiresAt = typeof data.deadline === "number" ? new Date(data.deadline) : null;
+  if (expiresAt && expiresAt.getTime() < Date.now()) {
+    throw new AppError("EXPIRED_CODE", `Booking code ${code} has expired on SportyBet.`);
+  }
+
+  let selections = [
+    ...selectionsFromOutcomes(data.outcomes, true),
+    ...selectionsFromOutcomes(data.unavailableOutcomes, false),
+  ];
+
+  if (!selections.length) {
+    // `data.outcomes` was empty or has changed shape. Fall back to the minimal reader and price
+    // through the event endpoint, and log the shape so the gap is a one-line fix.
+    const picks = parseSharedSelections(data);
+    logger.warn("sportybet.share_outcomes_missing", {
+      code,
+      picks: picks.length,
+      shape: JSON.stringify(shapeOf(data)).slice(0, 2000),
+    });
+    if (picks.length) selections = await priceViaEvents(code, picks);
   }
 
   if (!selections.length) {
-    logger.error("sportybet.share_events_unavailable", { code, events: byEvent.size });
-    throw new AppError("BOOKMAKER_UNAVAILABLE", "SportyBet gave us the slip but not the games. Please try again in a moment.");
+    // Our reader, not the user's code.
+    logger.error("sportybet.share_shape_unrecognised", { code, shape: JSON.stringify(shapeOf(data)).slice(0, 2000) });
+    throw new AppError(
+      "BOOKMAKER_UNAVAILABLE",
+      "We reached SportyBet but couldn't read that slip. We're on it — your code is fine.",
+    );
   }
 
-  return { bookmaker: "sportybet", code, selections, expiresAt: null };
+  return { bookmaker: "sportybet", code, selections, expiresAt };
+}
+
+/**
+ * Books a slip at SportyBet and returns its booking code. No account is involved: a booking code is
+ * a shareable selection list, not a placed bet, and no money moves.
+ */
+export async function createCode(selections: CreateCodeSelection[]): Promise<CreatedCode> {
+  if (!selections.length) throw new AppError("BAD_REQUEST", "There are no picks to book.");
+
+  const payload = selections.map(({ eventExternalId, market, raw: given }) => {
+    const raw = given ?? (market ? unmapBetradarMarket(market) : null);
+    if (!raw) {
+      const what = market ? `${market.type} (${market.period})` : "that market";
+      throw new AppError("BAD_REQUEST", `SportyBet doesn't offer ${what}, so this slip can't be booked there.`);
+    }
+    return {
+      eventId: eventExternalId,
+      marketId: raw.marketId,
+      outcomeId: raw.outcomeId,
+      // Only markets with a line carry a specifier; sending "" on the others is what their own
+      // client does, but omitting it keeps the request minimal and is equally accepted.
+      ...(raw.specifier ? { specifier: raw.specifier } : {}),
+      sportId: FOOTBALL,
+    };
+  });
+
+  const url = new URL("orders/share", BASE_URL);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { ...HEADERS, "content-type": "application/json", accept: "application/json", origin: "https://www.sportybet.com" },
+      body: JSON.stringify({ selections: payload }),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (error) {
+    logger.error("sportybet.create_failed", { error: String(error) });
+    throw new AppError("BOOKMAKER_UNAVAILABLE", "We couldn't reach SportyBet to book that slip. Please try again in a moment.");
+  }
+
+  if (!res.ok) {
+    logger.error("sportybet.create_http_error", { status: res.status });
+    throw new AppError("BOOKMAKER_UNAVAILABLE", "SportyBet wouldn't book that slip just now. Please try again in a moment.");
+  }
+
+  const body = (await res.json()) as Envelope<ShareData>;
+  if (body.bizCode !== BIZ_OK || !body.data?.shareCode) {
+    const message = body.innerMsg ?? body.message ?? "";
+    logger.warn("sportybet.create_rejected", { bizCode: body.bizCode, message, picks: payload.length });
+    // A rejection here is about the picks (a suspended market, a game that has started), not us.
+    throw new AppError(
+      "BOOKMAKER_UNAVAILABLE",
+      message
+        ? `SportyBet wouldn't book this slip: ${message}`
+        : "SportyBet wouldn't book this slip. One of the games may have started or had its market suspended.",
+    );
+  }
+
+  const unavailable = body.data.unavailableOutcomes?.length ?? 0;
+  if (unavailable) logger.warn("sportybet.create_dropped_picks", { code: body.data.shareCode, unavailable });
+
+  return {
+    code: body.data.shareCode,
+    expiresAt: typeof body.data.deadline === "number" ? new Date(body.data.deadline) : null,
+  };
 }

@@ -10,14 +10,17 @@ import { BUILD_LIMIT } from "@/lib/services/build-slip";
 import { buildFromFixtures, toCandidates, type FixtureSlip } from "@/lib/slips/fixture-picks";
 
 // "Make me a 5 odds for today": a slip built from a bookmaker's own live fixtures and prices,
-// rather than from a slip the user already has.
+// rather than from a slip the user already has, and booked so the user gets a real code to paste.
 //
-// Nothing here is booked. Creating a booking code is a POST we have not captured for any
-// bookmaker, so the result says plainly that it cannot be booked yet instead of offering a button
-// that would fail. The picks themselves are real and the user can place them by hand.
+// Picks are booked by their raw market ids, because the varied markets this deliberately reaches
+// for (corners, cards, fouls) have no internal market type. If the bookmaker cannot book, the picks
+// are still returned with a note to add them by hand rather than failing the whole request.
 
 export type TodaySlip = {
   bookmaker: { slug: string; name: string };
+  /** The booking code at the bookmaker, or null when it couldn't be booked. */
+  code: string | null;
+  expiresAt: string | null;
   target: number;
   reachedTarget: boolean;
   totalOdds: number;
@@ -86,16 +89,34 @@ export async function buildFromToday(opts: {
   const slip = buildFromFixtures(candidates, target, { bookmakerName: source.name });
   if (!slip) throw new AppError("BAD_REQUEST", "We couldn't build a slip from today's games.");
 
+  // Book it, so the user gets a code rather than a list to retype. A booking failure must not lose
+  // the picks: they are real either way, so fall back to "add these yourself".
+  let code: string | null = null;
+  let expiresAt: Date | null = null;
+  if (source.capabilities.createCode) {
+    try {
+      const created = await source.createCode(
+        slip.picks.map((p) => ({ eventExternalId: p.event.externalId, raw: p.raw })),
+      );
+      code = created.code;
+      expiresAt = created.expiresAt;
+    } catch (error) {
+      logger.warn("today.booking_failed", { bookmaker: source.slug, error: String(error) });
+    }
+  }
+
   await logUsage({
     userId: user.id,
     ipHash,
     kind: "SLIP_EDIT",
     success: true,
-    meta: { op: "today", target, reached: slip.reachedTarget, games: slip.picks.length, bookmaker: source.slug },
+    meta: { op: "today", target, reached: slip.reachedTarget, games: slip.picks.length, bookmaker: source.slug, booked: code !== null },
   });
 
   return {
     bookmaker: { slug: source.slug, name: source.name },
+    code,
+    expiresAt: expiresAt?.toISOString() ?? null,
     target,
     reachedTarget: slip.reachedTarget,
     totalOdds: slip.totalOdds,
@@ -113,9 +134,9 @@ export async function buildFromToday(opts: {
       probability: p.probability,
       reason: p.reason,
     })),
-    bookable: source.capabilities.createCode,
-    bookingNote: source.capabilities.createCode
-      ? `We can book this on ${source.name}.`
-      : `We can't create a ${source.name} booking code yet, so add these picks on ${source.name} yourself. Every price above is ${source.name}'s own.`,
+    bookable: code !== null,
+    bookingNote: code
+      ? `Booked on ${source.name}. Paste code ${code} into their app.`
+      : `We couldn't get a ${source.name} booking code for this one, so add these picks on ${source.name} yourself. Every price above is ${source.name}'s own.`,
   };
 }

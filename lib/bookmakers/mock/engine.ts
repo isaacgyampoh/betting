@@ -128,11 +128,13 @@ export function createMockBackend(config: MockBackendConfig, adapter: () => Adap
     const picks: MockPick[] = selections.map((s, i) => {
       const f = listed.find((x) => config.eventId(x) === s.eventExternalId);
       if (!f) throw new AppError("BAD_REQUEST", `Game #${i + 1} isn't available on this bookmaker.`);
-      const raw = a.unmapMarket(s.market, eventOf(f));
-      if (!raw || !findOffer(f, raw)) {
+      const raw = s.raw ?? (s.market ? a.unmapMarket(s.market, eventOf(f)) : null);
+      const offer = raw && findOffer(f, raw);
+      if (!raw || !offer) {
         throw new AppError("BAD_REQUEST", `Game #${i + 1}: this market isn't offered on this bookmaker.`);
       }
-      return { fixture: f.key, market: s.market };
+      // A pick given as a raw market is stored that way, since it may have no internal equivalent.
+      return s.market ? { fixture: f.key, market: s.market } : { fixture: f.key, raw, odds: offer.odds };
     });
 
     let code: string;

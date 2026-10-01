@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { listUpcomingWithOffers } from "@/lib/bookmakers/live/sportybet";
 import { buildFromFixtures, toCandidates } from "@/lib/slips/fixture-picks";
+import { createAdapter } from "@/lib/bookmakers/registry";
+
+const adapter = createAdapter("sportybet", "live");
 
 // Builds real slips from real SportyBet prices. Skipped unless VERIFY_LIVE=1 (needs the network):
 //   VERIFY_LIVE=1 pnpm vitest run tests/slips/fixture-picks-real.test.ts
@@ -38,6 +41,18 @@ describe.skipIf(!live)("building slips from real fixtures", () => {
         console.log(`       ${p.reason}`);
         expect(p.reason).toContain("SportyBet");
       }
+
+      // The whole point: these picks must be bookable at SportyBet, including the markets we don't
+      // model internally (corners, cards, fouls), which is why they are booked by raw market id.
+      const created = await adapter.createCode(
+        slip!.picks.map((p) => ({ eventExternalId: p.event.externalId, raw: p.raw })),
+      );
+      expect(created.code).toMatch(/^[A-Z0-9]{5,10}$/);
+      console.log(`     → booked on SportyBet as ${created.code}`);
+
+      const back = await adapter.loadCode(created.code);
+      expect(back.selections).toHaveLength(slip!.picks.length);
+      expect(back.selections.every((s) => (s.odds ?? 0) > 1)).toBe(true);
     }
-  }, 120_000);
+  }, 180_000);
 });

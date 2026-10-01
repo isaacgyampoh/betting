@@ -63,7 +63,12 @@ export type EventMarkets = {
   offers: { raw: RawMarket; market: Market | null; odds: number }[];
 };
 
-export type CreateCodeSelection = { eventExternalId: string; market: Market };
+/**
+ * One pick to book. Normally given in our internal model; `raw` carries the bookmaker's own
+ * market/outcome ids instead, for markets we deliberately don't model (corners, cards, fouls). When
+ * both are present `raw` wins, since it needs no translation.
+ */
+export type CreateCodeSelection = { eventExternalId: string; market?: Market; raw?: RawMarket };
 
 export type CreatedCode = { code: string; expiresAt: Date | null };
 

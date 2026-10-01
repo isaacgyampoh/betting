@@ -34,6 +34,8 @@ export function compactSlip(s: SlipView) {
     bookmaker: s.bookmaker.name,
     ...(s.demo ? { demo_data: "sample bookmaker data: this code will not work on the real site" } : {}),
     code: s.code,
+    // No code means the bookmaker couldn't book it; say so, or the model implies there is one to paste.
+    ...(s.code ? {} : { not_booked: "we could not create a booking code at this bookmaker: tell the user to add these picks themselves" }),
     total_odds: s.totalOdds,
     games: s.selections.map((g) => ({
       pos: g.position,
