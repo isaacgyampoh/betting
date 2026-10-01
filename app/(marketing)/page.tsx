@@ -34,7 +34,9 @@ const FEATURES = [
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "win" | "loss" }) {
   return (
     <div className="bg-card p-4 text-center">
-      <p className={cn("text-2xl font-semibold", tone === "win" && "text-win", tone === "loss" && "text-loss")}>{value}</p>
+      <p className={cn("text-3xl font-semibold tracking-tight tabular-nums", tone === "win" && "text-win", tone === "loss" && "text-loss")}>
+        {value}
+      </p>
       <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
     </div>
   );
@@ -56,8 +58,10 @@ export default async function HomePage() {
     <div className="space-y-14 pb-4">
       <section className="grid items-center gap-8 pt-4 lg:grid-cols-2 lg:pt-10">
         <div className="space-y-5 text-center lg:text-left">
-          <h1 className="text-4xl font-semibold tracking-tight text-balance md:text-5xl">
-            Paste your code. Get a better slip.
+          <h1 className="text-[2.75rem] leading-[1.03] font-semibold tracking-[-0.03em] text-balance sm:text-6xl">
+            Paste your code.
+            <br />
+            <span className="text-primary">Get a better slip.</span>
           </h1>
           <p className="mx-auto max-w-md text-balance text-muted-foreground lg:mx-0">
             See every game and price on your booking code, move it to another bookmaker, or ask for a 2 or 5 odds built
@@ -84,8 +88,8 @@ export default async function HomePage() {
         </h2>
         <div className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3">
           {FEATURES.map(({ icon: Icon, title, text }) => (
-            <div key={title} className="bg-card p-5">
-              <Icon className="mb-3 size-5 text-muted-foreground" strokeWidth={1.75} />
+            <div key={title} className="bg-card p-5 sm:p-6">
+              <Icon className="mb-3 size-5 text-primary" strokeWidth={1.75} />
               <p className="font-medium">{title}</p>
               <p className="mt-1 text-sm text-muted-foreground">{text}</p>
             </div>

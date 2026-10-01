@@ -32,8 +32,8 @@ export function ProblemFix() {
   return (
     <section aria-labelledby="problem-fix" className="space-y-6">
       <div className="space-y-1">
-        <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">The problem → the fix</p>
-        <h2 id="problem-fix" className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
+        <p className="text-xs font-medium tracking-widest text-primary uppercase">The problem → the fix</p>
+        <h2 id="problem-fix" className="text-2xl font-semibold tracking-[-0.02em] text-balance sm:text-4xl">
           Betting takes too many apps. This is one chat.
         </h2>
       </div>

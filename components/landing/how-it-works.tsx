@@ -48,8 +48,8 @@ export function HowItWorks() {
     <section aria-labelledby="how" className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="space-y-1">
-          <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">Say it, and it&apos;s done</p>
-          <h2 id="how" className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
+          <p className="text-xs font-medium tracking-widest text-primary uppercase">Say it, and it&apos;s done</p>
+          <h2 id="how" className="text-2xl font-semibold tracking-[-0.02em] text-balance sm:text-4xl">
             Three ways to start.
           </h2>
         </div>
