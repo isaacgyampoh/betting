@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ServiceWorkerRegister } from "@/components/sw-register";
-import { SessionKeeper } from "@/components/session-keeper";
 import { ReferralCapture } from "@/components/referral-capture";
 import { Toaster } from "@/components/ui/sonner";
 import { publicEnv } from "@/lib/public-env";
@@ -15,7 +14,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(publicEnv.siteUrl),
   title: { default: "gameclaw", template: "%s · gameclaw" },
   description:
-    "Load, convert and trim betting slips across SportyBet and Betway, and check head-to-head before you bet. Built in Ghana. 18+.",
+    "Load, convert and trim betting slips across Ghana's bookmakers, and check head-to-head before you bet. Built in Ghana. 18+.",
   applicationName: "gameclaw",
   appleWebApp: { capable: true, title: "gameclaw", statusBarStyle: "black-translucent" },
   formatDetection: { telephone: false },
@@ -41,8 +40,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {children}
           <Toaster position="top-center" />
         </ThemeProvider>
+        {/* SessionKeeper lives in the app shell, not here: it pulls in the Supabase auth client
+            (about 250 KB), and a signed-out visitor reading the marketing pages never needs it. */}
         <ServiceWorkerRegister />
-        <SessionKeeper />
         <ReferralCapture />
       </body>
     </html>
