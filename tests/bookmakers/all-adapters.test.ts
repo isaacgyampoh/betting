@@ -79,6 +79,12 @@ describe("live mode claims nothing it cannot do", () => {
     sportybet: { loadCode: true, createCode: true, events: true },
     msport: { loadCode: true, createCode: true, events: true },
     footballcom: { loadCode: true, createCode: true, events: true },
+    // 1xBet platform: fixtures and odds verified; booking implemented but never checked end to end,
+    // so it stays off.
+    "1xbet": { loadCode: false, createCode: false, events: true },
+    paripesa: { loadCode: false, createCode: false, events: true },
+    "22bet": { loadCode: false, createCode: false, events: true },
+    betwinner: { loadCode: false, createCode: false, events: true },
   };
 
   it.each(BOOKMAKER_SLUGS)("%s declares only verified capabilities", (slug) => {
@@ -94,6 +100,17 @@ describe("live mode claims nothing it cannot do", () => {
     await expect(a.loadCode(CODES[slug][0])).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE" });
     await expect(a.getEventMarkets("whatever")).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE" });
     await expect(a.searchEvent("A", "B", new Date())).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE" });
+    err.mockRestore();
+  });
+
+  // A bookmaker that can read prices but not codes must still refuse the code operations, even
+  // though its live client implements them.
+  const pricesOnly = BOOKMAKER_SLUGS.filter((s) => VERIFIED[s]?.events && !VERIFIED[s]?.loadCode);
+  it.each(pricesOnly)("%s reads prices but refuses booking codes", async (slug) => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const a = createAdapter(slug, "live");
+    await expect(a.loadCode(CODES[slug][0])).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE" });
+    await expect(a.createCode([])).rejects.toMatchObject({ code: "BOOKMAKER_UNAVAILABLE" });
     err.mockRestore();
   });
 

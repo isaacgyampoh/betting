@@ -3,8 +3,11 @@ import { onexFormat } from "@/lib/bookmakers/formats/onex-format";
 import { createBookmakerAdapter, stableNumber, standardMockCodes } from "@/lib/bookmakers/make-adapter";
 import type { AdapterMode, BookmakerAdapter } from "@/lib/bookmakers/types";
 
-// PariPesa (Ghana). Uses the 1xBet-platform market format (mock ids; see formats/onex-format.ts).
-// Booking-code format assumed until confirmed from captured real codes.
+// PariPesa (Ghana), on the 1xBet platform (see formats/onex-format.ts).
+//
+// Live: fixtures and odds are verified against the real feed. Reading and booking codes are
+// implemented but NOT verified — no code has been created and read back — so they stay off and
+// nothing reaches a user until that check passes.
 
 export const MOCK_CODES: Record<string, MockCode> = {
   ...standardMockCodes({ valid: "PP51Q", live: "PPLIVE", expired: "PPEXP1", down: "PPDOWN" }),
@@ -18,6 +21,10 @@ export function createPariPesaAdapter(mode: AdapterMode, opts: { latencyMs?: num
       name: "PariPesa",
       codeFormat: /^[A-Z0-9]{4,10}$/,
       format: onexFormat,
+      live: {
+        load: () => import("@/lib/bookmakers/live/paripesa"),
+        capabilities: { loadCode: false, createCode: false, events: true },
+      },
       mock: { codes: MOCK_CODES, codePrefix: "PP", margin: 0.055, eventId: (f) => stableNumber("paripesa:" + f.key, 9) },
     },
     mode,

@@ -163,7 +163,7 @@ Headers: `x-pawa-brand: betpawa-ghana`, `x-pawa-language: en`. Errors are
 risk silently mis-reading odds, which is the one mistake that must never ship. A DevTools capture
 (step A below) unblocks it, because the browser shows the decoded body.
 
-## 3a. 1xBet platform (1xBet, PariPesa, 22Bet, Betwinner) — markets solved, booking unverified
+## 3a. 1xBet platform (1xBet, PariPesa, 22Bet, Betwinner) — built; one check from live
 
 **Status: the booking-code endpoints are found and reachable without an account. One field shape is
 still unconfirmed.** These four share a platform, so finishing one finishes all four. Working
@@ -236,49 +236,45 @@ So one prematch pick is:
 `GameId` is the feed's `I` (not `CI`), `Type` is the outcome's `T` and `Coef` its `C`, all from
 `LineFeed/GetGameZip`. `Kind` is 3 for a prematch bet, 1 for live.
 
-### What is left: two things, not one
+### What is left: one thing
 
-**1. One verified booking.** Save a code with the body above, read it back with
-`GetCoupon {"guid":"<code>","CfView":0,"Lng":"en"}`. If the picks come back, booking works.
+Everything except booking is built and verified. `lib/bookmakers/live/onex.ts` serves all four
+bookmakers; `tests/bookmakers/onex-real.test.ts` checks it against the real feeds:
+
+- **Fixtures and odds — verified.** `LineFeed/Get1x2_VZip?sports=1&count=N&lng=en&mode=4` returns
+  fixtures with markets priced inline. One run: 1xBet 50 fixtures / 628 mapped offers across five
+  market types; PariPesa and 22Bet 398 each. Adding `country` or `partner` to that call makes it
+  answer 406 — keep to those four params.
+- **One event's full market list — verified.** `LineFeed/GetGameZip?id={constId}&lng=en&cfView=0`.
+- **Reading and booking codes — written, not verified.** `GetCoupon` and `SaveCoupon` are
+  implemented against the shape from the platform's own serializer, but no code has been created and
+  read back. The four adapters therefore declare `loadCode: false, createCode: false`, so nothing
+  reaches a user, and a test pins that.
+
+**The one step left.** Create a code and read it back:
+
+```bash
+EV='{"GameId":<feed id I>,"Type":1,"Coef":1.22,"Param":0,"PV":null,"PlayerId":0,
+     "Kind":3,"InstrumentId":0,"Seconds":0,"Price":0,"Expired":0}'
+curl -s -X POST -H 'Content-Type: application/json' -H 'Referer: https://1xbet.com.gh/en/user/coupon' \
+  -d "{\"Events\":[$EV],\"Lng\":\"en\"}" \
+  https://1xbet.com.gh/service-api/LiveBet/Open/SaveCoupon
+# then, with the code it prints:
+curl -s -X POST -H 'Content-Type: application/json' -H 'Referer: https://1xbet.com.gh/en/user/coupon' \
+  -d '{"guid":"<code>","CfView":0,"Lng":"en"}' \
+  https://1xbet.com.gh/service-api/LiveBet/Open/GetCoupon
+```
+
+If the pick comes back, set `loadCode` and `createCode` to `true` in the four adapters and add
+`ONEXBET_MODE`, `PARIPESA_MODE`, `TWENTYTWOBET_MODE` and `BETWINNER_MODE` as `live`. Nothing else
+needs writing.
 
 That check was not run from here: sending bet-slip POSTs to a third party is blocked as attack-like
-traffic, and the block is right — earlier rounds of trying shapes are exactly what it exists to stop.
-Run those two requests yourself, or capture the `UpdateCoupon` body from DevTools, and paste either.
+traffic, and the block is right — the earlier rounds of trying shapes are what it exists to stop.
 
-**2. ~~A market dictionary~~ — done, by a different route.** This platform ships numeric ids with no
-labels (`{"T":1,"C":1.22,"G":1}`), and the names come from a translations service, so there was
-nothing to read them off. But gameclaw writes its own labels anyway ("Over 2.5 goals"), so what was
-actually needed was a mapping to our market model, not their display names.
-
-That was derived without sending them anything:
-
-- **Structure** from the platform's own table in its betting bundle, which declares which outcome
-  types make up each group: `vn = {1:[1,2,3], 2:[7,8], 8:[4,5,6], 14:[182,183], 15:[11,12],
-  17:[9,10], 62:[13,14], ...}`
-- **Meaning** by comparing one fixture against a bookmaker that *does* label its data, at the same
-  moment, and against the platform's own arithmetic — double chance `12` must price at
-  `1/(1/1.22 + 1/14.70) = 1.126` from its own 1X2, and `T5` was `1.12`.
-
-Verified, in `lib/bookmakers/formats/onex-format.ts`, re-checked against live data by
-`tests/bookmakers/onex-format-real.test.ts`:
-
-| Group | Types | Market | Corroboration (Germany v Serbia, 1xBet vs SportyBet) |
-|---|---|---|---|
-| `G1` | 1/2/3 | 1X2 | 1.22 / 6.95 / 14.70 vs 1.20 / 8.32 / 14.41 |
-| `G8` | 4/5/6 | Double chance | self-consistent with its own 1X2 (above) |
-| `G17` | 9/10 + `P` | Over/Under | brackets SportyBet's 2.0 and 3.0 lines |
-| `G14` | 182/183 | Both teams to score | 1.83 / 1.87 vs 1.87 / 1.94 |
-| `G2` | 7/8 + `P` | Asian handicap | T7 gives, T8 receives |
-| `G15` | 11/12 + `P` | Home team total | 1.22 / 1.65 vs 1.21 / 1.66 |
-| `G62` | 13/14 + `P` | Away team total | 1.80 / 4.40 vs 1.78 / 4.90 |
-
-One trap: **the handicap line is written from each side's own perspective** — `T7 P-1` and `T8 P+1`
-are the same bet — while ours is always home-relative. Mapping that wrong books the opposite
-handicap, so the away side's line is negated and a test pins it.
-
-Over 200 groups exist on a fixture. Everything not in that table maps to `null` rather than a guess,
-and the earlier mock had guessed four of seven wrong (it had both-teams-to-score as `G19`/`T180`;
-it is `G14`/`T182`), which is why nothing here is accepted without corroboration.
+> **No per-outcome probability.** Unlike SportyBet, this platform publishes none, so offers carry
+> `probability: null` and the AI slip builder skips them. These four are for loading and converting
+> codes, not for building slips.
 
 ## Priority order
 

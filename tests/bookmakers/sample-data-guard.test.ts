@@ -99,6 +99,9 @@ describe("convert targets", () => {
     vi.stubEnv("MSPORT_MODE", "live");
     vi.stubEnv("FOOTBALLCOM_MODE", "live");
     const { getAdapter } = await registry();
+    // Enabling price reading on the 1xBet-platform bookmakers must not make them convert targets.
+    vi.stubEnv("ONEXBET_MODE", "live");
+    vi.stubEnv("PARIPESA_MODE", "live");
     const bookable = BOOKMAKER_SLUGS.filter((s) => getAdapter(s).capabilities.createCode);
     // Order follows BOOKMAKER_SLUGS, not the order they were connected in.
     expect(bookable).toEqual(["sportybet", "msport", "footballcom"]);
