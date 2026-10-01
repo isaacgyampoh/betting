@@ -11,11 +11,16 @@ import { AUTO, BookmakerPicker, type BookmakerOption } from "./bookmaker-picker"
 import { SlipView } from "./slip-view";
 import { CodeInput, SlipSkeleton } from "./slip-workspace";
 
-export function ConvertWorkspace({ bookmakers, source }: { bookmakers: BookmakerOption[]; source: Slip | null }) {
+type ConvertBookmaker = BookmakerOption & { canLoad: boolean; canBook: boolean };
+
+export function ConvertWorkspace({ bookmakers, source }: { bookmakers: ConvertBookmaker[]; source: Slip | null }) {
   const [useSource, setUseSource] = useState(source !== null);
   const [from, setFrom] = useState(source?.bookmaker.slug ?? AUTO);
   const [code, setCode] = useState("");
-  const firstOther = (slug: string) => bookmakers.find((b) => b.slug !== slug)?.slug ?? "";
+  // Converting *to* a bookmaker needs us to be able to book there.
+  const targets = bookmakers.map((b) => ({ ...b, available: b.canBook }));
+  const sources = bookmakers.map((b) => ({ ...b, available: b.canLoad }));
+  const firstOther = (slug: string) => targets.find((b) => b.slug !== slug && b.canBook)?.slug ?? "";
   const [to, setTo] = useState(firstOther(source?.bookmaker.slug ?? "sportybet"));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
@@ -68,7 +73,7 @@ export function ConvertWorkspace({ bookmakers, source }: { bookmakers: Bookmaker
           </div>
         ) : (
           <>
-            <BookmakerPicker label="From" options={bookmakers} value={from} onChange={pickFrom} withAuto />
+            <BookmakerPicker label="From" options={sources} value={from} onChange={pickFrom} withAuto />
             <CodeInput value={code} onChange={setCode} />
           </>
         )}
@@ -77,7 +82,7 @@ export function ConvertWorkspace({ bookmakers, source }: { bookmakers: Bookmaker
           <ArrowDown className="size-5" />
         </div>
 
-        <BookmakerPicker label="To" options={bookmakers} value={to} onChange={setTo} disabledSlug={fromSlug} />
+        <BookmakerPicker label="To" options={targets} value={to} onChange={setTo} disabledSlug={fromSlug} />
 
         <Button type="submit" size="lg" className="h-11 w-full" disabled={pending || !canSubmit}>
           {pending && <Loader2 className="animate-spin" data-icon="inline-start" />}

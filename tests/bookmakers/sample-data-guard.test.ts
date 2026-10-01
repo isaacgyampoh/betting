@@ -88,3 +88,19 @@ describe("in production, an unconnected bookmaker serves nothing", () => {
     expect(connectedBookmakers()).toEqual([]);
   });
 });
+
+// The convert UI must never offer a bookmaker we cannot book at: the request would reach the
+// adapter and fail after the user had already chosen it.
+describe("convert targets", () => {
+  it("offers only bookmakers we can really book at", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("ALLOW_SAMPLE_DATA", "0");
+    vi.stubEnv("SPORTYBET_MODE", "live");
+    vi.stubEnv("MSPORT_MODE", "live");
+    const { getAdapter } = await registry();
+    const bookable = BOOKMAKER_SLUGS.filter((s) => getAdapter(s).capabilities.createCode);
+    expect(bookable).toEqual(["sportybet", "msport"]);
+    // And every bookmaker we can book at, we can also read from: a one-way conversion is useless.
+    for (const slug of bookable) expect(getAdapter(slug).capabilities.loadCode, slug).toBe(true);
+  });
+});
