@@ -304,6 +304,7 @@ enum SlipKind {
   CONVERTED // produced by converting another slip
   EDITED // result of remove / trim / safest-N
   SPLIT // one part of a split
+  BUILT // built from today's fixtures rather than from an existing slip
 }
 
 model Slip {

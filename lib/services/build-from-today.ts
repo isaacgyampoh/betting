@@ -19,6 +19,9 @@ import {
   type PickCandidate,
 } from "@/lib/slips/fixture-picks";
 import { enrich, pickKey, rankByEvidence, reasonWithEvidence, statsBlocked, withoutContradicted } from "@/lib/slips/enrich";
+import { requireEnabledBookmaker } from "@/lib/services/bookmakers";
+import { saveSlip, toSlipView, withLogos, type DraftSelection } from "@/lib/services/slips";
+import type { SlipView } from "@/lib/slips/view";
 
 // "Make me a 5 odds for today": a slip built from a bookmaker's own live fixtures and prices,
 // rather than from a slip the user already has, and booked so the user gets a real code to paste.
@@ -43,6 +46,12 @@ export type Research = {
 };
 
 export type TodaySlip = {
+  /**
+   * The saved slip, so the app can show it as a card with its code, games and prices. Without this
+   * the booking code exists at the bookmaker but never reaches the user, which makes the whole
+   * thing pointless.
+   */
+  slip: SlipView;
   bookmaker: { slug: string; name: string };
   /** The booking code at the bookmaker, or null when it couldn't be booked. */
   code: string | null;
@@ -211,7 +220,33 @@ export async function buildFromToday(opts: {
     meta: { op: "today", target, reached: slip.reachedTarget, games: slip.picks.length, bookmaker: source.slug, booked: code !== null },
   });
 
+  // Save it so the reply carries a slip card: the code, each game and the prices.
+  const row = await requireEnabledBookmaker(source.slug);
+  const drafts: DraftSelection[] = slip.picks.map((p, i) => ({
+    position: i + 1,
+    event: {
+      externalId: p.event.externalId,
+      home: p.event.home,
+      away: p.event.away,
+      kickoffAt: p.event.kickoffAt,
+      competition: p.event.competition,
+    },
+    market: p.market,
+    odds: p.odds,
+    raw: p.raw,
+    status: "OK",
+  }));
+  const saved = await saveSlip({
+    userId: user.id,
+    bookmakerId: row.id,
+    kind: "BUILT",
+    code,
+    expiresAt,
+    selections: drafts,
+  });
+
   return {
+    slip: await withLogos(toSlipView(saved)),
     bookmaker: { slug: source.slug, name: source.name },
     code,
     expiresAt: expiresAt?.toISOString() ?? null,

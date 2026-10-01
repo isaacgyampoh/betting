@@ -269,7 +269,11 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
         window,
         exclude: i.exclude,
       });
+      // Show it as a card, so the booking code and prices reach the user instead of only existing
+      // at the bookmaker.
+      remember(ctx, built.slip);
       return {
+        ...compactSlip(built.slip),
         built: true,
         bookmaker: built.bookmaker.name,
         target: built.target,
