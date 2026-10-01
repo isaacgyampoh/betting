@@ -78,6 +78,10 @@ export async function listMatches(date: string): Promise<{ groups: LeagueGroup[]
  * @param dateHint kickoff date (YYYY-MM-DD) when known (from a match list or search): the fixture is
  *   then read from that day's cached list instead of costing another API request.
  */
+/** How much history we pull per team, and per head-to-head. */
+export const FORM_GAMES = 10;
+export const H2H_GAMES = 6;
+
 export async function getMatchDetail(user: AuthUser, fixtureId: number, dateHint?: string): Promise<MatchDetail> {
   await enforceRateLimit({ userId: user.id, kind: "STATS", ...STATS_LIMIT });
   const provider = statsProvider();
@@ -113,9 +117,11 @@ export async function getMatchDetail(user: AuthUser, fixtureId: number, dateHint
   };
 
   const [homeLast, awayLast, h2h, standings] = await Promise.all([
-    section("form", () => provider.lastFixtures(match.home.id, 5), []),
-    section("form", () => provider.lastFixtures(match.away.id, 5), []),
-    section("h2h", () => provider.headToHead(match.home.id, match.away.id, 5), []),
+    // Ten games, not five: "9 of 10" is far stronger evidence than "4 of 5", and a home/away split
+    // of five leaves only two or three games a side, which says almost nothing.
+    section("form", () => provider.lastFixtures(match.home.id, FORM_GAMES), []),
+    section("form", () => provider.lastFixtures(match.away.id, FORM_GAMES), []),
+    section("h2h", () => provider.headToHead(match.home.id, match.away.id, H2H_GAMES), []),
     section("standings", () => provider.standings(match.league.id, match.league.season), null),
   ]);
 

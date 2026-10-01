@@ -39,7 +39,7 @@ Assuming a fairly heavy user, 20 active days a month:
 |---|---|---|---|
 | Cloudflare Workers | Paid | $5 | now (required: the Worker is 4.9 MB) |
 | Supabase | Free → Pro | $0 → $25 | Pro at roughly 300–500 active users, for backups and connection limits |
-| API-Football | Free → Pro | $0 → ~$39 | Pro unlocks form, tables and injuries: needed for good picks |
+| API-Football | **Pro (active)** | ~$39 | Already paid. Unlocks the form, head-to-head and tables the pick reasons are built from |
 | Resend | Free → Pro | $0 → $20 | Free covers 3,000 emails/month, about 1,500 sign-ins |
 | Domain | — | ~$1 | now |
 | **Total now** | | **$6** | |

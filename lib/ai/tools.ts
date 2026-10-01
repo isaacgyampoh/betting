@@ -10,6 +10,7 @@ import { analyzeMatch } from "@/lib/ai/analysis";
 import { compactMatch, compactMatchDetail, compactSlip } from "@/lib/ai/compact";
 import { buildToTarget } from "@/lib/services/build-slip";
 import { buildFromToday } from "@/lib/services/build-from-today";
+import { getSlipResults } from "@/lib/services/slip-results";
 import { convertSlip } from "@/lib/services/convert";
 import { editSlip } from "@/lib/services/edit";
 import { getSlip, listRecentSlips, loadSlip } from "@/lib/services/slips";
@@ -40,8 +41,22 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "build_slip_from_fixtures",
     description:
-      "Build a slip from today's real fixtures when the user has no slip ('make me a 5 odds for today', 'give me 2 odds'). Returns each pick with its market, the bookmaker's own odds and estimated chance, and a one-line reason. Check `bookable`: when false, tell the user to add the picks at the bookmaker themselves.",
-    input_schema: { type: "object", properties: { target: { type: "number" }, date: { type: "string" } }, required: ["target"] },
+      "Build a slip from real fixtures when the user has no slip ('make me a 5 odds for today', 'safe 5 odds from tonight's games'). Researches recent results before choosing, and returns each pick with its market, the bookmaker's own odds, an estimated chance and a reason citing real counts. Use from_hours/to_hours for a time window the user names (e.g. midnight games tonight = from_hours 2, to_hours 8). Report `research` so the user sees what was looked at, and check `bookable`.",
+    input_schema: {
+      type: "object",
+      properties: {
+        target: { type: "number" },
+        from_hours: { type: "number", description: "Window starts this many hours from now" },
+        to_hours: { type: "number", description: "Window ends this many hours from now" },
+      },
+      required: ["target"],
+    },
+  },
+  {
+    name: "check_slip_results",
+    description:
+      "How a saved slip is doing: live scores, which legs have won, lost or are still running. Use for 'results so far', 'how is my ticket', 'did it win'. Needs slip_id from an earlier tool. Legs we can't settle from a score (corners, cards, first-half lines) come back as UNKNOWN: say so rather than guessing.",
+    input_schema: { type: "object", properties: { slip_id: { type: "string" } }, required: ["slip_id"] },
   },
   {
     name: "convert_slip",
@@ -123,7 +138,12 @@ const SCHEMAS = {
     parts: z.number().int().min(2).max(10).optional(),
   }),
   get_slip: z.object({ slip_id: uuid }),
-  build_slip_from_fixtures: z.object({ target: z.number().min(1.01).max(100_000), date: z.iso.date().optional() }),
+  build_slip_from_fixtures: z.object({
+    target: z.number().min(1.01).max(100_000),
+    from_hours: z.number().min(0).max(168).optional(),
+    to_hours: z.number().min(0).max(168).optional(),
+  }),
+  check_slip_results: z.object({ slip_id: uuid }),
   build_target_slip: z.object({ slip_id: uuid, target: z.number().min(1.01).max(100_000), max_games: z.number().int().min(1).max(12).optional() }),
   list_recent_slips: z.object({}),
   find_matches: z.object({ team: z.string().min(2).max(60), opponent: z.string().max(60).optional() }),
@@ -214,9 +234,34 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
       // compactSlip flags any slip that couldn't be booked, so the shape stays a plain array.
       return slips.map(compactSlip);
     }
+    case "check_slip_results": {
+      const r = await getSlipResults(user, (input as { slip_id: string }).slip_id);
+      return {
+        code: r.code,
+        bookmaker: r.bookmaker,
+        total_odds: r.totalOdds,
+        state: r.state,
+        won: r.won,
+        lost: r.lost,
+        running: r.running,
+        cannot_check: r.unknown,
+        legs: r.legs.map((l) => ({ pos: l.position, game: l.game, pick: l.pick, state: l.state, score: l.score, clock: l.clock, note: l.note })),
+      };
+    }
     case "build_slip_from_fixtures": {
       const i = input as z.infer<(typeof SCHEMAS)["build_slip_from_fixtures"]>;
-      const built = await buildFromToday({ user, ipHash, target: i.target });
+      const hour = 3_600_000;
+      const window =
+        i.from_hours !== undefined || i.to_hours !== undefined
+          ? { from: new Date(Date.now() + (i.from_hours ?? 0) * hour), to: new Date(Date.now() + (i.to_hours ?? 24) * hour) }
+          : undefined;
+      const built = await buildFromToday({
+        user,
+        ipHash,
+        target: i.target,
+        hours: window ? Math.ceil((window.to.getTime() - Date.now()) / hour) : undefined,
+        window,
+      });
       return {
         built: true,
         bookmaker: built.bookmaker.name,
@@ -240,6 +285,15 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
         expires: built.expiresAt,
         bookable: built.bookable,
         booking_note: built.bookingNote,
+        research: {
+          fixtures_scanned: built.research.fixturesScanned,
+          researched_with_stats: built.research.researched,
+          had_history: built.research.withHistory,
+          left_out_on_recent_form: built.research.droppedOnStats,
+          ...(built.research.formUnavailable
+            ? { form_unavailable: "Recent-form data wasn't available, so these picks rest on the bookmaker's prices. Tell the user that." }
+            : {}),
+        },
       };
     }
     case "build_target_slip": {

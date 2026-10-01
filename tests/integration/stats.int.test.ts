@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { createApiFootballProvider, StatsPlanLimitError, StatsRateLimitError } from "@/lib/stats/api-football";
 import { sampleStatsProvider } from "@/lib/stats/sample";
-import { getMatchDetail, listMatches, lookupMatch } from "@/lib/services/stats";
+import { FORM_GAMES, getMatchDetail, listMatches, lookupMatch } from "@/lib/services/stats";
 import { createSportyBetAdapter } from "@/lib/bookmakers/sportybet";
 import { createUser } from "./helpers";
 
@@ -44,27 +44,62 @@ describe("API-Football client caching", () => {
   });
 });
 
-describe("API-Football plan limits (Free plan)", () => {
-  it("raises StatsPlanLimitError, caches it for a day, and doesn't call the API again", async () => {
-    await db.statsCache.deleteMany();
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ errors: { plan: "Free plans do not have access to the Last parameter." }, response: [] })),
-    );
+describe("API-Football plan limits", () => {
+  const PLAN_ERROR = { errors: { plan: "Free plans do not have access to the Last parameter." }, response: [] };
+
+  /** Answers /status with the given plan, and every other endpoint with a plan error. */
+  function mockApi(plan: string | null) {
+    const calls: string[] = [];
+    const fetchMock = vi.fn(async (url: string) => {
+      calls.push(url);
+      if (url.includes("/status")) {
+        return new Response(JSON.stringify({ response: { subscription: { plan, active: true } } }));
+      }
+      return new Response(JSON.stringify(PLAN_ERROR));
+    });
     vi.stubGlobal("fetch", fetchMock);
+    // /status does not count against the daily quota, so only data calls are worth counting.
+    return { fetchMock, dataCalls: () => calls.filter((u) => !u.includes("/status")) };
+  }
+
+  it("raises StatsPlanLimitError and doesn't ask the API for that data again", async () => {
+    await db.statsCache.deleteMany();
+    const { dataCalls } = mockApi("Free");
     const provider = createApiFootballProvider("k");
     await expect(provider.lastFixtures(33, 5)).rejects.toBeInstanceOf(StatsPlanLimitError);
     await expect(provider.lastFixtures(33, 5)).rejects.toBeInstanceOf(StatsPlanLimitError);
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(dataCalls()).toHaveLength(1);
   });
 
   it("remembers a plan gap for every team, not just the one that was asked", async () => {
     await db.statsCache.deleteMany();
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ errors: { plan: "Free plans do not have access to the Last parameter." }, response: [] })));
-    vi.stubGlobal("fetch", fetchMock);
+    const { dataCalls } = mockApi("Free");
     const provider = createApiFootballProvider("k");
     await expect(provider.lastFixtures(33, 5)).rejects.toBeInstanceOf(StatsPlanLimitError);
     await expect(provider.lastFixtures(47, 5)).rejects.toBeInstanceOf(StatsPlanLimitError); // different team
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(dataCalls()).toHaveLength(1);
+  });
+
+  // Upgrading the plan has to take effect at once. Leaving a recorded limit in place meant paying
+  // for a plan and still getting no stats until the marker expired.
+  it("clears a recorded limit once the subscription has changed", async () => {
+    await db.statsCache.deleteMany();
+    mockApi("Free");
+    const onFree = createApiFootballProvider("k");
+    await expect(onFree.lastFixtures(33, 5)).rejects.toBeInstanceOf(StatsPlanLimitError);
+    expect(await db.statsCache.count({ where: { key: "capability:fixtures-last" } })).toBe(1);
+
+    // Same key, now on Pro: the limit must be forgotten and the data fetched again.
+    await db.statsCache.deleteMany({ where: { key: "apifootball:plan" } }); // plan name is cached briefly
+    const fixtures = { response: [{ fixture: { id: 7, date: "2026-10-01T12:00:00+00:00", status: { short: "NS", long: "Not Started", elapsed: null } }, league: { id: 1, name: "L", country: "C", logo: null, season: 2026 }, teams: { home: { id: 33, name: "Arsenal", logo: null }, away: { id: 47, name: "Spurs", logo: null } }, goals: { home: null, away: null } }] };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+      url.includes("/status")
+        ? new Response(JSON.stringify({ response: { subscription: { plan: "Pro", active: true } } }))
+        : new Response(JSON.stringify(fixtures)),
+    ));
+    const onPro = createApiFootballProvider("k");
+    expect(await onPro.lastFixtures(33, 5)).toHaveLength(1);
+    expect(await db.statsCache.count({ where: { key: "capability:fixtures-last" } })).toBe(0);
   });
 
   it("per-minute rate limit: busy error with nothing cached, stale data when cached", async () => {
@@ -114,7 +149,7 @@ describe("stats service (sample provider)", () => {
 
     const detail = await getMatchDetail(user, match!.id);
     expect(detail.source).toBe("sample");
-    expect(detail.form.home.matches).toHaveLength(5);
+    expect(detail.form.home.matches).toHaveLength(FORM_GAMES);
     expect(detail.h2h.length).toBeGreaterThan(0);
     expect(detail.standings?.some((r) => r.team.id === match!.home.id)).toBe(true);
   });

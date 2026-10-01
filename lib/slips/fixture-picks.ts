@@ -248,19 +248,11 @@ const BANDS: [number, number][] = [
 ];
 
 /**
- * Chooses a varied shortlist and then the combination that reaches `target` with the best estimated
- * chance. Variety is enforced before the search, not after, so the result is the best *varied* slip
- * rather than the best slip with variety bolted on.
+ * A varied shortlist: one pick per fixture, a capped number per market group, and spread across
+ * price bands so both small and large targets are reachable. Exported so recent-results research can
+ * run over exactly this set before a slip is chosen from it.
  */
-export function buildFromFixtures(
-  candidates: PickCandidate[],
-  target: number,
-  opts: { maxPicks?: number; bookmakerName?: string; shortlist?: number } = {},
-): FixtureSlip | null {
-  const { maxPicks = legsForTarget(target), bookmakerName = "The bookmaker", shortlist = 18 } = opts;
-
-  // Fill the pool round-robin across price bands, strongest first within each, taking at most one
-  // pick per fixture and a capped number per market group.
+export function shortlistCandidates(candidates: PickCandidate[], shortlist = 18): PickCandidate[] {
   const byBand = BANDS.map(([lo, hi]) =>
     candidates.filter((c) => c.probability >= lo && c.probability < hi).sort((a, b) => b.probability - a.probability),
   );
@@ -287,6 +279,24 @@ export function buildFromFixtures(
       }
     }
   }
+  return pool;
+}
+
+/**
+ * Chooses a varied shortlist and then the combination that reaches `target` with the best estimated
+ * chance. Variety is enforced before the search, not after, so the result is the best *varied* slip
+ * rather than the best slip with variety bolted on.
+ *
+ * Pass `preShortlisted` when the caller has already narrowed and filtered the set (for example after
+ * dropping picks that recent results argue against), so it is not narrowed twice.
+ */
+export function buildFromFixtures(
+  candidates: PickCandidate[],
+  target: number,
+  opts: { maxPicks?: number; bookmakerName?: string; shortlist?: number; preShortlisted?: boolean } = {},
+): FixtureSlip | null {
+  const { maxPicks = legsForTarget(target), bookmakerName = "The bookmaker", shortlist = 18, preShortlisted = false } = opts;
+  const pool = preShortlisted ? candidates.slice(0, shortlist) : shortlistCandidates(candidates, shortlist);
   if (!pool.length) return null;
 
   const scored: Candidate[] = pool.map((c, i) => ({ position: i, odds: c.odds, bookmakerProbability: c.probability }));

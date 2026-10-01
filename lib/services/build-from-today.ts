@@ -7,7 +7,8 @@ import { logger } from "@/lib/logger";
 import { requireFeature } from "@/lib/services/ai-quota";
 import { enforceRateLimit, logUsage } from "@/lib/services/usage";
 import { BUILD_LIMIT } from "@/lib/services/build-slip";
-import { buildFromFixtures, toCandidates, type FixtureSlip } from "@/lib/slips/fixture-picks";
+import { buildFromFixtures, reasonFor, shortlistCandidates, toCandidates, type FixtureSlip } from "@/lib/slips/fixture-picks";
+import { enrich, rankByEvidence, reasonWithEvidence, statsBlocked, withoutContradicted } from "@/lib/slips/enrich";
 
 // "Make me a 5 odds for today": a slip built from a bookmaker's own live fixtures and prices,
 // rather than from a slip the user already has, and booked so the user gets a real code to paste.
@@ -15,6 +16,19 @@ import { buildFromFixtures, toCandidates, type FixtureSlip } from "@/lib/slips/f
 // Picks are booked by their raw market ids, because the varied markets this deliberately reaches
 // for (corners, cards, fouls) have no internal market type. If the bookmaker cannot book, the picks
 // are still returned with a note to add them by hand rather than failing the whole request.
+
+export type Research = {
+  /** Fixtures the bookmaker had prices for in the window. */
+  fixturesScanned: number;
+  /** Picks we looked up recent results for. */
+  researched: number;
+  /** Of those, how many had history covering that market. */
+  withHistory: number;
+  /** Picks the price liked but recent results argued against, so they were left out. */
+  droppedOnStats: { game: string; pick: string; why: string }[];
+  /** Set when recent form was unavailable to us, so the picks rest on prices alone. Say so. */
+  formUnavailable: boolean;
+};
 
 export type TodaySlip = {
   bookmaker: { slug: string; name: string };
@@ -42,9 +56,17 @@ export type TodaySlip = {
   /** Whether we can turn this into a booking code at the bookmaker yet. */
   bookable: boolean;
   bookingNote: string;
+  /** What was looked at to get here, so the user can judge the work rather than trust it. */
+  research: Research;
 };
 
 /** The first bookmaker that can really list fixtures with prices. */
+/** How many shortlisted picks we look up recent results for. Bounded: stats cost API requests. */
+const STATS_BUDGET = 12;
+
+const pickKey = (p: { event: { externalId: string }; raw: { marketId: string; outcomeId: string; specifier: string } }) =>
+  `${p.event.externalId}|${p.raw.marketId}|${p.raw.outcomeId}|${p.raw.specifier}`;
+
 export function priceSource(): BookmakerAdapter | null {
   return BOOKMAKER_SLUGS.map(getAdapter).find((a) => a.mode === "live" && a.capabilities.events) ?? null;
 }
@@ -55,8 +77,10 @@ export async function buildFromToday(opts: {
   ipHash: string | null;
   /** How far ahead to look. A day by default: "today" to a bettor means today's card. */
   hours?: number;
+  /** Only fixtures kicking off inside this window, for "tonight's games" or "morning games". */
+  window?: { from: Date; to: Date };
 }): Promise<TodaySlip> {
-  const { user, target, ipHash, hours = 24 } = opts;
+  const { user, target, ipHash, hours = 24, window } = opts;
   if (!(target > 1)) throw new AppError("BAD_REQUEST", "Give a target total odds above 1.0.");
 
   const source = priceSource();
@@ -78,16 +102,50 @@ export async function buildFromToday(opts: {
     throw new AppError("BOOKMAKER_UNAVAILABLE", `We couldn't read ${source.name}'s fixtures just now. Please try again in a moment.`);
   });
 
-  const candidates = toCandidates(fixtures);
+  const inWindow = window
+    ? fixtures.filter((f) => f.event.kickoffAt >= window.from && f.event.kickoffAt <= window.to)
+    : fixtures;
+  const candidates = toCandidates(inWindow);
   if (!candidates.length) {
     throw new AppError(
       "BOOKMAKER_UNAVAILABLE",
-      `${source.name} has no games in the next ${hours} hours we can build an honest slip from.`,
+      window
+        ? `${source.name} has no games in that time window we can build an honest slip from.`
+        : `${source.name} has no games in the next ${hours} hours we can build an honest slip from.`,
     );
   }
 
-  const slip = buildFromFixtures(candidates, target, { bookmakerName: source.name });
+  // Research the shortlist before choosing, so recent results can veto a pick the price liked —
+  // rather than being written up afterwards to justify whatever the price picked.
+  const pool = shortlistCandidates(candidates);
+  const researched = await enrich(user, pool, STATS_BUDGET);
+  const { kept, dropped } = withoutContradicted(researched);
+  const ranked = rankByEvidence(kept);
+
+  const slip = buildFromFixtures(ranked.length ? ranked : pool, target, {
+    bookmakerName: source.name,
+    preShortlisted: true,
+  });
   if (!slip) throw new AppError("BAD_REQUEST", "We couldn't build a slip from today's games.");
+
+  // Carry each chosen pick's research back onto it.
+  const byKey = new Map(researched.map((p) => [pickKey(p), p]));
+  const reasons = slip.picks.map((p) => {
+    const found = byKey.get(pickKey(p));
+    return reasonWithEvidence({ ...p, evidence: found?.evidence ?? null, gap: found?.gap ?? "none" }, reasonFor(p, source.name));
+  });
+
+  const research: Research = {
+    fixturesScanned: inWindow.length,
+    researched: Math.min(pool.length, STATS_BUDGET),
+    withHistory: researched.filter((p) => p.evidence).length,
+    droppedOnStats: dropped.map((p) => ({
+      game: `${p.event.home} v ${p.event.away}`,
+      pick: p.label,
+      why: p.evidence!.text,
+    })),
+    formUnavailable: statsBlocked(researched),
+  };
 
   // Book it, so the user gets a code rather than a list to retype. A booking failure must not lose
   // the picks: they are real either way, so fall back to "add these yourself".
@@ -122,7 +180,8 @@ export async function buildFromToday(opts: {
     totalOdds: slip.totalOdds,
     chance: slip.chance,
     confidence: slip.confidence,
-    picks: slip.picks.map((p) => ({
+    research,
+    picks: slip.picks.map((p, i) => ({
       position: p.position,
       home: p.event.home,
       away: p.event.away,
@@ -132,7 +191,7 @@ export async function buildFromToday(opts: {
       pickLabel: p.label,
       odds: p.odds,
       probability: p.probability,
-      reason: p.reason,
+      reason: reasons[i],
     })),
     bookable: code !== null,
     bookingNote: code

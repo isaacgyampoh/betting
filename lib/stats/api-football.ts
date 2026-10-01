@@ -30,6 +30,11 @@ export class StatsRateLimitError extends Error {
 }
 
 const PLAN_LIMITED = "__plan_limited__";
+/** The plan in force when a limit was recorded, so an upgrade clears it instead of waiting it out. */
+const PLAN_AT = "__plan_at__";
+/** Backstop lifetime for a plan-limit marker. Short, because getting this wrong blocks all stats. */
+const PLAN_LIMIT_TTL_MS = 6 * 60 * 60_000;
+const PLAN_NAME_TTL_MS = 10 * 60_000;
 
 function cacheKey(endpoint: string, params: Params) {
   const sorted = Object.keys(params).sort().map((k) => `${k}=${params[k]}`).join("&");
@@ -72,18 +77,61 @@ export function toMatchSummary(f: ApiFixture): MatchSummary {
 }
 
 export function createApiFootballProvider(apiKey: string): StatsProvider {
+  /**
+   * The subscription's plan name, cached briefly. `/status` does not count against the daily quota,
+   * so this is cheap, and it is what lets an upgrade take effect immediately.
+   */
+  async function currentPlan(): Promise<string | null> {
+    const key = "apifootball:plan";
+    const hit = await db.statsCache.findUnique({ where: { key } }).catch(() => null);
+    if (hit && hit.expiresAt > new Date()) return ((hit.payload as { plan?: string }).plan ?? null) as string | null;
+    try {
+      const res = await fetch(`${BASE_URL}/status`, { headers: { "x-apisports-key": apiKey }, signal: AbortSignal.timeout(8_000), cache: "no-store" });
+      const body = (await res.json()) as { response?: { subscription?: { plan?: string; active?: boolean } } };
+      const sub = body.response?.subscription;
+      const plan = sub?.active === false ? `${sub.plan ?? "unknown"} (inactive)` : (sub?.plan ?? null);
+      await db.statsCache
+        .upsert({
+          where: { key },
+          create: { key, endpoint: "/status", params: {}, payload: { plan }, expiresAt: new Date(Date.now() + PLAN_NAME_TTL_MS) },
+          update: { payload: { plan }, expiresAt: new Date(Date.now() + PLAN_NAME_TTL_MS), fetchedAt: new Date() },
+        })
+        .catch(() => {});
+      return plan;
+    } catch {
+      return null; // Unknown plan: fall back to trusting the marker rather than hammering the API.
+    }
+  }
+
+  /**
+   * Whether a recorded plan limit still applies. It does not if the subscription has changed since
+   * it was recorded, so upgrading the plan takes effect at once rather than leaving stats dark until
+   * the marker expires. Markers written before this check existed carry no plan and are honoured.
+   */
+  async function planLimitStillApplies(key: string, marker: Record<string, unknown>, context: string): Promise<boolean> {
+    const recordedOn = marker[PLAN_AT];
+    if (typeof recordedOn !== "string") return true;
+    const plan = await currentPlan();
+    if (!plan || plan === recordedOn) return true;
+    logger.info("stats.plan_changed_clearing_limit", { context, was: recordedOn, now: plan });
+    await db.statsCache.delete({ where: { key } }).catch(() => {});
+    return false;
+  }
+
   /** A plan limit applies to a whole kind of query (e.g. every team's `last=` form), not one request. */
   async function capabilityBlocked(capability: string): Promise<void> {
-    const hit = await db.statsCache.findUnique({ where: { key: `capability:${capability}` } });
+    const key = `capability:${capability}`;
+    const hit = await db.statsCache.findUnique({ where: { key } });
     const marker = hit?.payload as Record<string, unknown> | undefined;
-    if (hit && hit.expiresAt > new Date() && marker && PLAN_LIMITED in marker) {
+    if (!hit || hit.expiresAt <= new Date() || !marker || !(PLAN_LIMITED in marker)) return;
+    if (await planLimitStillApplies(key, marker, capability)) {
       throw new StatsPlanLimitError(capability, String(marker[PLAN_LIMITED]));
     }
   }
 
   async function rememberPlanLimit(key: string, endpoint: string, params: Params, message: string) {
-    const marker = { [PLAN_LIMITED]: message } as unknown as Prisma.InputJsonValue;
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60_000);
+    const marker = { [PLAN_LIMITED]: message, [PLAN_AT]: await currentPlan() } as unknown as Prisma.InputJsonValue;
+    const expiresAt = new Date(Date.now() + PLAN_LIMIT_TTL_MS);
     await db.statsCache.upsert({
       where: { key },
       create: { key, endpoint, params, payload: marker, expiresAt },
@@ -98,9 +146,14 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
     if (hit && hit.expiresAt > new Date()) {
       const cached = hit.payload as unknown;
       if (cached && typeof cached === "object" && PLAN_LIMITED in cached) {
-        throw new StatsPlanLimitError(endpoint, String((cached as Record<string, unknown>)[PLAN_LIMITED]));
+        const marker = cached as Record<string, unknown>;
+        // Same rule as the capability marker: a limit recorded on an older plan no longer binds.
+        if (await planLimitStillApplies(key, marker, endpoint)) {
+          throw new StatsPlanLimitError(endpoint, String(marker[PLAN_LIMITED]));
+        }
+      } else {
+        return cached as T[];
       }
-      return cached as T[];
     }
 
     const url = `${BASE_URL}${endpoint}?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`;
