@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeftRight, ArrowRight, Scissors, Sparkles } from "lucide-react";
+import { Bookmakers } from "@/components/landing/bookmakers";
+import { HowItWorks } from "@/components/landing/how-it-works";
 import { InstallGuide } from "@/components/landing/install-guide";
+import { ProblemFix } from "@/components/landing/problem-fix";
 import { PhoneDemo } from "@/components/landing/phone-demo";
 import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
@@ -89,6 +92,12 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      <ProblemFix />
+
+      <HowItWorks />
+
+      <Bookmakers />
 
       <section aria-labelledby="record" className="space-y-3">
         <div className="flex items-baseline justify-between gap-3">
