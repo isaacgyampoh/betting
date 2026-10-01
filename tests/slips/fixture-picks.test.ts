@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFromFixtures,
+  classifyFixture,
   describeOffer,
   legsForTarget,
   reasonFor,
@@ -99,6 +100,7 @@ describe("toCandidates", () => {
 describe("reasonFor", () => {
   const base = (over: Partial<PickCandidate>): PickCandidate => ({
     event: event(1),
+    kind: "standard",
     raw: raw("29", "74"),
     market: null,
     odds: 1.7,
@@ -195,5 +197,71 @@ describe("buildFromFixtures", () => {
     expect(slip.probability).toBeLessThan(1);
     expect(slip.chance).toMatch(/chance|likely/);
     expect(["low", "medium", "high"]).toContain(slip.confidence);
+  });
+});
+
+describe("classifyFixture", () => {
+  const ev = (competition: string | null, home = "A", away = "B") => ({ competition, home, away });
+
+  it.each([
+    ["Int. Friendly Games", "friendly"],
+    ["Club Friendlies", "friendly"],
+    ["International Friendly", "friendly"],
+  ])("treats %s as a friendly", (comp, kind) => {
+    expect(classifyFixture(ev(comp))).toBe(kind);
+  });
+
+  it("spots women's football from the competition or the team names", () => {
+    expect(classifyFixture(ev("UEFA Women's Champions League"))).toBe("womens");
+    expect(classifyFixture(ev("Damallsvenskan"))).toBe("womens");
+    expect(classifyFixture(ev("Some Cup", "Hacken Gothenburg W", "Juventus Turin W"))).toBe("womens");
+    // A single trailing W isn't enough: plenty of men's clubs end in a W-word.
+    expect(classifyFixture(ev("Premier League", "Wolves W", "Arsenal"))).toBe("standard");
+  });
+
+  it("spots youth football", () => {
+    expect(classifyFixture(ev("Primera Division U20"))).toBe("youth");
+    expect(classifyFixture(ev("Some League", "CD Aguila", "Inter Santa Tecla U20"))).toBe("youth");
+    expect(classifyFixture(ev("Campeonato Juniores"))).toBe("youth");
+    expect(classifyFixture(ev("Premier League 2 Youth"))).toBe("youth");
+    expect(classifyFixture(ev("Liga Primavera"))).toBe("youth");
+  });
+
+  it("leaves ordinary league football alone", () => {
+    expect(classifyFixture(ev("UEFA Nations League", "Germany", "Serbia"))).toBe("standard");
+    expect(classifyFixture(ev("LALIGA HYPERMOTION"))).toBe("standard");
+    expect(classifyFixture(ev(null, "Kotoko", "Hearts of Oak"))).toBe("standard");
+  });
+
+  it("doesn't mistake a senior club whose name contains a youth word", () => {
+    // Atletico Junior is a senior Colombian club; words like Junior and Academy only count in a
+    // competition name. An explicit age bracket is unambiguous anywhere.
+    expect(classifyFixture(ev("Serie A", "Atletico Junior", "Santa Fe"))).toBe("standard");
+    expect(classifyFixture(ev("Primera A", "Academy FC", "Millonarios"))).toBe("standard");
+    expect(classifyFixture(ev("Primera A", "Millonarios U20", "Santa Fe"))).toBe("youth");
+  });
+});
+
+describe("excluding fixture kinds", () => {
+  const offers = [{ raw: raw("18", "12", "total=1.5"), market: null, odds: 1.5, probability: 0.7 }];
+  const fixture = (competition: string, home = "A", away = "B") => ({
+    event: { ...event(1), competition, home, away },
+    offers,
+  });
+
+  it("leaves friendlies out by default, since form says little about them", () => {
+    expect(toCandidates([fixture("Int. Friendly Games")])).toEqual([]);
+    expect(toCandidates([fixture("Premier League")])).toHaveLength(1);
+  });
+
+  it("includes women's and youth football unless asked not to", () => {
+    expect(toCandidates([fixture("UEFA Women's Champions League")])).toHaveLength(1);
+    expect(toCandidates([fixture("Primera Division U20")])).toHaveLength(1);
+    expect(toCandidates([fixture("Primera Division U20")], { exclude: ["youth"] })).toEqual([]);
+    expect(toCandidates([fixture("UEFA Women's Champions League")], { exclude: ["womens"] })).toEqual([]);
+  });
+
+  it("can be asked to include friendlies", () => {
+    expect(toCandidates([fixture("Int. Friendly Games")], { exclude: [] })).toHaveLength(1);
   });
 });

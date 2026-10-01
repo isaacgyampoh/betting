@@ -24,6 +24,16 @@ export const MARKET_GROUPS = {
 
 export type MarketGroup = keyof typeof MARKET_GROUPS;
 
+/**
+ * The groups we hold comparable history for, so a pick in one of them can be backed by counts of
+ * real results rather than by the price alone. Corners, cards, fouls, team totals and half markets
+ * are real and bookable, but nothing in our stats speaks to them — so they are a fallback, used
+ * when the evidenced groups cannot reach the target on their own.
+ */
+export const EVIDENCE_GROUPS: MarketGroup[] = ["result", "double_chance", "goals", "btts"];
+
+export const hasEvidenceSupport = (group: MarketGroup) => EVIDENCE_GROUPS.includes(group);
+
 const GROUP_OF: Record<string, MarketGroup> = {
   "1": "result",
   "10": "double_chance",
@@ -113,6 +123,7 @@ export type FixtureInput = { event: BookmakerEventInfo; offers: FixtureOfferInpu
 
 export type PickCandidate = {
   event: BookmakerEventInfo;
+  kind: FixtureKind;
   raw: RawMarket;
   market: Market | null;
   odds: number;
@@ -127,7 +138,41 @@ export type PickCandidate = {
   favourite: boolean;
 };
 
+/**
+ * What kind of fixture this is, from the competition and team names the bookmaker gives us.
+ *
+ * Friendlies are excluded by default: line-ups are experimental, substitutions are unlimited in
+ * many of them, and recent form says much less about them than about a league game. Women's and
+ * youth football are *not* excluded by default — the data is fine — but a user can ask for them to
+ * be left out, which is a common request.
+ */
+export type FixtureKind = "friendly" | "womens" | "youth" | "standard";
+
+const FRIENDLY = /\bfriendl(y|ies)\b|\bclub friendl/i;
+const WOMENS = /\bwomen'?s?\b|\bfeminin|\bfrauen\b|\bdamallsvenskan\b/i;
+/** An explicit age bracket is unambiguous wherever it appears, including in a team name. */
+const AGE_BRACKET = /\bU-?(1[5-9]|2[0-3])\b/i;
+/**
+ * These words are only reliable in a *competition* name. Real senior clubs are called things like
+ * Atletico Junior and Academy, so matching them on a team name would wrongly drop real fixtures.
+ */
+const YOUTH_COMPETITION = /\byouth\b|\bjunior(es)?\b|\bprimavera\b|\bacademy\b|\breserves?\b/i;
+
+/** A trailing " W" on both team names is how most feeds mark a women's fixture. */
+const womensTeams = (home: string, away: string) => /\s(W|\(W\))$/.test(home.trim()) && /\s(W|\(W\))$/.test(away.trim());
+
+export function classifyFixture(event: Pick<BookmakerEventInfo, "home" | "away" | "competition">): FixtureKind {
+  const competition = event.competition ?? "";
+  const text = `${competition} ${event.home} ${event.away}`;
+  if (AGE_BRACKET.test(text) || YOUTH_COMPETITION.test(competition)) return "youth";
+  if (WOMENS.test(competition) || womensTeams(event.home, event.away)) return "womens";
+  if (FRIENDLY.test(competition)) return "friendly";
+  return "standard";
+}
+
 export type CandidateFilter = {
+  /** Kinds to leave out. Friendlies are dropped unless explicitly asked for. */
+  exclude?: FixtureKind[];
   /** Reject anything the bookmaker rates below this. Default 0.45: no coin-flips or worse. */
   minProbability?: number;
   /** Reject near-certainties: they add nothing to the total odds. Default 0.93. */
@@ -141,12 +186,14 @@ export type CandidateFilter = {
  * probability: we will not fabricate one, and a pick we cannot rate has no place in a built slip.
  */
 export function toCandidates(fixtures: FixtureInput[], filter: CandidateFilter = {}): PickCandidate[] {
-  const { minProbability = 0.45, maxProbability = 0.93, minMinutesToKickoff = 15 } = filter;
+  const { minProbability = 0.45, maxProbability = 0.93, minMinutesToKickoff = 15, exclude = ["friendly"] } = filter;
   const cutoff = Date.now() + minMinutesToKickoff * 60_000;
+  const skip = new Set(exclude);
   const out: PickCandidate[] = [];
 
   for (const { event, offers } of fixtures) {
     if (event.status !== "NOT_STARTED" || event.kickoffAt.getTime() < cutoff) continue;
+    if (skip.has(classifyFixture(event))) continue;
 
     // The likeliest outcome within each market, so a pick can say whether it is the favourite.
     const bestInMarket = new Map<string, number>();
@@ -165,6 +212,7 @@ export function toCandidates(fixtures: FixtureInput[], filter: CandidateFilter =
       if (!label) continue;
       out.push({
         event,
+        kind: classifyFixture(event),
         raw: o.raw,
         market: o.market,
         odds: o.odds,

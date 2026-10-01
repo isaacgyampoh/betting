@@ -273,12 +273,21 @@ export async function createCode(selections: CreateCodeSelection[]): Promise<Cre
   // it cannot be used to tell them apart. Read the code back instead — one extra request on a rare
   // operation is a fair price for never handing someone a code that turns out to be empty.
   const code = body.data.shareCode;
-  const check = await loadCode(code).catch((error: unknown) => {
+  let check: Awaited<ReturnType<typeof loadCode>> | null = null;
+  try {
+    check = await loadCode(code);
+  } catch (error) {
+    // An empty code reads back as expired, and that is the case we must catch: MSport accepted
+    // nothing. Any other failure is our read, not the booking, so the code is still good.
+    if (error instanceof AppError && error.code === "EXPIRED_CODE") {
+      logger.warn("msport.create_empty", { code, sent: payload.length });
+      throw new AppError(
+        "BOOKMAKER_UNAVAILABLE",
+        "MSport didn't accept these picks — a game may be too close to kick-off or its market suspended.",
+      );
+    }
     logger.warn("msport.create_verify_failed", { code, error: String(error) });
-    return null;
-  });
-  if (!check) {
-    throw new AppError("BOOKMAKER_UNAVAILABLE", "MSport gave us a code but then couldn't open it. Please try again in a moment.");
+    return { code, expiresAt: null };
   }
   if (check.selections.length < payload.length) {
     logger.warn("msport.create_partial", { code, accepted: check.selections.length, sent: payload.length });

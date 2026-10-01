@@ -82,8 +82,13 @@ export async function listMatches(date: string): Promise<{ groups: LeagueGroup[]
 export const FORM_GAMES = 10;
 export const H2H_GAMES = 6;
 
-export async function getMatchDetail(user: AuthUser, fixtureId: number, dateHint?: string): Promise<MatchDetail> {
-  await enforceRateLimit({ userId: user.id, kind: "STATS", ...STATS_LIMIT });
+/**
+ * `user` is null for background work such as the daily-picks cron: there is nobody to meter, and
+ * usage_logs has a foreign key to a real profile, so the metering is skipped rather than faked.
+ */
+export async function getMatchDetail(user: AuthUser | null, fixtureId: number, dateHint?: string): Promise<MatchDetail> {
+  // Background work is bounded by its own caller, not by a per-user rate limit.
+  if (user) await enforceRateLimit({ userId: user.id, kind: "STATS", ...STATS_LIMIT });
   const provider = statsProvider();
   const fromDay =
     dateHint && /^\d{4}-\d{2}-\d{2}$/.test(dateHint)
@@ -125,7 +130,9 @@ export async function getMatchDetail(user: AuthUser, fixtureId: number, dateHint
     section("standings", () => provider.standings(match.league.id, match.league.season), null),
   ]);
 
-  await logUsage({ userId: user.id, kind: "STATS", success: true, meta: { fixtureId, source: provider.source, unavailable: [...unavailable] } });
+  if (user) {
+    await logUsage({ userId: user.id, kind: "STATS", success: true, meta: { fixtureId, source: provider.source, unavailable: [...unavailable] } });
+  }
   return {
     match,
     form: { home: buildTeamForm(match.home, homeLast), away: buildTeamForm(match.away, awayLast) },

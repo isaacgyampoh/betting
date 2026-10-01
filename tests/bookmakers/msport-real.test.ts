@@ -13,14 +13,27 @@ const sportybet = createAdapter("sportybet", "live");
 
 describe.skipIf(!live)("MSport live API", () => {
   let fixtures: BookmakerEventInfo[] = [];
-  let target: BookmakerEventInfo;
+  let target!: BookmakerEventInfo;
   let offers: Awaited<ReturnType<typeof getEventMarkets>>["offers"] = [];
 
   beforeAll(async () => {
     fixtures = await listUpcoming({ pages: 2 });
-    target = fixtures.find((f) => f.status === "NOT_STARTED") ?? fixtures[0];
-    offers = (await getEventMarkets(target.externalId)).offers;
-  }, 60_000);
+    // At least an hour out, because bookmakers refuse a game about to kick off, and with a real
+    // market list: plenty of obscure fixtures carry only a handful of prices, and testing whichever
+    // one happens to be first tests the luck of the draw rather than the adapter.
+    const soonest = Date.now() + 60 * 60_000;
+    const candidates = fixtures.filter((f) => f.status === "NOT_STARTED" && f.kickoffAt.getTime() > soonest);
+    for (const candidate of candidates.slice(0, 8)) {
+      const got = (await getEventMarkets(candidate.externalId)).offers;
+      const has = (id: string) => got.some((o) => o.raw.marketId === id && o.market);
+      if (got.length > 10 && has("1") && has("18")) {
+        target = candidate;
+        offers = got;
+        break;
+      }
+    }
+    if (!target) throw new Error(`No MSport fixture with a full market list among ${candidates.length} candidates`);
+  }, 120_000);
 
   it("lists real upcoming fixtures", () => {
     expect(fixtures.length).toBeGreaterThan(10);
@@ -32,7 +45,7 @@ describe.skipIf(!live)("MSport live API", () => {
   });
 
   it("maps the markets Ghanaian slips use", () => {
-    expect(offers.length).toBeGreaterThan(5);
+    expect(offers.length).toBeGreaterThan(10);
     expect(offers.every((o) => o.odds > 1)).toBe(true);
     const types = new Set(offers.filter((o) => o.market).map((o) => o.market!.type));
     expect(types).toContain("MATCH_RESULT");

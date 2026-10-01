@@ -7,8 +7,18 @@ import { logger } from "@/lib/logger";
 import { requireFeature } from "@/lib/services/ai-quota";
 import { enforceRateLimit, logUsage } from "@/lib/services/usage";
 import { BUILD_LIMIT } from "@/lib/services/build-slip";
-import { buildFromFixtures, reasonFor, shortlistCandidates, toCandidates, type FixtureSlip } from "@/lib/slips/fixture-picks";
-import { enrich, rankByEvidence, reasonWithEvidence, statsBlocked, withoutContradicted } from "@/lib/slips/enrich";
+import {
+  buildFromFixtures,
+  classifyFixture,
+  hasEvidenceSupport,
+  reasonFor,
+  shortlistCandidates,
+  toCandidates,
+  type FixtureKind,
+  type FixtureSlip,
+  type PickCandidate,
+} from "@/lib/slips/fixture-picks";
+import { enrich, pickKey, rankByEvidence, reasonWithEvidence, statsBlocked, withoutContradicted } from "@/lib/slips/enrich";
 
 // "Make me a 5 odds for today": a slip built from a bookmaker's own live fixtures and prices,
 // rather than from a slip the user already has, and booked so the user gets a real code to paste.
@@ -28,6 +38,8 @@ export type Research = {
   droppedOnStats: { game: string; pick: string; why: string }[];
   /** Set when recent form was unavailable to us, so the picks rest on prices alone. Say so. */
   formUnavailable: boolean;
+  /** Fixtures skipped for what they are, e.g. friendlies, with how many of each. */
+  skipped: { kind: FixtureKind; count: number }[];
 };
 
 export type TodaySlip = {
@@ -64,9 +76,6 @@ export type TodaySlip = {
 /** How many shortlisted picks we look up recent results for. Bounded: stats cost API requests. */
 const STATS_BUDGET = 12;
 
-const pickKey = (p: { event: { externalId: string }; raw: { marketId: string; outcomeId: string; specifier: string } }) =>
-  `${p.event.externalId}|${p.raw.marketId}|${p.raw.outcomeId}|${p.raw.specifier}`;
-
 export function priceSource(): BookmakerAdapter | null {
   return BOOKMAKER_SLUGS.map(getAdapter).find((a) => a.mode === "live" && a.capabilities.events) ?? null;
 }
@@ -79,8 +88,10 @@ export async function buildFromToday(opts: {
   hours?: number;
   /** Only fixtures kicking off inside this window, for "tonight's games" or "morning games". */
   window?: { from: Date; to: Date };
+  /** Kinds of fixture to leave out. Friendlies are dropped unless this says otherwise. */
+  exclude?: FixtureKind[];
 }): Promise<TodaySlip> {
-  const { user, target, ipHash, hours = 24, window } = opts;
+  const { user, target, ipHash, hours = 24, window, exclude = ["friendly"] } = opts;
   if (!(target > 1)) throw new AppError("BAD_REQUEST", "Give a target total odds above 1.0.");
 
   const source = priceSource();
@@ -105,7 +116,7 @@ export async function buildFromToday(opts: {
   const inWindow = window
     ? fixtures.filter((f) => f.event.kickoffAt >= window.from && f.event.kickoffAt <= window.to)
     : fixtures;
-  const candidates = toCandidates(inWindow);
+  const candidates = toCandidates(inWindow, { exclude });
   if (!candidates.length) {
     throw new AppError(
       "BOOKMAKER_UNAVAILABLE",
@@ -117,26 +128,52 @@ export async function buildFromToday(opts: {
 
   // Research the shortlist before choosing, so recent results can veto a pick the price liked —
   // rather than being written up afterwards to justify whatever the price picked.
-  const pool = shortlistCandidates(candidates);
+  //
+  // Markets we hold history for come first. Filling a slip with corner and card lines would make the
+  // research pointless: every leg would read "no history for this market". Corners and cards are
+  // only reached for when the evidenced markets cannot get to the target on their own.
+  const evidenced = candidates.filter((c) => hasEvidenceSupport(c.group));
+  const pool = shortlistCandidates(evidenced.length ? evidenced : candidates);
   const researched = await enrich(user, pool, STATS_BUDGET);
   const { kept, dropped } = withoutContradicted(researched);
   const ranked = rankByEvidence(kept);
 
-  const slip = buildFromFixtures(ranked.length ? ranked : pool, target, {
-    bookmakerName: source.name,
-    preShortlisted: true,
-  });
+  const build = (from: PickCandidate[], preShortlisted: boolean) =>
+    buildFromFixtures(from, target, { bookmakerName: source.name, preShortlisted });
+
+  // A pick recent results argued against must stay out, including when we widen the search. Letting
+  // one back in would publish it alongside the very evidence against it.
+  const vetoed = new Set(dropped.map(pickKey));
+
+  let slip = ranked.length ? build(ranked, true) : null;
+  if (!slip?.reachedTarget) {
+    // Widen to every market, including the ones no stats speak to, rather than miss the target.
+    const wider = build(candidates.filter((c) => !vetoed.has(pickKey(c))), false);
+    if (wider && (!slip || wider.reachedTarget)) slip = wider;
+  }
   if (!slip) throw new AppError("BAD_REQUEST", "We couldn't build a slip from today's games.");
 
   // Carry each chosen pick's research back onto it.
   const byKey = new Map(researched.map((p) => [pickKey(p), p]));
+  // Nothing recent results argued against may reach the user.
+  if (slip.picks.some((p) => vetoed.has(pickKey(p)))) {
+    logger.error("today.vetoed_pick_leaked", { picks: slip.picks.filter((p) => vetoed.has(pickKey(p))).map((p) => p.label) });
+    throw new AppError("BAD_REQUEST", "We couldn't build a slip we'd stand behind from today's games.");
+  }
   const reasons = slip.picks.map((p) => {
     const found = byKey.get(pickKey(p));
     return reasonWithEvidence({ ...p, evidence: found?.evidence ?? null, gap: found?.gap ?? "none" }, reasonFor(p, source.name));
   });
 
+  const skippedCounts = new Map<FixtureKind, number>();
+  for (const f of inWindow) {
+    const kind = classifyFixture(f.event);
+    if (exclude.includes(kind)) skippedCounts.set(kind, (skippedCounts.get(kind) ?? 0) + 1);
+  }
+
   const research: Research = {
     fixturesScanned: inWindow.length,
+    skipped: [...skippedCounts].map(([kind, count]) => ({ kind, count })),
     researched: Math.min(pool.length, STATS_BUDGET),
     withHistory: researched.filter((p) => p.evidence).length,
     droppedOnStats: dropped.map((p) => ({

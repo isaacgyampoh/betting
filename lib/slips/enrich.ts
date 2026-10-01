@@ -34,7 +34,7 @@ const MIN_SAMPLE = 6;
 
 type Looked = { evidence: Evidence | null; gap: EnrichedPick["gap"] };
 
-async function evidenceForPick(user: AuthUser, pick: PickCandidate): Promise<Looked> {
+async function evidenceForPick(user: AuthUser | null, pick: PickCandidate): Promise<Looked> {
   const match = await lookupMatch(pick.event.home, pick.event.away, pick.event.kickoffAt);
   if (!match) return { evidence: null, gap: "fixture-not-found" };
   const detail = await getMatchDetail(user, match.id, match.kickoffAt.slice(0, 10));
@@ -55,7 +55,7 @@ async function evidenceForPick(user: AuthUser, pick: PickCandidate): Promise<Loo
  * Looks up recent results for up to `limit` picks, keeping the order given. Failures are swallowed:
  * a stats outage must never stop someone getting a slip.
  */
-export async function enrich(user: AuthUser, picks: PickCandidate[], limit: number): Promise<EnrichedPick[]> {
+export async function enrich(user: AuthUser | null, picks: PickCandidate[], limit: number): Promise<EnrichedPick[]> {
   const head = picks.slice(0, limit);
   const enriched = await mapWithConcurrency(head, 4, async (pick): Promise<EnrichedPick> => {
     try {
@@ -82,6 +82,10 @@ export function withoutContradicted(picks: EnrichedPick[]): { kept: EnrichedPick
   }
   return { kept, dropped };
 }
+
+/** Identifies one pick, for carrying research across rebuilds. */
+export const pickKey = (p: { event: { externalId: string }; raw: { marketId: string; outcomeId: string; specifier: string } }) =>
+  `${p.event.externalId}|${p.raw.marketId}|${p.raw.outcomeId}|${p.raw.specifier}`;
 
 /** Strongest first: recent results break ties the bookmaker's price leaves level. */
 export function rankByEvidence(picks: EnrichedPick[]): EnrichedPick[] {

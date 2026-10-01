@@ -6,13 +6,17 @@ import { BOOKMAKER_SLUGS } from "@/lib/bookmakers/types";
 import { getAdapter } from "@/lib/bookmakers/registry";
 import type { PickStatus } from "@/lib/generated/prisma/enums";
 import { getActiveSubscription } from "@/lib/services/profile";
-import { buildFromFixtures, toCandidates } from "@/lib/slips/fixture-picks";
+import { buildFromFixtures, hasEvidenceSupport, reasonFor, shortlistCandidates, toCandidates } from "@/lib/slips/fixture-picks";
+import { enrich, pickKey, rankByEvidence, reasonWithEvidence, withoutContradicted } from "@/lib/slips/enrich";
 
 // Daily picks are generated once per day for everyone (not per user) to keep AI cost flat, and
 // published unchanged. Results are filled in automatically after kickoff; rows are never edited
 // or removed, so the public record includes every loss.
 
 export const DAILY_TARGETS = [2, 5] as const;
+
+/** How many picks the daily research covers. Larger than a user's build: it runs once for everyone. */
+const DAILY_SHORTLIST = 18;
 
 
 export type DailyPickLegView = {
@@ -206,8 +210,30 @@ export async function generateDailyPicks(now = new Date()): Promise<GenerationRe
     return { date, created: 0, skipped: [...skipped, "No fixture today had prices we could build an honest pick from."] };
   }
 
+  // Published picks are judged in public, so they get the same research a user's slip does: recent
+  // results are looked up over the shortlist and may veto a pick the price liked. This runs once a
+  // day for everyone, so the stats cost is flat. There is no user here, hence the null.
+  // Markets we hold history for first, so published picks carry real evidence (see build-from-today).
+  const evidenced = candidates.filter((c) => hasEvidenceSupport(c.group));
+  const pool = shortlistCandidates(evidenced.length ? evidenced : candidates, DAILY_SHORTLIST);
+  const researched = await enrich(null, pool, DAILY_SHORTLIST).catch((error: unknown) => {
+    logger.warn("daily.research_failed", { date, error: String(error) });
+    return pool.map((p) => ({ ...p, evidence: null, gap: "error" as const }));
+  });
+  const { kept, dropped } = withoutContradicted(researched);
+  if (dropped.length) logger.info("daily.dropped_on_form", { date, dropped: dropped.length });
+  const ranked = rankByEvidence(kept);
+  const evidenceByKey = new Map(researched.map((p) => [pickKey(p), p]));
+  // A vetoed pick must not return through the wider fallback search below.
+  const vetoed = new Set(dropped.map(pickKey));
+  const widerPool = candidates.filter((c) => !vetoed.has(pickKey(c)));
+
   for (const target of targets) {
-    const slip = buildFromFixtures(candidates, target, { bookmakerName: source.name });
+    let slip = ranked.length ? buildFromFixtures(ranked, target, { bookmakerName: source.name, preShortlisted: true }) : null;
+    if (!slip?.reachedTarget) {
+      const wider = buildFromFixtures(widerPool, target, { bookmakerName: source.name });
+      if (wider && (!slip || wider.reachedTarget)) slip = wider;
+    }
     if (!slip || !slip.reachedTarget) {
       skipped.push(`${target} odds: today's prices couldn't reach ${target} without reaching for games we don't rate.`);
       continue;
@@ -229,7 +255,13 @@ export async function generateDailyPicks(now = new Date()): Promise<GenerationRe
             marketLabel: p.marketLabel,
             pickLabel: p.label,
             odds: p.odds,
-            reason: p.reason,
+            reason: (() => {
+              const found = evidenceByKey.get(pickKey(p));
+              return reasonWithEvidence(
+                { ...p, evidence: found?.evidence ?? null, gap: found?.gap ?? "none" },
+                reasonFor(p, source.name),
+              );
+            })(),
           })),
         },
       },

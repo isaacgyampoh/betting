@@ -48,6 +48,11 @@ export const TOOLS: Anthropic.Tool[] = [
         target: { type: "number" },
         from_hours: { type: "number", description: "Window starts this many hours from now" },
         to_hours: { type: "number", description: "Window ends this many hours from now" },
+        exclude: {
+          type: "array",
+          items: { type: "string", enum: ["friendly", "womens", "youth"] },
+          description: "Fixture kinds to leave out. Friendlies are excluded unless you pass [] explicitly.",
+        },
       },
       required: ["target"],
     },
@@ -142,6 +147,7 @@ const SCHEMAS = {
     target: z.number().min(1.01).max(100_000),
     from_hours: z.number().min(0).max(168).optional(),
     to_hours: z.number().min(0).max(168).optional(),
+    exclude: z.array(z.enum(["friendly", "womens", "youth"])).optional(),
   }),
   check_slip_results: z.object({ slip_id: uuid }),
   build_target_slip: z.object({ slip_id: uuid, target: z.number().min(1.01).max(100_000), max_games: z.number().int().min(1).max(12).optional() }),
@@ -261,6 +267,7 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
         target: i.target,
         hours: window ? Math.ceil((window.to.getTime() - Date.now()) / hour) : undefined,
         window,
+        exclude: i.exclude,
       });
       return {
         built: true,
@@ -290,6 +297,7 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
           researched_with_stats: built.research.researched,
           had_history: built.research.withHistory,
           left_out_on_recent_form: built.research.droppedOnStats,
+          skipped_fixture_kinds: built.research.skipped,
           ...(built.research.formUnavailable
             ? { form_unavailable: "Recent-form data wasn't available, so these picks rest on the bookmaker's prices. Tell the user that." }
             : {}),
