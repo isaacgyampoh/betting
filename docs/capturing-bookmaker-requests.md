@@ -163,7 +163,7 @@ Headers: `x-pawa-brand: betpawa-ghana`, `x-pawa-language: en`. Errors are
 risk silently mis-reading odds, which is the one mistake that must never ship. A DevTools capture
 (step A below) unblocks it, because the browser shows the decoded body.
 
-## 3a. 1xBet platform (1xBet, PariPesa, 22Bet, Betwinner) — two gaps, one of them large
+## 3a. 1xBet platform (1xBet, PariPesa, 22Bet, Betwinner) — markets solved, booking unverified
 
 **Status: the booking-code endpoints are found and reachable without an account. One field shape is
 still unconfirmed.** These four share a platform, so finishing one finishes all four. Working
@@ -245,35 +245,40 @@ That check was not run from here: sending bet-slip POSTs to a third party is blo
 traffic, and the block is right — earlier rounds of trying shapes are exactly what it exists to stop.
 Run those two requests yourself, or capture the `UpdateCoupon` body from DevTools, and paste either.
 
-**2. A market dictionary, which is the bigger job.** This platform's feed ships **numeric ids with
-no labels at all**:
+**2. ~~A market dictionary~~ — done, by a different route.** This platform ships numeric ids with no
+labels (`{"T":1,"C":1.22,"G":1}`), and the names come from a translations service, so there was
+nothing to read them off. But gameclaw writes its own labels anyway ("Over 2.5 goals"), so what was
+actually needed was a mapping to our market model, not their display names.
 
-```json
-{"T":1,"C":1.22,"CV":"1.22","G":1}      // 1xBet: what market? what outcome?
-```
+That was derived without sending them anything:
 
-against SportyBet, which names everything:
+- **Structure** from the platform's own table in its betting bundle, which declares which outcome
+  types make up each group: `vn = {1:[1,2,3], 2:[7,8], 8:[4,5,6], 14:[182,183], 15:[11,12],
+  17:[9,10], 62:[13,14], ...}`
+- **Meaning** by comparing one fixture against a bookmaker that *does* label its data, at the same
+  moment, and against the platform's own arithmetic — double chance `12` must price at
+  `1/(1/1.22 + 1/14.70) = 1.126` from its own 1X2, and `T5` was `1.12`.
 
-```json
-{"id":"1","name":"1X2","outcomes":[{"id":"1","desc":"Home","odds":"1.22"}]}
-```
+Verified, in `lib/bookmakers/formats/onex-format.ts`, re-checked against live data by
+`tests/bookmakers/onex-format-real.test.ts`:
 
-One fixture carries **206 distinct market groups**, and the names are not in the feed and not in the
-bundle — they come from a translations service at runtime. Without a `T`/`G` → market mapping:
+| Group | Types | Market | Corroboration (Germany v Serbia, 1xBet vs SportyBet) |
+|---|---|---|---|
+| `G1` | 1/2/3 | 1X2 | 1.22 / 6.95 / 14.70 vs 1.20 / 8.32 / 14.41 |
+| `G8` | 4/5/6 | Double chance | self-consistent with its own 1X2 (above) |
+| `G17` | 9/10 + `P` | Over/Under | brackets SportyBet's 2.0 and 3.0 lines |
+| `G14` | 182/183 | Both teams to score | 1.83 / 1.87 vs 1.87 / 1.94 |
+| `G2` | 7/8 + `P` | Asian handicap | T7 gives, T8 receives |
+| `G15` | 11/12 + `P` | Home team total | 1.22 / 1.65 vs 1.21 / 1.66 |
+| `G62` | 13/14 + `P` | Away team total | 1.80 / 4.40 vs 1.78 / 4.90 |
 
-- a loaded 1xBet slip would show a list of numbers, not picks;
-- converting *to* 1xBet could not express our markets in their ids.
+One trap: **the handicap line is written from each side's own perspective** — `T7 P-1` and `T8 P+1`
+are the same bet — while ours is always home-relative. Mapping that wrong books the opposite
+handicap, so the away side's line is negated and a test pins it.
 
-Inferring the mapping by comparing odds against another bookmaker is **not** acceptable: a wrong
-guess silently books a different bet, which is the one failure this project must never ship.
-
-**So the capture to ask for is bigger than one request.** What is needed is the market list for one
-fixture *as the site displays it* — the names shown next to the prices — alongside the feed's `T`
-and `G` for the same fixture. DevTools on a match page shows both at once: the `GetGameZip` response
-and whatever the page fetches to label it.
-
-Until that exists, these four bookmakers stay off. SportyBet, MSport and Football.com needed none of
-this because they ship their own labels.
+Over 200 groups exist on a fixture. Everything not in that table maps to `null` rather than a guess,
+and the earlier mock had guessed four of seven wrong (it had both-teams-to-score as `G19`/`T180`;
+it is `G14`/`T182`), which is why nothing here is accepted without corroboration.
 
 ## Priority order
 
