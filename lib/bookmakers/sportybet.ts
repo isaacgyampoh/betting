@@ -7,7 +7,7 @@ import {
   unmapBetradarMarket,
 } from "@/lib/bookmakers/formats/betradar-format";
 import { liveNotImplemented } from "@/lib/bookmakers/live-stub";
-import type { AdapterMode, BookmakerAdapter, RawMarket } from "@/lib/bookmakers/types";
+import type { AdapterMode, BookmakerAdapter } from "@/lib/bookmakers/types";
 
 // SportyBet Ghana.
 //

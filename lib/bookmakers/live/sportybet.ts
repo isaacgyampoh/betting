@@ -194,6 +194,81 @@ export async function listUpcoming({ hours = 24, pages = 1 } = {}): Promise<Book
   return events;
 }
 
+/**
+ * Market groups we ask for inline when building a slip. pcUpcomingEvents accepts any market ids and
+ * embeds them in the fixture list, which matters enormously: this returns ~20 KB per fixture across
+ * all of these groups, where fetching one fixture's *full* market list is about 1.3 MB. Keep this
+ * list deliberate — every id added is paid for on every page.
+ */
+export const INLINE_MARKET_IDS = [
+  "1", // 1X2
+  "10", // Double Chance
+  "18", // Over/Under
+  "29", // GG/NG (both teams to score)
+  "19", // Home total
+  "20", // Away total
+  "68", // 1st half Over/Under
+  "75", // 1st half GG/NG
+  "166", // Corners Over/Under
+  "139", // Bookings (cards) Over/Under
+  "900342", // Fouls Over/Under
+] as const;
+
+export type FixtureOffer = {
+  raw: RawMarket;
+  market: ReturnType<typeof mapBetradarMarket>;
+  odds: number;
+  /** SportyBet's own margin-free probability. Null only if they omitted it. */
+  probability: number | null;
+};
+
+export type FixtureWithOffers = { event: BookmakerEventInfo; offers: FixtureOffer[] };
+
+/**
+ * Upcoming fixtures with a chosen set of markets priced inline — one request per page, no per-event
+ * calls. This is what the slip builder and the daily picks run on.
+ */
+export async function listUpcomingWithOffers({
+  hours = 24,
+  pages = 2,
+  marketIds = INLINE_MARKET_IDS as readonly string[],
+} = {}): Promise<FixtureWithOffers[]> {
+  const out: FixtureWithOffers[] = [];
+  for (let page = 1; page <= pages; page++) {
+    const res = await cachedGet<Envelope<UpcomingData>>({
+      scope: "sportybet",
+      baseUrl: BASE_URL,
+      endpoint: "factsCenter/pcUpcomingEvents",
+      params: {
+        sportId: FOOTBALL,
+        marketId: marketIds.join(","),
+        pageSize: 20,
+        pageNum: page,
+        option: 1,
+        timeline: hours,
+      },
+      ttlSeconds: 120,
+      headers: HEADERS,
+      timeoutMs: 20_000,
+      cacheable: (p) => (p as Envelope<UpcomingData>).bizCode === BIZ_OK,
+    });
+    const batch = (unwrap(res, "upcomingWithOffers").tournaments ?? []).flatMap((t) => t.events ?? []);
+    if (!batch.length) break;
+    for (const e of batch) {
+      const offers: FixtureOffer[] = [];
+      for (const m of e.markets ?? []) {
+        for (const o of m.outcomes ?? []) {
+          if (!isLiveOffer(m, o)) continue;
+          const raw = toRawMarket(m, o);
+          offers.push({ raw, market: mapBetradarMarket(raw), odds: Number(o.odds), probability: probabilityOf(o) });
+        }
+      }
+      if (offers.length) out.push({ event: toEventInfo(e), offers });
+    }
+  }
+  return out;
+}
+
 export async function searchEvent(home: string, away: string, kickoff: Date): Promise<BookmakerEventInfo[]> {
   // No public search endpoint exists, so match against the upcoming list. Widen the window enough
   // to cover the fixture even when it is a day or two out.

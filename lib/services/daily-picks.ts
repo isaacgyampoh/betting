@@ -6,6 +6,7 @@ import { BOOKMAKER_SLUGS } from "@/lib/bookmakers/types";
 import { getAdapter } from "@/lib/bookmakers/registry";
 import type { PickStatus } from "@/lib/generated/prisma/enums";
 import { getActiveSubscription } from "@/lib/services/profile";
+import { buildFromFixtures, toCandidates } from "@/lib/slips/fixture-picks";
 
 // Daily picks are generated once per day for everyone (not per user) to keep AI cost flat, and
 // published unchanged. Results are filled in automatically after kickoff; rows are never edited
@@ -163,26 +164,80 @@ export async function getTrackRecord(limit = 60): Promise<TrackRecord> {
 export type GenerationResult = { date: string; created: number; skipped: string[] };
 
 /**
- * Generates today's picks. Returns what it skipped and why, rather than inventing anything:
- * real odds are required, so this needs at least one bookmaker connected to live prices.
+ * Generates today's picks from real fixtures and real prices. Returns what it skipped and why,
+ * rather than inventing anything: with no bookmaker connected to live odds, nothing is published.
+ *
+ * Published picks are never regenerated. The record has to stay checkable, so a pick that exists
+ * for a date and target is left exactly as it was.
  */
 export async function generateDailyPicks(now = new Date()): Promise<GenerationResult> {
   const date = ghanaDate(now);
   const skipped: string[] = [];
+  let created = 0;
 
-  const connected = BOOKMAKER_SLUGS.filter((s) => getAdapter(s).mode === "live");
-  if (connected.length === 0) {
+  // Only a bookmaker that can really list fixtures and prices can source a pick.
+  const source = BOOKMAKER_SLUGS.map(getAdapter).find((a) => a.mode === "live" && a.capabilities.events);
+  if (!source) {
     logger.warn("daily.no_live_prices", { date });
-    return { date, created: 0, skipped: ["No bookmaker is connected to live prices, so no picks were generated. We never publish made-up odds."] };
+    return {
+      date,
+      created: 0,
+      skipped: ["No bookmaker is connected to live prices, so no picks were generated. We never publish made-up odds."],
+    };
   }
 
-  // With live prices connected, build one pick per target from real fixtures.
-  // (Implemented with the live adapters; see docs/capturing-bookmaker-requests.md.)
+  const targets: number[] = [];
   for (const target of DAILY_TARGETS) {
     const existing = await db.dailyPick.findUnique({ where: { forDate_target: { forDate: new Date(date), target } } });
     if (existing) skipped.push(`${target} odds: already published today`);
+    else targets.push(target);
   }
-  return { date, created: 0, skipped };
+  if (!targets.length) return { date, created: 0, skipped };
+
+  // One fetch of today's fixtures with prices, shared by every target.
+  const { listUpcomingWithOffers } = await import("@/lib/bookmakers/live/sportybet");
+  const fixtures = await listUpcomingWithOffers({ hours: 24, pages: 3 }).catch((error: unknown) => {
+    logger.error("daily.fixtures_failed", { date, error: String(error) });
+    return [];
+  });
+  const candidates = toCandidates(fixtures);
+  if (!candidates.length) {
+    logger.warn("daily.no_candidates", { date, fixtures: fixtures.length });
+    return { date, created: 0, skipped: [...skipped, "No fixture today had prices we could build an honest pick from."] };
+  }
+
+  for (const target of targets) {
+    const slip = buildFromFixtures(candidates, target, { bookmakerName: source.name });
+    if (!slip || !slip.reachedTarget) {
+      skipped.push(`${target} odds: today's prices couldn't reach ${target} without reaching for games we don't rate.`);
+      continue;
+    }
+    await db.dailyPick.create({
+      data: {
+        forDate: new Date(date),
+        target,
+        totalOdds: slip.totalOdds,
+        probability: Number(slip.probability.toFixed(4)),
+        confidence: slip.confidence,
+        legs: {
+          create: slip.picks.map((p) => ({
+            position: p.position,
+            homeTeam: p.event.home,
+            awayTeam: p.event.away,
+            competition: p.event.competition,
+            kickoffAt: p.event.kickoffAt,
+            marketLabel: p.marketLabel,
+            pickLabel: p.label,
+            odds: p.odds,
+            reason: p.reason,
+          })),
+        },
+      },
+    });
+    created++;
+    logger.info("daily.published", { date, target, totalOdds: slip.totalOdds, legs: slip.picks.length });
+  }
+  return { date, created, skipped };
 }
 
 /** Fills in results for picks whose games have finished. Never changes a settled pick. */

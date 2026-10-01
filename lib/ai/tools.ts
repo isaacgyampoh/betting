@@ -2,7 +2,6 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { AuthUser } from "@/lib/auth";
-import { getAdapter } from "@/lib/bookmakers/registry";
 import { BOOKMAKER_SLUGS } from "@/lib/bookmakers/types";
 import { AppError } from "@/lib/errors";
 import type { EditOp } from "@/lib/slips/edit";
@@ -10,6 +9,7 @@ import type { SlipView } from "@/lib/slips/view";
 import { analyzeMatch } from "@/lib/ai/analysis";
 import { compactMatch, compactMatchDetail, compactSlip } from "@/lib/ai/compact";
 import { buildToTarget } from "@/lib/services/build-slip";
+import { buildFromToday } from "@/lib/services/build-from-today";
 import { convertSlip } from "@/lib/services/convert";
 import { editSlip } from "@/lib/services/edit";
 import { getSlip, listRecentSlips, loadSlip } from "@/lib/services/slips";
@@ -40,7 +40,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "build_slip_from_fixtures",
     description:
-      "Build a slip from today's fixtures when the user has no slip ('make me a 5 odds for today'). Needs real prices from a connected bookmaker; returns a clear reason when none is connected yet.",
+      "Build a slip from today's real fixtures when the user has no slip ('make me a 5 odds for today', 'give me 2 odds'). Returns each pick with its market, the bookmaker's own odds and estimated chance, and a one-line reason. Check `bookable`: when false, tell the user to add the picks at the bookmaker themselves.",
     input_schema: { type: "object", properties: { target: { type: "number" }, date: { type: "string" } }, required: ["target"] },
   },
   {
@@ -214,16 +214,30 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
       return slips.map(compactSlip);
     }
     case "build_slip_from_fixtures": {
-      // Building from scratch needs live prices; the mock adapters have none for arbitrary fixtures.
-      const connected = BOOKMAKER_SLUGS.filter((s) => getAdapter(s).mode === "live");
-      if (connected.length === 0) {
-        return {
-          built: false,
-          reason:
-            "No bookmaker is connected to live prices yet, so we can't price a slip from scratch. The user can paste a booking code instead and we'll build a target slip from it.",
-        };
-      }
-      throw new AppError("BAD_REQUEST", "Building from today's fixtures isn't available yet. Paste a booking code and I'll build from that.");
+      const i = input as z.infer<(typeof SCHEMAS)["build_slip_from_fixtures"]>;
+      const built = await buildFromToday({ user, ipHash, target: i.target });
+      return {
+        built: true,
+        bookmaker: built.bookmaker.name,
+        target: built.target,
+        reached_target: built.reachedTarget,
+        total_odds: built.totalOdds,
+        estimated_chance: built.chance,
+        confidence: built.confidence,
+        picks: built.picks.map((p) => ({
+          position: p.position,
+          game: `${p.home} v ${p.away}`,
+          competition: p.competition,
+          kickoff: p.kickoffAt,
+          market: p.marketLabel,
+          pick: p.pickLabel,
+          odds: p.odds,
+          estimated_chance_pct: Math.round(p.probability * 100),
+          reason: p.reason,
+        })),
+        bookable: built.bookable,
+        booking_note: built.bookingNote,
+      };
     }
     case "build_target_slip": {
       const i = input as z.infer<(typeof SCHEMAS)["build_target_slip"]>;

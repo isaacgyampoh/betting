@@ -9,6 +9,12 @@
 export type Candidate = {
   position: number;
   odds: number;
+  /**
+   * The bookmaker's own margin-free probability, when it publishes one (SportyBet sends one for
+   * every outcome). Always better than deriving it from the price with an assumed margin, so it
+   * wins when present. Never fill this in with a guess.
+   */
+  bookmakerProbability?: number;
   /** 0..1 from stats (form, head-to-head, table). Undefined when we have no stats for the game. */
   statProbability?: number;
   /** Why the stats lean that way, in plain words. */
@@ -19,7 +25,7 @@ export type ScoredPick = Candidate & {
   /** Estimated chance this single pick lands (0..1). */
   probability: number;
   /** How the estimate was reached, for the explanation shown to the user. */
-  basis: "odds" | "odds+stats";
+  basis: "odds" | "odds+stats" | "bookmaker" | "bookmaker+stats";
 };
 
 export type TargetSelection = {
@@ -42,10 +48,16 @@ export function impliedProbability(odds: number): number {
 }
 
 export function scorePick(c: Candidate): ScoredPick {
-  const fromOdds = impliedProbability(c.odds);
-  if (c.statProbability === undefined) return { ...c, probability: fromOdds, basis: "odds" };
-  const blended = fromOdds + (c.statProbability - fromOdds) * STATS_WEIGHT;
-  return { ...c, probability: Math.min(0.97, Math.max(0.03, blended)), basis: "odds+stats" };
+  // Prefer the bookmaker's published probability; fall back to stripping an assumed margin.
+  const published = c.bookmakerProbability !== undefined && c.bookmakerProbability > 0 && c.bookmakerProbability <= 1;
+  const base = published ? c.bookmakerProbability! : impliedProbability(c.odds);
+  if (c.statProbability === undefined) return { ...c, probability: base, basis: published ? "bookmaker" : "odds" };
+  const blended = base + (c.statProbability - base) * STATS_WEIGHT;
+  return {
+    ...c,
+    probability: Math.min(0.97, Math.max(0.03, blended)),
+    basis: published ? "bookmaker+stats" : "odds+stats",
+  };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
