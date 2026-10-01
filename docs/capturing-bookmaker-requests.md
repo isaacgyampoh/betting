@@ -118,21 +118,100 @@ Repeat A, B and C:
 - **B:** Add picks, then **Book a bet** / **Share** to get a code.
 - **C:** Open a match page, and search for a team.
 
+## 2b. betPawa Ghana (betpawa.com.gh) — found, but blocked on protobuf
+
+**Status: endpoints known, not implemented.** No account is needed to read a booking code, but the
+response bodies are **protobuf**, not JSON.
+
+| Endpoint | Gives us |
+|---|---|
+| `GET /api/sportsbook/v3/booking-number/{code}` | read a booking code (JSON errors, protobuf body) |
+| `POST /api/sportsbook/v3/booking-number` | create one; takes `{"selections":[...]}` |
+| `POST /api/sportsbook/v4/events/lists/by-queries` | fixtures |
+| `POST /api/sportsbook/v3/prices/list` | odds |
+| `GET /api/sportsbook/v4/categories/list/{id}` | categories (this one *is* JSON) |
+
+Headers: `x-pawa-brand: betpawa-ghana`, `x-pawa-language: en`. Errors are
+`{error, params, payload, uuid}`; a bad code gives `BOOKING_CODE_NOT_FOUND`.
+
+**Why it stops here.** The schema is compiled into their generated protobuf code
+(`proto-json-converter-*.js`), not shipped as a readable descriptor. Guessing field numbers would
+risk silently mis-reading odds, which is the one mistake that must never ship. A DevTools capture
+(step A below) unblocks it, because the browser shows the decoded body.
+
+## 3a. 1xBet platform (1xbet.com.gh, Betwinner, 22Bet, PariPesa) — endpoints found, one gap left
+
+**Status: the booking-code endpoints are found and reachable without an account. One field shape is
+still unconfirmed.** These four share a platform, so finishing one finishes all four. Working
+domains: `1xbet.com.gh`, `betwinner.com.gh`, `paripesa.top`, `paripesa.ng`.
+
+### Where the endpoints live
+
+They are *not* in the page or the host bundle. The betting screen is a separate Nuxt micro-frontend
+whose script is named only inside the Nuxt payload, with `/` escaped as `\u002F`:
+
+```bash
+curl -s https://1xbet.com.gh/en/user/coupon | grep -o 'entry-[a-f0-9]*\.js'
+curl -s https://1xbet.com.gh/sys-static/sys-betting-app-static/Mobile/Default/entry-<hash>.js
+```
+
+That bundle carries the whole betting API surface (192 `/service-api/` paths).
+
+### Verified, no account needed
+
+| Endpoint | Method | Gives us |
+|---|---|---|
+| `/service-api/LineFeed/GetSportsShortZip?lng=en` | GET | sports list |
+| `/service-api/LineFeed/GetGameZip?id={id}&lng=en&cfView=0&isSubGames=true&GroupEvents=true` | GET | one event, markets and odds |
+| `/service-api/LiveBet/Open/SaveCoupon` | POST | **creates a booking code** |
+| `/service-api/LiveBet/Open/GetCoupon` | POST | **reads a booking code** |
+| `/service-api/LiveBet-update/Open/UpdateCoupon` | POST | prices a slip |
+
+```
+POST /service-api/LiveBet/Open/SaveCoupon   {"Events":[ ... ],"Lng":"en"}
+  -> {"Value":"BEMY7","Success":true,"ErrorCode":0}       <- the booking code
+
+POST /service-api/LiveBet/Open/GetCoupon    {"guid":"BEMY7","CfView":0,"Lng":"en"}
+  -> {"Success":false,"Error":"Incorrect code","ErrorCode":100849}   for a bad code
+```
+
+`guid` is the booking code despite the name: a wrong one answers "Incorrect code".
+
+### The one gap
+
+`SaveCoupon` does **not validate** — it returns a code for `{"Events":[]}` as readily as for a real
+pick. Every event shape tried saved, but reading the code back answers *"Events in the downloaded
+bet slip have finished"*, so the items are not stored in a form `GetCoupon` resolves. Tried, with
+`Type` taken from the feed's `E[].T`:
+
+- `{GameId: <I>, Type}` and `{GameId: <CI>, Type}` — the feed carries a changing `I`
+  (`756597520`) and a stable `CI` (`367912266`, the id in the page URL)
+- adding `Coef`, `Group`, `Kind`, `Param`, `PlayerId`, `Seconds` in combination
+
+Field names are confirmed from the bundle (`GameId`, `constId`, `Group`, `Type`, `Coef`, `Lng`,
+`CfView`); which combination `GetCoupon` needs is not.
+
+**What finishes it:** one DevTools capture of **adding a single pick to the bet slip** on
+`1xbet.com.gh`. The `UpdateCoupon` request body contains the exact `Events` item, and that one
+capture completes all four bookmakers. Nothing needs to be typed — the browser shows the payload.
+
+> Do not try to finish this by probing from outside. It means firing many malformed requests at a
+> third party, which is indistinguishable from an attack at their end, and the remaining unknown is
+> one field that a single capture answers exactly.
+
 ## Priority order
 
-Capture them in this order. It's based on how widely each is used in Ghana, and on how much work one capture saves:
+One capture each, in this order. It reflects how widely each is used in Ghana and how much a single
+capture unlocks:
 
-| # | Bookmaker | Why this position |
-|---|---|---|
-| 1 | **SportyBet** | The largest in Ghana; most shared codes are SportyBet codes. |
-| 2 | **Betway** | The second big name; the most common conversion target. |
-| 3 | **1xBet** | Very popular. Betwinner, 22Bet and PariPesa are widely reported to run on the same platform, so one good 1xBet capture probably unlocks all four (confirm with one small capture from each). |
-| 4 | **betPawa** | Popular with mobile and low-data users. |
-| 5 | **MSport** | Established Ghanaian brand. |
-| 6 | **Football.com** | Growing quickly. |
-| 7 | **Betwinner, 22Bet, PariPesa** | A quick check each, to confirm they match 1xBet. |
+| # | Bookmaker | Capture | Unlocks |
+|---|---|---|---|
+| 1 | **1xBet** (`1xbet.com.gh`) | add one pick to the bet slip | **four bookmakers** — 1xBet, Betwinner, 22Bet, PariPesa share the platform, and only one field shape is missing |
+| 2 | **betPawa** | load a booking code | betPawa; the browser shows the decoded protobuf we cannot read from outside |
+| 3 | **Betway** | load a code, book a code, open a match | Betway |
+| 4 | **Football.com** | the same three | Football.com |
 
-This ranking is an estimate from public information. Tell me if your users lean differently.
+SportyBet and MSport need nothing: both are live, including booking codes.
 
 ## Steps for every other bookmaker
 
