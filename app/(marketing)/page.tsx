@@ -15,7 +15,7 @@ import { listActivePlans } from "@/lib/services/plans";
 export const metadata: Metadata = {
   title: { absolute: "gameclaw: convert booking codes between Ghana's bookmakers" },
   description:
-    "Paste a SportyBet or MSport booking code to see every game, market and price on it. Convert it to the other, or ask for a 2 or 5 odds built from today's real prices. Built in Ghana. 18+.",
+    "Paste a booking code to see every game, market and price on it. Move it to another bookmaker, or ask for a 2 or 5 odds built from today's real prices. Built in Ghana. 18+.",
   alternates: { canonical: "/" },
   openGraph: { url: "/" },
 };
@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 // Each line must describe something the app does today, and name the bookmakers it really works
 // with. Do not write "every bookmaker" until every bookmaker is actually connected.
 const FEATURES = [
-  { icon: ArrowLeftRight, title: "Convert your code", text: "Between SportyBet and MSport today, with more being connected." },
+  { icon: ArrowLeftRight, title: "Convert your code", text: "Move a code between the bookmakers we're connected to, in one message." },
   { icon: Sparkles, title: "Ask for a slip", text: "\"Build me a 5 odds\" — from today's real prices, across varied markets." },
   { icon: Scissors, title: "Cut it down", text: "Trim to the odds you want, or keep only the safest picks." },
 ];
@@ -60,8 +60,8 @@ export default async function HomePage() {
             Paste your code. Get a better slip.
           </h1>
           <p className="mx-auto max-w-md text-balance text-muted-foreground lg:mx-0">
-            See every game and price on your SportyBet or MSport code, convert it to the other, or ask for a 2 or 5 odds
-            built from today&apos;s real prices.
+            See every game and price on your booking code, move it to another bookmaker, or ask for a 2 or 5 odds built
+            from today&apos;s real prices.
           </p>
           <div className="flex flex-col justify-center gap-2 sm:flex-row lg:justify-start">
             <Button asChild size="lg" className="h-12 px-6">
@@ -78,7 +78,7 @@ export default async function HomePage() {
         <PhoneDemo />
       </section>
 
-      <section aria-labelledby="features">
+      <section aria-labelledby="features" className="gc-reveal">
         <h2 id="features" className="sr-only">
           What it does
         </h2>
@@ -93,13 +93,19 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <ProblemFix />
+      <div className="gc-reveal">
+        <ProblemFix />
+      </div>
 
-      <HowItWorks />
+      <div className="gc-reveal">
+        <HowItWorks />
+      </div>
 
-      <Bookmakers />
+      <div className="gc-reveal">
+        <Bookmakers />
+      </div>
 
-      <section aria-labelledby="record" className="space-y-3">
+      <section aria-labelledby="record" className="gc-reveal space-y-3">
         <div className="flex items-baseline justify-between gap-3">
           <h2 id="record" className="text-lg font-semibold">
             Daily picks, in the open
@@ -125,13 +131,13 @@ export default async function HomePage() {
           </>
         ) : (
           <p className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-            Daily picks start once the bookmakers are connected for live prices. Every pick will be published here with its
-            result, win or lost, and nothing will be edited afterwards.
+            Two picks go up every morning, built from real prices. Results appear here as the games finish — won or lost,
+            never edited, never removed.
           </p>
         )}
       </section>
 
-      <section aria-labelledby="install" className="grid gap-4 sm:grid-cols-2">
+      <section aria-labelledby="install" className="gc-reveal grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <h2 id="install" className="text-lg font-semibold">
             Keep it on your phone
@@ -152,7 +158,7 @@ export default async function HomePage() {
         <InstallGuide />
       </section>
 
-      <section className="rounded-lg border bg-card p-6 text-center">
+      <section className="gc-reveal rounded-lg border bg-card p-6 text-center">
         <h2 className="text-lg font-semibold">Paste your first code</h2>
         <p className="mt-1 text-sm text-muted-foreground">It takes a few seconds and costs nothing.</p>
         <Button asChild size="lg" className="mt-4 h-12 px-6">

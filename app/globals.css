@@ -145,33 +145,52 @@
     font-variant-numeric: tabular-nums;
   }
 }
-/* Landing page demo: a looping walk-through of the real flow. One timeline, staged with delays,
-   so it costs no JavaScript. Respects reduced-motion by showing the finished state. */
+/* Landing page demo: a walk-through of the real flow, staged with delays so it costs no
+   JavaScript. It runs once rather than looping: a loop spends most of its cycle with the phone
+   empty, and the first thing a visitor saw was a blank frame. */
 @keyframes gc-step {
-  0%, 4% { opacity: 0; transform: translateY(6px); }
-  8%, 92% { opacity: 1; transform: none; }
-  100% { opacity: 1; transform: none; }
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes gc-caret {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0; }
 }
 @keyframes gc-type {
-  0%, 2% { width: 0; }
-  14%, 100% { width: 6ch; }
+  from { width: 0; }
+  to { width: 6ch; }
 }
 .gc-demo-step {
   opacity: 0;
-  animation: gc-step 12s ease-out infinite;
+  animation: gc-step 0.45s ease-out forwards;
 }
 .gc-demo-type {
   display: inline-block;
   overflow: hidden;
   white-space: nowrap;
   vertical-align: bottom;
-  animation: gc-type 12s steps(6, end) infinite;
+  width: 6ch;
+  animation: gc-type 0.8s steps(6, end);
 }
-.gc-demo-caret { animation: gc-caret 1s step-end infinite; }
+.gc-demo-caret { animation: gc-caret 1s step-end 6; }
+
+/* Sections ease in as they are scrolled to, where the browser can do it without JavaScript.
+   Content is fully visible by default, so a browser without scroll-driven animations — or with
+   JavaScript-free rendering — simply shows everything. Nothing here can hide content. */
+@keyframes gc-reveal {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .gc-reveal {
+      animation: gc-reveal linear both;
+      animation-timeline: view();
+      /* Finish well before the element is centred, so it is readable as it arrives. */
+      animation-range: entry 10% cover 28%;
+    }
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .gc-demo-step, .gc-demo-type, .gc-demo-caret { animation: none; opacity: 1; width: auto; }
 }
