@@ -10,8 +10,9 @@ import type { UserRole } from "@/lib/generated/prisma/enums";
  * live site. This is granted from the `role` column rather than a hard-coded address: the account
  * that holds it can change, and an email in source would be both fragile and public.
  *
- * The subscription returned for an admin is synthetic — nothing is written, no payment is implied,
- * and the billing pages still treat them as unsubscribed, so they can test a real checkout.
+ * The subscription returned for an admin is synthetic — nothing is written and no payment is
+ * implied — and it applies even when the admin holds a real, lower plan. The grant is a floor, not
+ * a fallback: an operator who once bought a cheap plan to test checkout must not be left on it.
  */
 async function adminSubscription(userId: string, knownRole?: UserRole) {
   const role = knownRole ?? (await db.profile.findUnique({ where: { id: userId }, select: { role: true } }))?.role;
@@ -41,13 +42,16 @@ async function adminSubscription(userId: string, knownRole?: UserRole) {
 
 /** `knownRole` saves a query when the caller already holds the profile. */
 export async function getActiveSubscription(userId: string, knownRole?: UserRole) {
-  const real = await db.subscription.findFirst({
+  // The admin grant is checked first and wins: VIP is the top tier, so it is never worse than
+  // anything they hold, and falling back only when they have nothing would leave an admin with an
+  // old test purchase stuck on it.
+  const granted = await adminSubscription(userId, knownRole);
+  if (granted) return granted;
+  return db.subscription.findFirst({
     where: { userId, status: "ACTIVE", endsAt: { gt: new Date() } },
     include: { plan: true },
     orderBy: { endsAt: "desc" },
   });
-  // A real subscription wins, so an admin who has paid sees what they paid for.
-  return real ?? (await adminSubscription(userId, knownRole));
 }
 
 /** Public shape of the current user, shared by the web app, Telegram bot and mobile app. */

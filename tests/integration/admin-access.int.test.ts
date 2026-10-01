@@ -44,7 +44,7 @@ describe("admin access", () => {
     expect(allowance.kind).toBe("trial");
   });
 
-  it("lets an admin who really paid keep what they paid for", async () => {
+  it("keeps VIP even when the admin holds a cheaper real plan", async () => {
     const admin = await makeAdmin();
     const starter = await db.plan.findFirst({ where: { code: { startsWith: "starter" } } });
     await db.subscription.create({
@@ -56,8 +56,12 @@ describe("admin access", () => {
         endsAt: new Date(Date.now() + 7 * 86_400_000),
       },
     });
-    // A real subscription wins over the grant, so a real purchase is never silently ignored.
-    expect((await getActiveSubscription(admin.id))?.plan.code).toBe(starter!.code);
+    // The grant is a floor: buying a cheap plan to test checkout must not demote the operator.
+    const sub = await getActiveSubscription(admin.id);
+    expect(sub?.plan.code).toMatch(/^vip/);
+    expect(sub?.plan.allowDailyPicks).toBe(true);
+    // Their real purchase is untouched; only what they can use changes.
+    expect(await db.subscription.count({ where: { userId: admin.id } })).toBe(1);
   });
 
   it("reports the granted plan on the profile", async () => {
