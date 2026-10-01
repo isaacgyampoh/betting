@@ -105,13 +105,16 @@ function resultEvidence(d: MatchDetail, outcome: string): Evidence | null {
   const where = backedSide === "home" ? "at home" : "away";
   const parts = [`${backed.team.name} ${verb} in ${outOf(mine.hits, mine.total)} ${where}`];
 
+  // The backed side's own record carries most of the weight. A weak opponent is worth something,
+  // but it must not rescue a team that keeps losing: "avoided defeat in 1 of 5 at home" should not
+  // end up supporting a pick just because the other side is worse.
   let support = mine.hits / mine.total;
   let sample = mine.total;
   const theirs = winRate(other, otherSide);
   if (theirs.total) {
     const theirWhere = otherSide === "home" ? "at home" : "away";
     parts.push(`${other.team.name} won just ${outOf(theirs.hits, theirs.total)} ${theirWhere}`);
-    support = support * 0.65 + (1 - theirs.hits / theirs.total) * 0.35;
+    support = support * 0.8 + (1 - theirs.hits / theirs.total) * 0.2;
     sample += theirs.total;
   }
   return { text: `${parts.join(", while ")}.`, support, sample };

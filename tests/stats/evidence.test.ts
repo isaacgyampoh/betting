@@ -118,6 +118,15 @@ describe("result evidence", () => {
     expect(e.text).toContain("Shimizu won in 0 of 1 at home");
   });
 
+  it("won't let a weak opponent rescue a side with a poor record of its own", () => {
+    // Malta avoided defeat in 1 of 5 at home; Gibraltar won 0 of 3 away. Published, this read as an
+    // argument against the very pick it was attached to.
+    const weakHome = form(HOME, [[0, 1, true], [0, 2, true], [1, 1, true], [0, 3, true], [1, 2, true]]);
+    const weakerAway = form(AWAY, [[0, 2, false], [0, 1, false], [1, 3, false]]);
+    const e = evidenceFor({ marketId: "10", outcome: "HOME_DRAW", line: null }, detail(weakHome, weakerAway))!;
+    expect(e.support).toBeLessThan(0.4); // below the veto line
+  });
+
   it("backs the away side when the pick does", () => {
     const e = evidenceFor({ marketId: "1", outcome: "AWAY", line: null }, detail(homeForm, awayForm))!;
     expect(e.text).toBe("Yokohama won in 1 of 5 away, while Shimizu won just 3 of 5 at home.");
