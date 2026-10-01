@@ -36,7 +36,9 @@ describe("SportyBet market mapping", () => {
     expect(parseSpecifier("hcp3way", "bogus")).toBeUndefined();
     // Market 16 states the line directly instead of as a head start.
     expect(parseSpecifier("hcpAsian", "hcp=-3.5")).toBe(-3.5);
+    // Read either spelling, but only ever write the bare one.
     expect(parseSpecifier("hcpAsian", "hcp=+1.5")).toBe(1.5);
+    expect(parseSpecifier("hcpAsian", "hcp=1.5")).toBe(1.5);
     expect(parseSpecifier("hcpAsian", "hcp=0:1")).toBeUndefined();
   });
 
@@ -53,6 +55,13 @@ describe("SportyBet market mapping", () => {
     ["90", "12", "total=1", { type: "OVER_UNDER", period: "H2", outcome: "OVER", line: 1 }],
   ])("maps the newly verified market %s / outcome %s / %s", (marketId, outcomeId, specifier, expected) => {
     expect(adapter.mapMarket({ marketId, outcomeId, specifier }, teams)).toEqual(expected);
+  });
+
+  it("writes a positive asian handicap line without a plus sign", () => {
+    // Both bookmakers send "hcp=0.5"; "hcp=+0.5" is a different (or invalid) line to them.
+    const raw = adapter.unmapMarket({ type: "ASIAN_HANDICAP", period: "FT", outcome: "HOME", line: 0.5 }, teams);
+    expect(raw?.specifier).toBe("hcp=0.5");
+    expect(adapter.mapMarket(raw!, teams)).toEqual({ type: "ASIAN_HANDICAP", period: "FT", outcome: "HOME", line: 0.5 });
   });
 
   it("keeps home and away team totals apart when unmapping", () => {

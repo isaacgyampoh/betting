@@ -96,7 +96,9 @@ export function formatSpecifier(kind: LineKind, line: number | null): string | u
   if (kind === "none") return line === null ? "" : undefined;
   if (line === null) return undefined;
   if (kind === "total") return `total=${line}`;
-  if (kind === "hcpAsian") return `hcp=${line > 0 ? `+${line}` : line}`;
+  // Both SportyBet and MSport write a positive asian line bare ("hcp=0.5"), never "hcp=+0.5".
+  // Emitting the plus sign books a different line or fails outright, so keep it off.
+  if (kind === "hcpAsian") return `hcp=${line}`;
   return line < 0 ? `hcp=0:${-line}` : `hcp=${line}:0`;
 }
 
