@@ -29,9 +29,11 @@
     "NEXT_PUBLIC_SUPABASE_URL": "https://qefedcphkmxuxjetmtqw.supabase.co",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlZmVkY3Boa214dXhqZXRtdHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NjE0NTUsImV4cCI6MjEwNjMzNzQ1NX0.0uK_oW-vIBwPfpg1qXi53BjXpF2XjfsdUz2SO9hYh6g",
     "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "pk_live_9d21dd9b8bd208a10cd1a1195a0dbd1d477894b1",
-    "SPORTYBET_MODE": "mock",
+    "SPORTYBET_MODE": "live",
     "BETWAY_MODE": "mock",
-    "STATS_MODE": "auto"
+    "STATS_MODE": "auto",
+    // Production never serves sample bookmaker data: an unconnected bookmaker refuses instead.
+    "ALLOW_SAMPLE_DATA": "0"
   },
 
   // Pooled Postgres connections next to Supabase (session pooler origin, query caching off).

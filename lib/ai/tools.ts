@@ -211,7 +211,13 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
       const i = input as z.infer<(typeof SCHEMAS)["edit_slip"]>;
       const slips = await editSlip({ user, ipHash, slipId: i.slip_id, op: await toEditOp(i, ctx), book: true });
       remember(ctx, ...slips);
-      return slips.map(compactSlip);
+      // A slip with no code could not be booked at the bookmaker; say so rather than leaving the
+      // model to imply the user has a code to paste.
+      const booked = slips.every((s) => s.code);
+      return {
+        slips: slips.map(compactSlip),
+        ...(booked ? {} : { booked: false, note: "We couldn't create a booking code at this bookmaker, so tell the user to add these picks themselves." }),
+      };
     }
     case "build_slip_from_fixtures": {
       const i = input as z.infer<(typeof SCHEMAS)["build_slip_from_fixtures"]>;

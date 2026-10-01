@@ -34,7 +34,7 @@ export function CodeInput({ value, onChange, id = "code" }: { value: string; onC
           id={id}
           value={value}
           onChange={(e) => onChange(e.target.value.toUpperCase())}
-          placeholder="e.g. BC7K2Q"
+          placeholder="Paste your booking code"
           autoComplete="off"
           autoCapitalize="characters"
           spellCheck={false}

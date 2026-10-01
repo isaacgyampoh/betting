@@ -20,10 +20,12 @@ type ChatResponse = { reply: string; slips: SlipView[]; allowance: Allowance; qu
 const STORAGE_KEY = "gameclaw.chat.v2";
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
+// Things that work without the user already having a code. Sample codes are deliberately not
+// suggested: they don't resolve in production, so suggesting one would send the user into an error.
 const STARTERS = [
-  "Convert SportyBet BC7K2Q to Betway",
-  "Load BC7K2Q and make a 2 odds from it",
-  "Load 7KQ2M and remove anything above 2.0",
+  "Build me a 5 odds for today",
+  "Give me a 2 odds with varied markets",
+  "Paste your booking code and I'll check it",
 ];
 
 function loadStored(): Turn[] {

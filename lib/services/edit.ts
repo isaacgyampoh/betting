@@ -13,6 +13,10 @@ export const SLIP_EDIT_LIMIT = { limit: 60, windowMs: 60 * 60_000 };
 /**
  * Applies an edit (remove / safest N / trim to odds / split) and books a new code for each
  * resulting slip. Only bookable games (active, mapped market, not started) are used.
+ *
+ * `book` is a request, not a guarantee: a bookmaker we cannot create codes at yet still returns the
+ * edited slip, without a code, so the user can see the result and place it themselves. Failing the
+ * whole edit because we cannot book it would throw away work the user asked for.
  */
 export async function editSlip(opts: { user: AuthUser; slipId: string; op: EditOp; book: boolean; ipHash: string | null }): Promise<SlipView[]> {
   const { user, op, ipHash } = opts;
@@ -33,7 +37,8 @@ export async function editSlip(opts: { user: AuthUser; slipId: string; op: EditO
   const byPosition = new Map(usable.map((s) => [s.position, s]));
   const adapter = getAdapter(source.bookmaker.slug as BookmakerSlug);
   const kind = op.type === "split" ? "SPLIT" : "EDITED";
-  const meta = { op: op.type, sourceSlipId: source.id, groups: nonEmpty.length };
+  const book = opts.book && adapter.capabilities.createCode;
+  const meta = { op: op.type, sourceSlipId: source.id, groups: nonEmpty.length, booked: book };
 
   try {
     const results: SlipView[] = [];
@@ -41,7 +46,7 @@ export async function editSlip(opts: { user: AuthUser; slipId: string; op: EditO
       const picks = group.map((p) => byPosition.get(p)!);
       let code: string | null = null;
       let expiresAt: Date | null = null;
-      if (opts.book) {
+      if (book) {
         const created = await adapter
           .createCode(picks.map((s) => ({ eventExternalId: s.bookmakerEvent!.externalId, market: marketOf(s)! })))
           .catch((err) => {

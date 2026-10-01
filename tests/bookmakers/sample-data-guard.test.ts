@@ -21,13 +21,13 @@ afterEach(() => {
 describe("sampleDataAllowed", () => {
   it("is off in production unless explicitly turned on", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    delete process.env.ALLOW_SAMPLE_DATA;
+    vi.stubEnv("ALLOW_SAMPLE_DATA", "");
     expect((await registry()).sampleDataAllowed()).toBe(false);
   });
 
   it("is on outside production", async () => {
     vi.stubEnv("NODE_ENV", "development");
-    delete process.env.ALLOW_SAMPLE_DATA;
+    vi.stubEnv("ALLOW_SAMPLE_DATA", "");
     expect((await registry()).sampleDataAllowed()).toBe(true);
   });
 
@@ -83,7 +83,7 @@ describe("in production, an unconnected bookmaker serves nothing", () => {
   });
 
   it("lists none when nothing is connected", async () => {
-    delete process.env.SPORTYBET_MODE;
+    vi.stubEnv("SPORTYBET_MODE", "mock");
     const { connectedBookmakers } = await registry();
     expect(connectedBookmakers()).toEqual([]);
   });

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeftRight, ArrowRight, MessageSquare, Scissors } from "lucide-react";
+import { ArrowRight, MessageSquare, Scissors, Sparkles } from "lucide-react";
 import { InstallGuide } from "@/components/landing/install-guide";
 import { PhoneDemo } from "@/components/landing/phone-demo";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,9 @@ import { getTrackRecord } from "@/lib/services/daily-picks";
 import { listActivePlans } from "@/lib/services/plans";
 
 export const metadata: Metadata = {
-  title: { absolute: "gameclaw: convert betting codes between Ghana's bookmakers" },
+  title: { absolute: "gameclaw: read your booking code and build a better slip" },
   description:
-    "Paste a booking code from any bookmaker. See the games, then convert it to every other bookmaker in one tap. Built in Ghana. 18+.",
+    "Paste your SportyBet booking code to see every game, market and price on it. Then ask for a 2 or 5 odds built from today's real prices. Built in Ghana. 18+.",
   alternates: { canonical: "/" },
   openGraph: { url: "/" },
 };
@@ -20,8 +20,10 @@ export const metadata: Metadata = {
 // Shows live track record numbers, so it is rendered per request.
 export const dynamic = "force-dynamic";
 
+// Each line must describe something the app does today. Conversion between bookmakers needs the
+// other bookmakers connected first, so it is not promised here yet.
 const FEATURES = [
-  { icon: ArrowLeftRight, title: "Convert anywhere", text: "One code in, a code for every other bookmaker out." },
+  { icon: Sparkles, title: "Ask for a slip", text: "\"Build me a 5 odds\" — from today's real prices, across varied markets." },
   { icon: Scissors, title: "Cut it down", text: "Trim to the odds you want, or keep only the safest picks." },
   { icon: MessageSquare, title: "Just ask", text: "Type it, or send a screenshot of a slip and it reads it." },
 ];
@@ -52,10 +54,11 @@ export default async function HomePage() {
       <section className="grid items-center gap-8 pt-4 lg:grid-cols-2 lg:pt-10">
         <div className="space-y-5 text-center lg:text-left">
           <h1 className="text-4xl font-semibold tracking-tight text-balance md:text-5xl">
-            One code. Every bookmaker.
+            Paste your code. Get a better slip.
           </h1>
           <p className="mx-auto max-w-md text-balance text-muted-foreground lg:mx-0">
-            Paste a booking code, see the games, convert it to every other bookmaker in one tap.
+            See every game, market and price on your SportyBet code — then ask for a 2 or 5 odds built from today&apos;s
+            real prices.
           </p>
           <div className="flex flex-col justify-center gap-2 sm:flex-row lg:justify-start">
             <Button asChild size="lg" className="h-12 px-6">
@@ -67,7 +70,7 @@ export default async function HomePage() {
               <Link href="/pricing">See plans</Link>
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">Free to paste, view and convert. 18+.</p>
+          <p className="text-xs text-muted-foreground">Free to paste and view. 18+.</p>
         </div>
         <PhoneDemo />
       </section>
