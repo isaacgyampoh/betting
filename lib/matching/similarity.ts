@@ -75,12 +75,28 @@ function softTokenScore(a: string[], b: string[]): number {
   return (side(a, b) + side(b, a)) / 2;
 }
 
+/**
+ * The squad a name refers to: the senior side, an age group, a women's side or a B/reserve team.
+ * These are different teams that share a name, and "North Macedonia" is wholly contained in
+ * "North Macedonia U21", so without this they score as a near-certain match and we end up quoting
+ * one squad's results for another's game.
+ */
+function squadLevel(normalized: string): string {
+  const age = normalized.match(/\bu(1[5-9]|2[0-3])\b/)?.[0];
+  if (age) return age;
+  if (/\b(w|women|womens|feminine|frauen)\b/.test(normalized)) return "w";
+  if (/\b(ii|b|reserves?|academy|youth)\b/.test(normalized)) return "b";
+  return "senior";
+}
+
 /** 0..1 confidence that two team names refer to the same club. */
 export function teamSimilarity(a: string, b: string, index: AliasIndex = DEFAULT_INDEX): number {
   const na = normalizeTeamName(a);
   const nb = normalizeTeamName(b);
   if (!na || !nb) return 0;
   if (na === nb) return 1;
+  // A senior side and its U21 are not the same team, however similar the names read.
+  if (squadLevel(na) !== squadLevel(nb)) return 0;
   const ka = index.get(na);
   const kb = index.get(nb);
   if (ka && ka === kb) return 0.98;

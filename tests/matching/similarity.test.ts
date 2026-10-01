@@ -113,3 +113,39 @@ describe("typo tolerance", () => {
     ["Inter Milan", "AC Milan"],
   ])("%s ≠ %s", (a, b) => expect(teamSimilarity(a, b)).toBeLessThan(MATCH_THRESHOLD));
 });
+
+// A senior side and its age-group team share a name, and the shorter name is wholly contained in
+// the longer one, so they used to score as a near-certain match. That put one squad's results under
+// another squad's game: a published pick cited "North Macedonia U21's games" for a senior fixture.
+describe("squad levels are different teams", () => {
+  it.each([
+    ["North Macedonia", "North Macedonia U21"],
+    ["Montenegro", "Montenegro U21"],
+    ["Brazil", "Brazil U23"],
+    ["Arsenal", "Arsenal W"],
+    ["Real Madrid", "Real Madrid B"],
+    ["Chelsea", "Chelsea Reserves"],
+  ])("%s never matches %s", (senior, other) => {
+    expect(teamSimilarity(senior, other)).toBe(0);
+    expect(teamSimilarity(other, senior)).toBe(0);
+  });
+
+  it("still matches two names for the same squad", () => {
+    expect(teamSimilarity("Brazil U23", "Brasil U23")).toBeGreaterThan(0.8);
+    // Feeds disagree on how to mark a women's side; they are the same team.
+    expect(teamSimilarity("Arsenal W", "Arsenal Women")).toBe(1);
+    expect(teamSimilarity("Hacken Gothenburg W", "Hacken Gothenburg Ladies")).toBe(1);
+  });
+
+  it("the level check never lowers an ordinary score", () => {
+    // "N." vs "North" is an abbreviation limit that predates this and is unaffected by it.
+    expect(teamSimilarity("North Macedonia U21", "N. Macedonia U21")).toBeGreaterThanOrEqual(
+      teamSimilarity("North Macedonia", "N. Macedonia"),
+    );
+  });
+
+  it("leaves ordinary senior matching alone", () => {
+    expect(teamSimilarity("Newcastle", "Newcastle United")).toBeGreaterThan(0.8);
+    expect(teamSimilarity("Man Utd", "Manchester United")).toBeGreaterThan(0.8);
+  });
+});
