@@ -163,7 +163,7 @@ Headers: `x-pawa-brand: betpawa-ghana`, `x-pawa-language: en`. Errors are
 risk silently mis-reading odds, which is the one mistake that must never ship. A DevTools capture
 (step A below) unblocks it, because the browser shows the decoded body.
 
-## 3a. 1xBet platform (1xBet, PariPesa, 22Bet, Betwinner) — one verification away
+## 3a. 1xBet platform (1xBet, PariPesa, 22Bet, Betwinner) — two gaps, one of them large
 
 **Status: the booking-code endpoints are found and reachable without an account. One field shape is
 still unconfirmed.** These four share a platform, so finishing one finishes all four. Working
@@ -236,20 +236,44 @@ So one prematch pick is:
 `GameId` is the feed's `I` (not `CI`), `Type` is the outcome's `T` and `Coef` its `C`, all from
 `LineFeed/GetGameZip`. `Kind` is 3 for a prematch bet, 1 for live.
 
-### What is left
+### What is left: two things, not one
 
-**One verified booking.** Save a code with the body above and read it back with
-`GetCoupon {"guid":"<code>","CfView":0,"Lng":"en"}`. If the picks come back, the client can be
-written and four bookmakers go live; the earlier attempts failed only because they were missing
-`PV`, `InstrumentId`, `Price`, `Expired` and `Kind`.
+**1. One verified booking.** Save a code with the body above, read it back with
+`GetCoupon {"guid":"<code>","CfView":0,"Lng":"en"}`. If the picks come back, booking works.
 
 That check was not run from here: sending bet-slip POSTs to a third party is blocked as attack-like
 traffic, and the block is right — earlier rounds of trying shapes are exactly what it exists to stop.
-Either of these clears it:
+Run those two requests yourself, or capture the `UpdateCoupon` body from DevTools, and paste either.
 
-- **Run it yourself**, or allow it, and paste the result.
-- **Or capture it**: open `1xbet.com.gh`, DevTools → Network → Fetch/XHR, add one pick to the bet
-  slip, and copy the `UpdateCoupon` request body. That shows the live values for the same fields.
+**2. A market dictionary, which is the bigger job.** This platform's feed ships **numeric ids with
+no labels at all**:
+
+```json
+{"T":1,"C":1.22,"CV":"1.22","G":1}      // 1xBet: what market? what outcome?
+```
+
+against SportyBet, which names everything:
+
+```json
+{"id":"1","name":"1X2","outcomes":[{"id":"1","desc":"Home","odds":"1.22"}]}
+```
+
+One fixture carries **206 distinct market groups**, and the names are not in the feed and not in the
+bundle — they come from a translations service at runtime. Without a `T`/`G` → market mapping:
+
+- a loaded 1xBet slip would show a list of numbers, not picks;
+- converting *to* 1xBet could not express our markets in their ids.
+
+Inferring the mapping by comparing odds against another bookmaker is **not** acceptable: a wrong
+guess silently books a different bet, which is the one failure this project must never ship.
+
+**So the capture to ask for is bigger than one request.** What is needed is the market list for one
+fixture *as the site displays it* — the names shown next to the prices — alongside the feed's `T`
+and `G` for the same fixture. DevTools on a match page shows both at once: the `GetGameZip` response
+and whatever the page fetches to label it.
+
+Until that exists, these four bookmakers stay off. SportyBet, MSport and Football.com needed none of
+this because they ship their own labels.
 
 ## Priority order
 
@@ -258,7 +282,7 @@ capture unlocks:
 
 | # | Bookmaker | Capture | Unlocks |
 |---|---|---|---|
-| 1 | **1xBet** (`1xbet.com.gh`) | add one pick to the bet slip | **four bookmakers** — 1xBet, Betwinner, 22Bet, PariPesa share the platform, and only one field shape is missing |
+| 1 | **1xBet** (`1xbet.com.gh`) | open a match page, then add one pick | **four bookmakers** — 1xBet, PariPesa, 22Bet, Betwinner share the platform. Needs both the `UpdateCoupon` body *and* the market names beside their numeric ids |
 | 2 | **betPawa** | load a booking code | betPawa; the browser shows the decoded protobuf we cannot read from outside |
 | 3 | **Betway** | load a code, book a code, open a match | Betway |
 | 4 | **Football.com** | the same three | Football.com |
