@@ -16,6 +16,7 @@ import {
   toCandidates,
   type FixtureKind,
   type FixtureSlip,
+  type MarketGroup,
   type PickCandidate,
 } from "@/lib/slips/fixture-picks";
 import { enrich, pickKey, rankByEvidence, reasonWithEvidence, statsBlocked, withoutContradicted } from "@/lib/slips/enrich";
@@ -99,8 +100,10 @@ export async function buildFromToday(opts: {
   window?: { from: Date; to: Date };
   /** Kinds of fixture to leave out. Friendlies are dropped unless this says otherwise. */
   exclude?: FixtureKind[];
+  /** Build only from these markets, when the user has asked for particular ones. */
+  markets?: MarketGroup[];
 }): Promise<TodaySlip> {
-  const { user, target, ipHash, hours = 24, window, exclude = ["friendly"] } = opts;
+  const { user, target, ipHash, hours = 24, window, exclude = ["friendly"], markets } = opts;
   if (!(target > 1)) throw new AppError("BAD_REQUEST", "Give a target total odds above 1.0.");
 
   const source = priceSource();
@@ -125,13 +128,14 @@ export async function buildFromToday(opts: {
 
   // Ask for the markets we can research first: it is a third faster than the full set and gives the
   // same evidence-capable picks. Corners, cards and the rest are fetched only if the target needs
-  // them, which is the uncommon case.
-  const fixtures = await load(CORE_MARKET_IDS);
+  // them — or straight away when the user has asked for them by name.
+  const askedForExtras = markets?.some((m) => !hasEvidenceSupport(m)) ?? false;
+  const fixtures = askedForExtras ? await load() : await load(CORE_MARKET_IDS);
 
   const inWindow = window
     ? fixtures.filter((f) => f.event.kickoffAt >= window.from && f.event.kickoffAt <= window.to)
     : fixtures;
-  const candidates = toCandidates(inWindow, { exclude });
+  const candidates = toCandidates(inWindow, { exclude, only: markets });
   if (!candidates.length) {
     throw new AppError(
       "BOOKMAKER_UNAVAILABLE",
@@ -147,14 +151,18 @@ export async function buildFromToday(opts: {
   // Markets we hold history for come first. Filling a slip with corner and card lines would make the
   // research pointless: every leg would read "no history for this market". Corners and cards are
   // only reached for when the evidenced markets cannot get to the target on their own.
-  const evidenced = candidates.filter((c) => hasEvidenceSupport(c.group));
-  const pool = shortlistCandidates(evidenced.length ? evidenced : candidates);
+  // When particular markets were asked for, those are the pool: a user who wants corners does not
+  // want a goals line substituted because we hold more history for it.
+  const evidenced = markets?.length ? candidates : candidates.filter((c) => hasEvidenceSupport(c.group));
+  // A named-markets request keeps every pick from those markets rather than capping each group.
+  const chosenMarkets = Boolean(markets?.length);
+  const pool = shortlistCandidates(evidenced.length ? evidenced : candidates, 18, { ignoreGroupCaps: chosenMarkets });
   const researched = await enrich(user, pool, STATS_BUDGET);
   const { kept, dropped } = withoutContradicted(researched);
   const ranked = rankByEvidence(kept);
 
   const build = (from: PickCandidate[], preShortlisted: boolean) =>
-    buildFromFixtures(from, target, { bookmakerName: source.name, preShortlisted });
+    buildFromFixtures(from, target, { bookmakerName: source.name, preShortlisted, ignoreGroupCaps: chosenMarkets });
 
   // A pick recent results argued against must stay out, including when we widen the search. Letting
   // one back in would publish it alongside the very evidence against it.
@@ -166,7 +174,7 @@ export async function buildFromToday(opts: {
     // This is where the heavier fetch is paid for, and only when it is needed.
     const wide = toCandidates(
       window ? (await load()).filter((f) => f.event.kickoffAt >= window.from && f.event.kickoffAt <= window.to) : await load(),
-      { exclude },
+      { exclude, only: markets },
     );
     const wider = build(wide.filter((c) => !vetoed.has(pickKey(c))), false);
     if (wider && (!slip || wider.reachedTarget)) slip = wider;

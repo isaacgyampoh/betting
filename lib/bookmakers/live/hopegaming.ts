@@ -141,6 +141,8 @@ export const INLINE_MARKET_IDS = [
   "166", // Corners Over/Under
   "139", // Bookings (cards) Over/Under
   "900342", // Fouls Over/Under
+  "900393", // Shots on Target Over/Under
+  "900394", // Shots Over/Under
 ] as const;
 
 

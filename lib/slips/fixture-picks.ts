@@ -20,6 +20,8 @@ export const MARKET_GROUPS = {
   corners: { label: "Corners", maxPerSlip: 2 },
   cards: { label: "Cards", maxPerSlip: 2 },
   fouls: { label: "Fouls", maxPerSlip: 1 },
+  shots_on_target: { label: "Shots on target", maxPerSlip: 1 },
+  shots: { label: "Shots", maxPerSlip: 1 },
 } as const;
 
 export type MarketGroup = keyof typeof MARKET_GROUPS;
@@ -46,6 +48,8 @@ const GROUP_OF: Record<string, MarketGroup> = {
   "166": "corners",
   "139": "cards",
   "900342": "fouls",
+  "900393": "shots_on_target",
+  "900394": "shots",
 };
 
 const line = (specifier: string): number | null => {
@@ -107,6 +111,12 @@ export function describeOffer(event: Pick<BookmakerEventInfo, "home" | "away">, 
       return overUnder(specifier, outcomeId, "card");
     case "900342":
       return overUnder(specifier, outcomeId, "foul");
+    case "900393": {
+      const label = overUnder(specifier, outcomeId, "shot");
+      return label && `${label} on target`;
+    }
+    case "900394":
+      return overUnder(specifier, outcomeId, "shot");
     default:
       return null;
   }
@@ -173,6 +183,8 @@ export function classifyFixture(event: Pick<BookmakerEventInfo, "home" | "away" 
 export type CandidateFilter = {
   /** Kinds to leave out. Friendlies are dropped unless explicitly asked for. */
   exclude?: FixtureKind[];
+  /** Only these market groups, when the user has asked for particular ones. */
+  only?: MarketGroup[];
   /** Reject anything the bookmaker rates below this. Default 0.45: no coin-flips or worse. */
   minProbability?: number;
   /** Reject near-certainties: they add nothing to the total odds. Default 0.93. */
@@ -186,7 +198,8 @@ export type CandidateFilter = {
  * probability: we will not fabricate one, and a pick we cannot rate has no place in a built slip.
  */
 export function toCandidates(fixtures: FixtureInput[], filter: CandidateFilter = {}): PickCandidate[] {
-  const { minProbability = 0.45, maxProbability = 0.93, minMinutesToKickoff = 15, exclude = ["friendly"] } = filter;
+  const { minProbability = 0.45, maxProbability = 0.93, minMinutesToKickoff = 15, exclude = ["friendly"], only } = filter;
+  const wanted = only?.length ? new Set<MarketGroup>(only) : null;
   const cutoff = Date.now() + minMinutesToKickoff * 60_000;
   const skip = new Set(exclude);
   const out: PickCandidate[] = [];
@@ -206,6 +219,7 @@ export function toCandidates(fixtures: FixtureInput[], filter: CandidateFilter =
     for (const o of offers) {
       const group = GROUP_OF[o.raw.marketId];
       if (!group || o.probability === null) continue;
+      if (wanted && !wanted.has(group)) continue;
       if (o.probability < minProbability || o.probability > maxProbability) continue;
       if (!(o.odds > 1.02)) continue;
       const label = describeOffer(event, o.raw);
@@ -258,6 +272,10 @@ export function reasonFor(c: PickCandidate, bookmakerName: string): string {
       return `${bookmakerName} rate this card line at about ${pct}%${where}.`;
     case "fouls":
       return `${bookmakerName} rate this foul line at about ${pct}%.`;
+    case "shots_on_target":
+      return `${bookmakerName} rate this shots-on-target line at about ${pct}%.`;
+    case "shots":
+      return `${bookmakerName} rate this shots line at about ${pct}%.`;
   }
 }
 
@@ -300,7 +318,7 @@ const BANDS: [number, number][] = [
  * price bands so both small and large targets are reachable. Exported so recent-results research can
  * run over exactly this set before a slip is chosen from it.
  */
-export function shortlistCandidates(candidates: PickCandidate[], shortlist = 18): PickCandidate[] {
+export function shortlistCandidates(candidates: PickCandidate[], shortlist = 18, opts: { ignoreGroupCaps?: boolean } = {}): PickCandidate[] {
   const byBand = BANDS.map(([lo, hi]) =>
     candidates.filter((c) => c.probability >= lo && c.probability < hi).sort((a, b) => b.probability - a.probability),
   );
@@ -318,7 +336,9 @@ export function shortlistCandidates(candidates: PickCandidate[], shortlist = 18)
         const c = band[cursor[b]++];
         if (usedEvents.has(c.event.externalId)) continue;
         const used = perGroup.get(c.group) ?? 0;
-        if (used >= MARKET_GROUPS[c.group].maxPerSlip) continue;
+        // The caps exist to stop a slip being five variations of one bet. Someone who asked for
+        // corners wants corners, so they do not apply then.
+        if (!opts.ignoreGroupCaps && used >= MARKET_GROUPS[c.group].maxPerSlip) continue;
         usedEvents.add(c.event.externalId);
         perGroup.set(c.group, used + 1);
         pool.push(c);
@@ -341,10 +361,10 @@ export function shortlistCandidates(candidates: PickCandidate[], shortlist = 18)
 export function buildFromFixtures(
   candidates: PickCandidate[],
   target: number,
-  opts: { maxPicks?: number; bookmakerName?: string; shortlist?: number; preShortlisted?: boolean } = {},
+  opts: { maxPicks?: number; bookmakerName?: string; shortlist?: number; preShortlisted?: boolean; ignoreGroupCaps?: boolean } = {},
 ): FixtureSlip | null {
   const { maxPicks = legsForTarget(target), bookmakerName = "The bookmaker", shortlist = 18, preShortlisted = false } = opts;
-  const pool = preShortlisted ? candidates.slice(0, shortlist) : shortlistCandidates(candidates, shortlist);
+  const pool = preShortlisted ? candidates.slice(0, shortlist) : shortlistCandidates(candidates, shortlist, opts);
   if (!pool.length) return null;
 
   const scored: Candidate[] = pool.map((c, i) => ({ position: i, odds: c.odds, bookmakerProbability: c.probability }));

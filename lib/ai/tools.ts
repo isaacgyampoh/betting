@@ -41,7 +41,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "build_slip_from_fixtures",
     description:
-      "Build a slip from real fixtures when the user has no slip ('make me a 5 odds for today', 'safe 5 odds from tonight's games'). Researches recent results before choosing, and returns each pick with its market, the bookmaker's own odds, an estimated chance and a reason citing real counts. Use from_hours/to_hours for a time window the user names (e.g. midnight games tonight = from_hours 2, to_hours 8). Report `research` so the user sees what was looked at, and check `bookable`.",
+      "Build a slip from real fixtures when the user has no slip ('make me a 5 odds for today', 'a 3 odds on corners'). Researches recent results before choosing, and returns each pick with its market, the bookmaker's own odds, an estimated chance and a reason citing real counts. Use from_hours/to_hours for a time window the user names (midnight games tonight = from_hours 2, to_hours 8), and `markets` when they name what they like (corners, shots on target, fouls, cards). Report `research` so the user sees what was looked at, and check `bookable`.",
     input_schema: {
       type: "object",
       properties: {
@@ -52,6 +52,15 @@ export const TOOLS: Anthropic.Tool[] = [
           type: "array",
           items: { type: "string", enum: ["friendly", "womens", "youth"] },
           description: "Fixture kinds to leave out. Friendlies are excluded unless you pass [] explicitly.",
+        },
+        markets: {
+          type: "array",
+          items: {
+            type: "string",
+            enum: ["result", "double_chance", "goals", "btts", "team_goals", "first_half", "corners", "cards", "fouls", "shots_on_target", "shots"],
+          },
+          description:
+            "Build only from these markets, when the user names what they like (corners, shots on target, fouls, cards). Leave out to let it choose.",
         },
       },
       required: ["target"],
@@ -148,6 +157,9 @@ const SCHEMAS = {
     from_hours: z.number().min(0).max(168).optional(),
     to_hours: z.number().min(0).max(168).optional(),
     exclude: z.array(z.enum(["friendly", "womens", "youth"])).optional(),
+    markets: z
+      .array(z.enum(["result", "double_chance", "goals", "btts", "team_goals", "first_half", "corners", "cards", "fouls", "shots_on_target", "shots"]))
+      .optional(),
   }),
   check_slip_results: z.object({ slip_id: uuid }),
   build_target_slip: z.object({ slip_id: uuid, target: z.number().min(1.01).max(100_000), max_games: z.number().int().min(1).max(12).optional() }),
@@ -268,6 +280,7 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
         hours: window ? Math.ceil((window.to.getTime() - Date.now()) / hour) : undefined,
         window,
         exclude: i.exclude,
+        markets: i.markets,
       });
       // Show it as a card, so the booking code and prices reach the user instead of only existing
       // at the bookmaker.

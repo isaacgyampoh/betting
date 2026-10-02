@@ -1,9 +1,31 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "@/components/nav-items";
+
+/**
+ * A tapped tab lights up at once, instead of waiting for the page to arrive.
+ *
+ * `usePathname` only changes after the navigation finishes, so on a phone the tab you just pressed
+ * stayed grey for a second or more and the app felt like it had ignored you. `useLinkStatus` knows
+ * the navigation is in flight, which is the bit a native app shows immediately.
+ */
+function TabContent({ icon: Icon, label, active }: { icon: typeof NAV_ITEMS[number]["icon"]; label: string; active: boolean }) {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      className={cn(
+        "flex flex-col items-center gap-1 py-2 text-[11px] font-medium transition-colors",
+        active || pending ? "text-foreground" : "text-muted-foreground",
+      )}
+    >
+      <Icon className={cn("size-5 transition-transform", pending && "scale-110")} />
+      {label}
+    </span>
+  );
+}
 
 export function BottomNav() {
   const pathname = usePathname();
@@ -17,17 +39,8 @@ export function BottomNav() {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <li key={href}>
-              <Link
-                href={href}
-                prefetch
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex flex-col items-center gap-1 py-2 text-[11px] font-medium text-muted-foreground",
-                  active && "text-foreground",
-                )}
-              >
-                <Icon className="size-5" />
-                {label}
+              <Link href={href} prefetch aria-current={active ? "page" : undefined} className="block">
+                <TabContent icon={Icon} label={label} active={active} />
               </Link>
             </li>
           );
