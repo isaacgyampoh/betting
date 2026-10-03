@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { BRAND_ACCENT, BrandIcon } from "@/lib/brand-icon";
 import { formatKickoff, formatOdds } from "@/lib/format";
 import { getSlip } from "@/lib/services/slips";
+import { fitShareList } from "@/lib/slips/share-layout";
 
 export const size = { width: 1080, height: 1350 };
 
@@ -19,11 +20,14 @@ export async function GET(req: Request, { params }: RouteContext<"/slip/[id]/sha
   const slip = await getSlip(user, id.data).catch(() => null);
   if (!slip) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Slip not found." } }, { status: 404 });
 
-  // Fewer games when we have reasons to show: a wall of text at this size reads as nothing.
   const playable = slip.selections.filter((s) => s.status === "OK");
-  const explained = playable.some((s) => s.reason);
-  const games = playable.slice(0, explained ? 6 : 10);
-  const row = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, padding: "18px 32px", borderBottom: "1px solid #27272a" } as const;
+  // There is no measuring step inside an image: whatever is laid out here is what ships, and
+  // anything past 1350px is simply cut off, footer and all. So the list is fitted before it is
+  // drawn - games dropped and reasons shortened until the estimate fits what the canvas has left
+  // once the header, the code block and the footer have taken theirs.
+  const free = 1350 - 320;
+  const { games, reasons, pad } = fitShareList(playable, free);
+  const row = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, padding: `${pad}px 32px`, borderBottom: "1px solid #27272a" } as const;
 
   return new ImageResponse(
     (
@@ -46,7 +50,7 @@ export async function GET(req: Request, { params }: RouteContext<"/slip/[id]/sha
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", borderTop: "1px solid #27272a" }}>
-          {games.map((g) => (
+          {games.map((g, i) => (
             <div key={g.position} style={row}>
               <div style={{ display: "flex", flexDirection: "column", maxWidth: 760 }}>
                 <span style={{ fontSize: 30 }}>
@@ -55,9 +59,9 @@ export async function GET(req: Request, { params }: RouteContext<"/slip/[id]/sha
                 <span style={{ color: "#a1a1aa", fontSize: 22 }}>
                   {g.pickLabel} · {formatKickoff(g.kickoffAt)}
                 </span>
-                {g.reason && (
+                {reasons[i] && (
                   <span style={{ color: "#8b8b93", fontSize: 19, marginTop: 6, maxWidth: 740 }}>
-                    {g.reason.length > 115 ? `${g.reason.slice(0, 112)}…` : g.reason}
+                    {reasons[i]}
                   </span>
                 )}
               </div>
