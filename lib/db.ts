@@ -18,8 +18,19 @@ function cloudflareRequest(): CfRequest | null {
   }
 }
 
+// On Workers every query is a hop to the database before the page can render, so how many a page
+// makes is a thing worth being able to assert. Setting DB_QUERY_LOG=1 makes the client emit one
+// event per query; nothing reads it unless a test asks.
+export const queryCounter = { count: 0 };
+
 function createClient(connectionString: string) {
-  return new PrismaClient({ adapter: new PrismaPg({ connectionString, max: 3 }) });
+  const adapter = new PrismaPg({ connectionString, max: 3 });
+  if (process.env.DB_QUERY_LOG !== "1") return new PrismaClient({ adapter });
+  const client = new PrismaClient({ adapter, log: [{ emit: "event", level: "query" }] });
+  client.$on("query", () => {
+    queryCounter.count += 1;
+  });
+  return client;
 }
 
 const perRequest = new WeakMap<object, PrismaClient>();

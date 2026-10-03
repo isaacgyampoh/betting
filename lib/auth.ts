@@ -36,14 +36,25 @@ export async function requireUser(authorization?: string | null): Promise<AuthUs
   return user;
 }
 
-/** Loads the profile, creating it if the auth trigger hasn't (e.g. users created before the trigger). */
-export async function getProfile(user: AuthUser) {
+/**
+ * Loads the profile, creating it if the auth trigger hasn't (e.g. users created before the trigger).
+ *
+ * Read first, write only on a miss: this runs before every protected page renders, and an upsert
+ * is a write even when there is nothing to write - it takes a primary connection and cannot be
+ * served from anywhere nearer. For everyone but a brand-new account the row is already there.
+ *
+ * Cached for the request, because the page guard and the page itself both want the profile, and
+ * so does the account page a third time through getMe.
+ */
+export const getProfile = cache(async (user: AuthUser) => {
+  const existing = await db.profile.findUnique({ where: { id: user.id } });
+  if (existing) return existing;
   return db.profile.upsert({
     where: { id: user.id },
     create: { id: user.id, email: user.email },
     update: {},
   });
-}
+});
 
 /** Signed-in user, 18+ confirmed, and not on a self-imposed break. */
 export async function requireAdult(authorization?: string | null) {

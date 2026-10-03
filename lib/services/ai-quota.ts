@@ -2,6 +2,8 @@ import "server-only";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { getActiveSubscription } from "@/lib/services/profile";
+import { planByCode } from "@/lib/services/plans";
+import type { UserRole } from "@/lib/generated/prisma/enums";
 
 // Per-feature daily limits, read from the plans table so prices and limits change without a deploy.
 // Users without a subscription fall back to the "free" plan row.
@@ -52,44 +54,50 @@ const FREE_FALLBACK: PlanLimits = {
   dailyAnalyses: 0,
 };
 
-async function planFor(userId: string): Promise<{ limits: PlanLimits; subscribed: boolean }> {
-  const subscription = await getActiveSubscription(userId);
+async function planFor(userId: string, knownRole?: UserRole): Promise<{ limits: PlanLimits; subscribed: boolean }> {
+  const subscription = await getActiveSubscription(userId, knownRole);
   if (subscription) return { limits: subscription.plan as PlanLimits, subscribed: true };
-  const free = await db.plan.findUnique({ where: { code: "free" } });
-  return { limits: (free as PlanLimits | null) ?? FREE_FALLBACK, subscribed: false };
+  const free = (await planByCode("free")) as PlanLimits | null;
+  return { limits: free ?? FREE_FALLBACK, subscribed: false };
 }
 
-/** How many times each feature has been used today. */
+/**
+ * How many times each feature has been used today, in one round trip.
+ *
+ * This runs before every protected page renders, and on Workers each query is a hop to the
+ * database through Hyperdrive, so the count of queries is what the user feels. The three Prisma
+ * calls this replaced - a groupBy, a findMany to spot screenshot reads, and a filtered count for
+ * builds - all read the same rows for the same day, and Postgres will do the whole lot in one
+ * aggregate over the (user_id, kind, created_at) index.
+ */
 async function usageToday(userId: string) {
-  const since = startOfDayUtc();
-  const rows = await db.usageLog.groupBy({
-    by: ["kind"],
-    where: { userId, success: true, createdAt: { gte: since } },
-    _count: true,
-    _sum: { inputTokens: true, outputTokens: true },
-  });
-  const byKind = new Map(rows.map((r) => [r.kind, r]));
-  const meta = await db.usageLog.findMany({
-    where: { userId, success: true, kind: "AI_CHAT", createdAt: { gte: since } },
-    select: { meta: true },
-  });
-  const uploads = meta.filter((m) => (m.meta as { op?: string } | null)?.op === "extract").length;
-  const builds = await db.usageLog.count({
-    where: { userId, success: true, kind: "SLIP_EDIT", createdAt: { gte: since }, meta: { path: ["op"], equals: "target" } },
-  });
+  const [row] = await db.$queryRaw<
+    { chat_all: bigint; uploads: bigint; builds: bigint; analyses: bigint; tokens: bigint }[]
+  >`
+    select
+      count(*) filter (where kind = 'AI_CHAT')                                     as chat_all,
+      count(*) filter (where kind = 'AI_CHAT' and meta->>'op' = 'extract')         as uploads,
+      count(*) filter (where kind = 'SLIP_EDIT' and meta->>'op' = 'target')        as builds,
+      count(*) filter (where kind = 'AI_ANALYSIS')                                 as analyses,
+      coalesce(sum(input_tokens + output_tokens), 0)                               as tokens
+    from usage_logs
+    where user_id = ${userId}::uuid and success and created_at >= ${startOfDayUtc()}
+  `;
 
-  const chatRows = byKind.get("AI_CHAT");
+  const n = (value: bigint | number | null | undefined) => Number(value ?? 0);
+  const uploads = n(row?.uploads);
   return {
-    chat: Math.max(0, (chatRows?._count ?? 0) - uploads), // a screenshot read isn't a chat message
+    chat: Math.max(0, n(row?.chat_all) - uploads), // a screenshot read isn't a chat message
     upload: uploads,
-    build: builds,
-    analysis: byKind.get("AI_ANALYSIS")?._count ?? 0,
-    tokens: rows.reduce((sum, r) => sum + (r._sum.inputTokens ?? 0) + (r._sum.outputTokens ?? 0), 0),
+    build: n(row?.builds),
+    analysis: n(row?.analyses),
+    tokens: n(row?.tokens),
   };
 }
 
-export async function getAiAllowance(userId: string): Promise<AiAllowance> {
-  const [{ limits, subscribed }, used] = await Promise.all([planFor(userId), usageToday(userId)]);
+/** `knownRole` saves a lookup when the caller is already holding the profile. */
+export async function getAiAllowance(userId: string, knownRole?: UserRole): Promise<AiAllowance> {
+  const [{ limits, subscribed }, used] = await Promise.all([planFor(userId, knownRole), usageToday(userId)]);
 
   const limitOf = (n: number) => (n < 0 ? null : n);
   const left = (limit: number | null, usedCount: number) => (limit === null ? null : Math.max(0, limit - usedCount));
