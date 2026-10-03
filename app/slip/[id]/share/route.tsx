@@ -19,8 +19,11 @@ export async function GET(req: Request, { params }: RouteContext<"/slip/[id]/sha
   const slip = await getSlip(user, id.data).catch(() => null);
   if (!slip) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Slip not found." } }, { status: 404 });
 
-  const games = slip.selections.filter((s) => s.status === "OK").slice(0, 10);
-  const row = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 32px", borderBottom: "1px solid #27272a" } as const;
+  // Fewer games when we have reasons to show: a wall of text at this size reads as nothing.
+  const playable = slip.selections.filter((s) => s.status === "OK");
+  const explained = playable.some((s) => s.reason);
+  const games = playable.slice(0, explained ? 6 : 10);
+  const row = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 24, padding: "18px 32px", borderBottom: "1px solid #27272a" } as const;
 
   return new ImageResponse(
     (
@@ -52,6 +55,11 @@ export async function GET(req: Request, { params }: RouteContext<"/slip/[id]/sha
                 <span style={{ color: "#a1a1aa", fontSize: 22 }}>
                   {g.pickLabel} · {formatKickoff(g.kickoffAt)}
                 </span>
+                {g.reason && (
+                  <span style={{ color: "#8b8b93", fontSize: 19, marginTop: 6, maxWidth: 740 }}>
+                    {g.reason.length > 115 ? `${g.reason.slice(0, 112)}…` : g.reason}
+                  </span>
+                )}
               </div>
               <span style={{ fontSize: 32, fontWeight: 600 }}>{formatOdds(g.odds)}</span>
             </div>
@@ -59,7 +67,7 @@ export async function GET(req: Request, { params }: RouteContext<"/slip/[id]/sha
         </div>
 
         <div style={{ marginTop: "auto", display: "flex", justifyContent: "space-between", padding: "28px 32px", color: "#a1a1aa", fontSize: 22 }}>
-          <span>gameclaw.win</span>
+          <span>gameclaw.win{playable.length > games.length ? ` · +${playable.length - games.length} more` : ""}</span>
           <span>18+. Odds change. Not a guarantee.</span>
         </div>
       </div>

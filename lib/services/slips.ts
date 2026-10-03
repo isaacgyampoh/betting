@@ -133,6 +133,7 @@ export function toSlipView(slip: SlipRecord): SlipView {
         market: marketOf(s),
         rawMarketName: s.rawMarketName,
         rawOutcomeName: s.rawOutcomeName,
+        reason: s.reason,
         odds: s.odds === null ? null : Number(s.odds),
         status: s.status as SelectionStatus,
         ...(slip.parent && slip.kind === "CONVERTED" ? { sourceOdds: parentOdds.get(s.position) ?? null } : {}),
@@ -165,6 +166,8 @@ export type DraftSelection = {
   odds: number | null;
   raw: RawMarket | null;
   status: SelectionStatus;
+  /** Why this pick was chosen, when we chose it. Carried into the slip card and the shared image. */
+  reason?: string | null;
 };
 
 export async function saveSlip(input: {
@@ -225,6 +228,7 @@ export async function saveSlip(input: {
           rawMarketName: s.raw ? (s.raw.marketName ?? s.raw.marketId) : null,
           rawOutcomeName: s.raw ? (s.raw.outcomeName ?? s.raw.outcomeId) : null,
           raw: s.raw ? (s.raw as unknown as Prisma.InputJsonValue) : undefined,
+          reason: s.reason ?? null,
           status: s.status,
         })),
       },

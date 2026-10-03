@@ -359,6 +359,8 @@ model Selection {
   // Bookmaker's own labels, for display and debugging
   rawMarketName    String?         @map("raw_market_name")
   rawOutcomeName   String?         @map("raw_outcome_name")
+  /// Why we chose this pick, for slips we built. Null on loaded or converted slips.
+  reason           String?
   raw              Json?
   status           SelectionStatus @default(OK)
   createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz

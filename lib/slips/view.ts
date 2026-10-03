@@ -31,6 +31,8 @@ export type SelectionView = {
   awayLogo?: string | null;
   /** Odds of the same pick on the parent slip (conversions), for comparison. */
   sourceOdds?: number | null;
+  /** Why this pick was chosen, for slips we built. Shown on the card and in the shared image. */
+  reason?: string | null;
 };
 
 export type SlipWarningCode = "STARTED" | "UNMAPPED_MARKET" | "MISSING_ODDS" | "NOT_CONVERTED";
@@ -77,6 +79,7 @@ export type SelectionInput = {
   odds: number | null;
   status?: SelectionStatus;
   sourceOdds?: number | null;
+  reason?: string | null;
 };
 
 /** Product of all odds, rounded to 2 dp. Null when no selection has odds. */
@@ -101,6 +104,7 @@ export function toSelectionView(s: SelectionInput, now = new Date()): SelectionV
     odds: s.odds,
     status: s.status ?? "OK",
     ...(s.sourceOdds !== undefined ? { sourceOdds: s.sourceOdds } : {}),
+    ...(s.reason ? { reason: s.reason } : {}),
   };
 }
 

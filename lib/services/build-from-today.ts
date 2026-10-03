@@ -243,6 +243,7 @@ export async function buildFromToday(opts: {
   const row = await requireEnabledBookmaker(source.slug);
   const drafts: DraftSelection[] = slip.picks.map((p, i) => ({
     position: i + 1,
+    reason: reasons[i],
     event: {
       externalId: p.event.externalId,
       home: p.event.home,

@@ -61,6 +61,7 @@ export function ChatSlipCard({ slip }: { slip: SlipView }) {
               <p className="truncate text-xs text-muted-foreground">
                 {s.pickLabel} · {formatKickoff(s.kickoffAt)}
               </p>
+              {s.reason && <p className="mt-1 text-xs leading-snug text-muted-foreground/80">{s.reason}</p>}
             </div>
             <span className={cn("shrink-0 font-medium", s.started && "text-loss")}>{formatOdds(s.odds)}</span>
           </li>
