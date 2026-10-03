@@ -69,6 +69,22 @@ npx wrangler hyperdrive create gameclaw-db --caching-disabled \
 ```
 It's already created (`gameclaw-db`, query caching **disabled** so fresh reads are never stale) and bound as `HYPERDRIVE` in `wrangler.jsonc`. `lib/db.ts` uses it automatically.
 
+### Checking a deploy from outside
+
+`/api/v1/health` reports the commit it is serving, so "it is up" and "it is the new one" are
+different questions. CI's smoke test waits for its own sha.
+
+Nothing in the test suites can see Workers, Hyperdrive or the browser, and all three have broken
+the live site while every test passed. After a deploy that touches auth, the database layer or the
+root layout, be a user:
+
+```bash
+SERVICE_KEY=... node scripts/smoke-live.mjs
+```
+
+It signs up a throwaway account, confirms 18+, walks every tab on a phone-sized viewport, fails on
+any browser error, and deletes the account. `SERVICE_KEY` is the Supabase service-role key.
+
 For `pnpm cf:preview`, point the binding at a real database:
 ```bash
 export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="$(grep ^DIRECT_URL= .env.local | cut -d= -f2-)"

@@ -44,17 +44,20 @@ export async function requireUser(authorization?: string | null): Promise<AuthUs
  * Cached for the request, because the page guard and the page itself both want the profile, and so
  * does the account page a third time through getMe.
  *
- * One statement, and deliberately a write rather than a read.
+ * One statement. Prisma's own upsert is a transaction - BEGIN, two SELECTs, COMMIT - which is four
+ * round trips to a database in another region before any protected page can render. ON CONFLICT is
+ * one. The conflict branch assigns the row to itself: there is nothing to update, and overwriting
+ * the email from the token would undo a change made anywhere else.
  *
- * Hyperdrive serves plain SELECTs from a cache it does not invalidate on writes, so reading this
- * row returned a stale profile for up to a minute: someone who had just confirmed they were 18 was
- * sent straight back to the 18+ page and could not get into the app at all. Nothing in a write, or
- * in a transaction, comes from that cache. Prisma's own upsert is correct for the same reason - it
- * opens a transaction - but that is four round trips to another region before a page can render,
- * where ON CONFLICT is one.
- *
- * The conflict branch assigns the row to itself: there is nothing to update, and overwriting the
- * email from the token would undo a change made anywhere else.
+ * Be careful here. Replacing this with a plain findUnique is what the shape of the code invites,
+ * and when that went out, new users could not get past the 18+ page on the live site at all: the
+ * confirmation was written and the next request still saw an unconfirmed profile. Reverting to a
+ * write fixed it. What was never pinned down is why - it does not reproduce against a local
+ * production build, and Hyperdrive is not serving stale reads (checked on the live site: a
+ * subscription written straight to the database shows up on the very next request). So the reason
+ * this is a write is that reads here have been seen to be wrong in production, and nobody has
+ * explained it. scripts/smoke-live.mjs is the check that caught it; run it before trusting a change
+ * to this function.
  */
 export const getProfile = cache(async (user: AuthUser) => {
   const [row] = await db.$queryRaw<ProfileRow[]>`

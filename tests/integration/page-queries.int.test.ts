@@ -26,8 +26,7 @@ describe("queries a protected page makes", () => {
     expect(await queries(() => getProfile({ id: user.id, email: user.email }))).toBe(1);
   });
 
-  // It is an upsert rather than a read on purpose: Hyperdrive serves plain SELECTs from a cache it
-  // does not invalidate on writes, and a stale profile here locked people out behind the 18+ page.
+  // It is a write rather than a read on purpose; lib/auth.ts says what happened when it was not.
   it("sees a write to the profile immediately", async () => {
     const user = await createUser();
     await db.profile.update({ where: { id: user.id }, data: { displayName: "Kofi" } });
