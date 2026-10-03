@@ -37,6 +37,54 @@ describe("API-Football client caching", () => {
     expect((await provider.fixture(999))?.home.name).toBe("Arsenal");
   });
 
+  // Building a slip researches a shortlist at once, and fixtures in the same league want the same
+  // league data. Nothing is in the cache yet when they all ask, so without this they each fetch it.
+  it("makes one request when the same call is already in the air", async () => {
+    await db.statsCache.deleteMany();
+    const body = {
+      errors: [],
+      response: [
+        {
+          fixture: { id: 777, date: "2026-10-05T14:00:00+00:00", status: { short: "NS", long: "Not Started", elapsed: null } },
+          league: { id: 39, name: "Premier League", country: "England", logo: null, season: 2026 },
+          teams: { home: { id: 1, name: "Arsenal", logo: null }, away: { id: 2, name: "Chelsea", logo: null } },
+          goals: { home: null, away: null },
+        },
+      ],
+    };
+    let resolve: () => void = () => {};
+    const held = new Promise<void>((r) => (resolve = r));
+    const fetchMock = vi.fn(async () => {
+      await held;
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = createApiFootballProvider("test-key");
+
+    const all = Promise.all([provider.fixture(777), provider.fixture(777), provider.fixture(777)]);
+    await new Promise((r) => setTimeout(r, 10)); // all three are now waiting on the same request
+    resolve();
+    const results = await all;
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(results.map((f) => f?.home.name)).toEqual(["Arsenal", "Arsenal", "Arsenal"]);
+
+    // The entry is dropped once it settles, so this is a coalescer and not a second cache: a later
+    // call still goes through the Postgres cache, and a failure is never remembered as a result.
+    expect((await provider.fixture(777))?.home.name).toBe("Arsenal");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("does not hold a failed call against the next one", async () => {
+    await db.statsCache.deleteMany();
+    const fail = vi.fn(async () => new Response(JSON.stringify({ errors: { bug: "boom" }, response: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fail);
+    const provider = createApiFootballProvider("test-key");
+    await expect(provider.fixture(778)).rejects.toThrow();
+    await expect(provider.fixture(778)).rejects.toThrow();
+    expect(fail).toHaveBeenCalledTimes(2);
+  });
+
   it("raises STATS_UNAVAILABLE when the API fails with nothing cached", async () => {
     await db.statsCache.deleteMany();
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network down"); }));

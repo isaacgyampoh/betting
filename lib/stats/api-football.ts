@@ -132,14 +132,42 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
   async function rememberPlanLimit(key: string, endpoint: string, params: Params, message: string) {
     const marker = { [PLAN_LIMITED]: message, [PLAN_AT]: await currentPlan() } as unknown as Prisma.InputJsonValue;
     const expiresAt = new Date(Date.now() + PLAN_LIMIT_TTL_MS);
-    await db.statsCache.upsert({
-      where: { key },
-      create: { key, endpoint, params, payload: marker, expiresAt },
-      update: { payload: marker, expiresAt, fetchedAt: new Date() },
-    });
+    await writeCache(key, endpoint, params, marker as Prisma.InputJsonValue, expiresAt);
   }
 
-  async function call<T>(endpoint: string, params: Params, ttlMs: number, capability?: string): Promise<T[]> {
+  /**
+   * One statement. Prisma's upsert opens a transaction - four round trips to the database - and
+   * this runs after every cache miss, several times per fixture researched.
+   */
+  async function writeCache(key: string, endpoint: string, params: Params, payload: Prisma.InputJsonValue, expiresAt: Date) {
+    await db.$executeRaw`
+      insert into stats_cache (key, endpoint, params, payload, expires_at, fetched_at)
+      values (${key}, ${endpoint}, ${JSON.stringify(params)}::jsonb, ${JSON.stringify(payload)}::jsonb, ${expiresAt}, now())
+      on conflict (key) do update
+        set payload = excluded.payload, expires_at = excluded.expires_at, fetched_at = now()
+    `;
+  }
+
+  /**
+   * Building a slip researches a shortlist of fixtures at once, and fixtures in the same league ask
+   * for exactly the same league and season data. Without this each one misses the cache (nothing is
+   * written yet), fetches the same URL, and writes the same row - so widening the research made it
+   * slower rather than faster: sixteen at a time took 15s where eight took 11s.
+   *
+   * Entries are removed as soon as they settle, so this only ever holds calls that are in the air.
+   */
+  const inFlight = new Map<string, Promise<unknown[]>>();
+
+  function call<T>(endpoint: string, params: Params, ttlMs: number, capability?: string): Promise<T[]> {
+    const key = cacheKey(endpoint, params);
+    const running = inFlight.get(key);
+    if (running) return running as Promise<T[]>;
+    const started = fetchOnce<T>(endpoint, params, ttlMs, capability).finally(() => inFlight.delete(key));
+    inFlight.set(key, started as Promise<unknown[]>);
+    return started;
+  }
+
+  async function fetchOnce<T>(endpoint: string, params: Params, ttlMs: number, capability?: string): Promise<T[]> {
     if (capability) await capabilityBlocked(capability);
     const key = cacheKey(endpoint, params);
     const hit = await db.statsCache.findUnique({ where: { key } });
@@ -190,13 +218,7 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
     }
 
     const payload = (body.response ?? []) as T[];
-    const expiresAt = new Date(Date.now() + ttlMs);
-    const json = payload as unknown as Prisma.InputJsonValue;
-    await db.statsCache.upsert({
-      where: { key },
-      create: { key, endpoint, params, payload: json, expiresAt },
-      update: { payload: json, expiresAt, fetchedAt: new Date() },
-    });
+    await writeCache(key, endpoint, params, payload as unknown as Prisma.InputJsonValue, new Date(Date.now() + ttlMs));
     return payload;
   }
 

@@ -53,14 +53,19 @@ async function evidenceForPick(user: AuthUser | null, pick: PickCandidate): Prom
 }
 
 /**
+ * How many picks are researched at once. Eight, not more: measured against the real provider,
+ * sixteen at a time was consistently slower than eight, because the limit is the provider's, not
+ * ours. Widening it only queues up against its per-minute cap.
+ */
+const RESEARCH_CONCURRENCY = 8;
+
+/**
  * Looks up recent results for up to `limit` picks, keeping the order given. Failures are swallowed:
  * a stats outage must never stop someone getting a slip.
  */
 export async function enrich(user: AuthUser | null, picks: PickCandidate[], limit: number): Promise<EnrichedPick[]> {
   const head = picks.slice(0, limit);
-  // Eight at a time rather than four: these are cached reads against a provider that handles it,
-  // and the research step was taking most of seven seconds.
-  const enriched = await mapWithConcurrency(head, 8, async (pick): Promise<EnrichedPick> => {
+  const enriched = await mapWithConcurrency(head, RESEARCH_CONCURRENCY, async (pick): Promise<EnrichedPick> => {
     try {
       return { ...pick, ...(await evidenceForPick(user, pick)) };
     } catch (error) {
