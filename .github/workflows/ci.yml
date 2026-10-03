@@ -74,8 +74,13 @@ jobs:
         run: pnpm exec opennextjs-cloudflare deploy
       - name: Smoke test
         run: |
-          for i in 1 2 3 4 5 6; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' https://gameclaw.win/api/v1/health) && [ "$code" = "200" ] && echo "health ok" && exit 0
+          want=$(echo "$GITHUB_SHA" | cut -c1-7)
+          for i in $(seq 1 12); do
+            body=$(curl -s https://gameclaw.win/api/v1/health) || true
+            got=$(echo "$body" | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p')
+            # Health alone is not enough: the previous deploy answers 200 too.
+            if [ "$got" = "$want" ]; then echo "health ok, serving $got"; exit 0; fi
+            echo "waiting for $want (serving ${got:-unknown})"
             sleep 10
           done
-          echo "health check failed ($code)"; exit 1
+          echo "deploy did not come up as $want"; echo "$body"; exit 1

@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
+// The commit being built, so /api/v1/health can say which one is serving. GitHub Actions sets
+// GITHUB_SHA; locally there is no commit worth naming.
+const commit = (process.env.GITHUB_SHA ?? "dev").slice(0, 7);
+
 const nextConfig: NextConfig = {
+  env: { NEXT_PUBLIC_COMMIT_SHA: commit },
   images: {
     // Team and league logos from API-Football. Served as-is: they're tiny, and optimising on
     // Cloudflare would need the paid Images binding.

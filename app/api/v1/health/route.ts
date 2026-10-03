@@ -6,6 +6,9 @@ import { readiness } from "@/lib/readiness";
 
 export const dynamic = "force-dynamic";
 
+// Baked in at build time by next.config.ts from the CI checkout; "dev" when built locally.
+const COMMIT = process.env.NEXT_PUBLIC_COMMIT_SHA ?? "dev";
+
 // 200 when the app can serve users; 503 with the reason otherwise (setting names only, no values).
 export async function GET() {
   const r = readiness();
@@ -17,7 +20,9 @@ export async function GET() {
     books_codes: b.capabilities.createCode,
     prices: b.capabilities.events,
   }));
-  const base = { time: new Date().toISOString(), features: r.features, bookmakers };
+  // Which commit is actually serving. Without it, checking a deploy means guessing from
+  // behaviour, and the previous deploy answers exactly like the new one until it doesn't.
+  const base = { time: new Date().toISOString(), commit: COMMIT, features: r.features, bookmakers };
   if (!r.ready) {
     return NextResponse.json({ data: { status: "not_configured", missing: r.missing, ...base } }, { status: 503 });
   }
