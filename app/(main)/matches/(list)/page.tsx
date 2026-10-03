@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { z } from "zod";
 import { MatchList } from "@/components/stats/match-list";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SampleDataNotice } from "@/components/stats/sample-badge";
 import { ApiErrorNotice } from "@/components/api-error-notice";
 import { requireAdultPage } from "@/lib/auth-pages";
@@ -24,10 +26,12 @@ const DAYS = [
   { label: "+2 days", offset: 2 },
 ];
 
-export default async function MatchesPage({ searchParams }: PageProps<"/matches">) {
-  await requireAdultPage("/matches");
-  const date = z.iso.date().catch(dayOffset(0)).parse((await searchParams).date);
-
+/**
+ * The fixtures come from API-Football, which on a cold cache takes a few seconds. Nothing else on
+ * this page needs them, so it is kept out of the way of everything that does not: the heading and
+ * the day tabs render at once and stay tappable while the list arrives.
+ */
+async function Fixtures({ date }: { date: string }) {
   let data: Awaited<ReturnType<typeof listMatches>> | null = null;
   let error: AppError | null = null;
   try {
@@ -36,6 +40,30 @@ export default async function MatchesPage({ searchParams }: PageProps<"/matches"
     if (!(err instanceof AppError)) throw err;
     error = err;
   }
+
+  return (
+    <>
+      {data?.source === "sample" && <SampleDataNotice />}
+      {error && <ApiErrorNotice code={error.code} message={error.message} />}
+      {data && <MatchList groups={data.groups} />}
+    </>
+  );
+}
+
+function FixturesSkeleton() {
+  return (
+    <div className="space-y-3" aria-busy="true" aria-label="Loading fixtures">
+      <Skeleton className="h-4 w-32" />
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Skeleton key={i} className="h-16 w-full rounded-lg" />
+      ))}
+    </div>
+  );
+}
+
+export default async function MatchesPage({ searchParams }: PageProps<"/matches">) {
+  await requireAdultPage("/matches");
+  const date = z.iso.date().catch(dayOffset(0)).parse((await searchParams).date);
 
   return (
     <div className="space-y-4">
@@ -60,9 +88,9 @@ export default async function MatchesPage({ searchParams }: PageProps<"/matches"
         })}
       </nav>
 
-      {data?.source === "sample" && <SampleDataNotice />}
-      {error && <ApiErrorNotice code={error.code} message={error.message} />}
-      {data && <MatchList groups={data.groups} />}
+      <Suspense key={date} fallback={<FixturesSkeleton />}>
+        <Fixtures date={date} />
+      </Suspense>
     </div>
   );
 }
