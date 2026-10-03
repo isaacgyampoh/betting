@@ -7,6 +7,14 @@ import type { MatchDetail, MatchSummary, TeamForm } from "@/lib/stats/types";
 // return null and the pick stands on the bookmaker's price alone — which is honest, and better than
 // dressing a price up as analysis.
 
+/**
+ * A team name in the possessive. English drops the second s on a name that already ends in one, and
+ * plenty of them do: "Bahamas's games" and "US Virgin Islands's" both appeared in published slips.
+ */
+export function possessive(name: string): string {
+  return /s$/i.test(name) ? `${name}'` : `${name}'s`;
+}
+
 export type PickShape = {
   /** Our internal market type, when the pick maps to one. */
   type?: string;
@@ -71,8 +79,8 @@ function totalsEvidence(d: MatchDetail, line: number, over: boolean): Evidence |
 
   const word = over ? "went over" : "stayed under";
   const parts = [
-    `${d.form.home.team.name}'s games ${word} ${line} in ${outOf(hit(home), home.total)}`,
-    `${d.form.away.team.name}'s in ${outOf(hit(away), away.total)}`,
+    `${possessive(d.form.home.team.name)} games ${word} ${line} in ${outOf(hit(home), home.total)}`,
+    `${possessive(d.form.away.team.name)} in ${outOf(hit(away), away.total)}`,
   ];
   // Head-to-head only earns a mention when there is enough of it to mean something.
   let support = (hShare + aShare) / 2;
@@ -127,7 +135,7 @@ function bttsEvidence(d: MatchDetail, yes: boolean): Evidence | null {
   const hit = (r: { hits: number; total: number }) => (yes ? r.hits : r.total - r.hits);
   const phrase = yes ? "saw both teams score" : "had at least one side fail to score";
   return {
-    text: `${d.form.home.team.name}'s games ${phrase} in ${outOf(hit(home), home.total)}, ${d.form.away.team.name}'s in ${outOf(hit(away), away.total)}.`,
+    text: `${possessive(d.form.home.team.name)} games ${phrase} in ${outOf(hit(home), home.total)}, ${possessive(d.form.away.team.name)} in ${outOf(hit(away), away.total)}.`,
     support: (hit(home) / home.total + hit(away) / away.total) / 2,
     sample: home.total + away.total,
   };

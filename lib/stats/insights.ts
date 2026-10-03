@@ -1,4 +1,5 @@
 import type { MatchDetail } from "@/lib/stats/types";
+import { possessive } from "@/lib/stats/evidence";
 
 // Plain factual statements derived from the stats. Descriptive only: never a prediction.
 export function matchInsights(d: MatchDetail): string[] {
@@ -8,9 +9,9 @@ export function matchInsights(d: MatchDetail): string[] {
     const s = f.summary;
     if (!s.played) continue;
     out.push(`${f.team.name}: ${s.won}W ${s.drawn}D ${s.lost}L in the last ${s.played}, scoring ${s.goalsFor} and conceding ${s.goalsAgainst}.`);
-    if (s.bttsRate >= 0.6) out.push(`Both teams scored in ${Math.round(s.bttsRate * s.played)} of ${f.team.name}'s last ${s.played} games.`);
-    if (s.over25Rate >= 0.6) out.push(`${Math.round(s.over25Rate * s.played)} of ${f.team.name}'s last ${s.played} games had over 2.5 goals.`);
-    if (s.over25Rate <= 0.2 && s.played >= 4) out.push(`Only ${Math.round(s.over25Rate * s.played)} of ${f.team.name}'s last ${s.played} games had over 2.5 goals.`);
+    if (s.bttsRate >= 0.6) out.push(`Both teams scored in ${Math.round(s.bttsRate * s.played)} of ${possessive(f.team.name)} last ${s.played} games.`);
+    if (s.over25Rate >= 0.6) out.push(`${Math.round(s.over25Rate * s.played)} of ${possessive(f.team.name)} last ${s.played} games had over 2.5 goals.`);
+    if (s.over25Rate <= 0.2 && s.played >= 4) out.push(`Only ${Math.round(s.over25Rate * s.played)} of ${possessive(f.team.name)} last ${s.played} games had over 2.5 goals.`);
   }
   if (d.h2h.length) {
     const homeId = d.match.home.id;

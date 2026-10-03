@@ -9,6 +9,9 @@ const TOKEN_EXPANSIONS: Record<string, string> = {
   atl: "atletico",
   st: "saint",
   wand: "wanderers",
+  jrs: "juniors",
+  dep: "deportivo",
+  depor: "deportivo",
 };
 
 export type AliasIndex = Map<string, string>; // normalized alias → group key
@@ -31,6 +34,37 @@ const DEFAULT_INDEX = buildAliasIndex();
 function tokens(normalized: string): string[] {
   return normalized.split(" ").map((t) => TOKEN_EXPANSIONS[t] ?? t);
 }
+
+/**
+ * The squad markers themselves, dropped before the names are compared. squadLevel has already
+ * refused to compare two different squads, so by this point both sides mean the same one and the
+ * marker only gets in the way: one feed writes "Real Sociedad II" and another "Real Sociedad San
+ * Sebastian B", and the "ii" and the "b" are the one thing they agree on while scoring as noise.
+ */
+const SQUAD_MARKERS = /^(u1[5-9]|u2[0-3]|w|ii|b|reserves?|academy|youth)$/;
+const withoutMarkers = (list: string[]) => {
+  const kept = list.filter((t) => !SQUAD_MARKERS.test(t));
+  return kept.length ? kept : list;
+};
+
+/** The name as one word, ignoring any year in it: "Ashanti Gold" and "AshantiGold 04" are one club. */
+const squashed = (list: string[]) => list.filter((t) => !/^\d+$/.test(t)).join("");
+
+/**
+ * Words that name a different side rather than describe the same one. Every one of these is a whole
+ * national team that the shorter name would otherwise swallow: Northern Ireland sits inside
+ * Ireland, Equatorial Guinea inside Guinea, DR Congo inside Congo, Central Cordoba inside Cordoba.
+ * The fuzzy rules below are built to forgive missing words, so each of these has to be a hard stop
+ * before they run - a slip that quotes Northern Ireland's last ten games under Ireland's name is
+ * worse than one that admits it has no history.
+ *
+ * "Republic" and "Rep" are deliberately absent: Rep. of Ireland is Ireland.
+ */
+const DISTINGUISHING = new Set([
+  "north", "northern", "south", "southern", "east", "eastern", "west", "western",
+  "new", "central", "equatorial", "british", "american", "dr", "drc", "dpr", "democratic", "bissau", "papua",
+]);
+const distinguishers = (list: string[]) => list.filter((t) => DISTINGUISHING.has(t)).sort().join(" ");
 
 /** Jaro–Winkler similarity (0..1), good for short names with typos/abbreviations. */
 export function jaroWinkler(a: string, b: string): number {
@@ -121,9 +155,13 @@ export function teamSimilarity(a: string, b: string, index: AliasIndex = DEFAULT
   // Both are known clubs, and different ones ("Inter Milan" vs "Milan").
   if (ka && kb) return 0.1;
 
-  const ta = tokens(na);
-  const tb = tokens(nb);
+  const ta = withoutMarkers(tokens(na));
+  const tb = withoutMarkers(tokens(nb));
+  // Checked before the fuzzy rules, which exist to forgive exactly the kind of difference this is.
+  if (distinguishers(ta) !== distinguishers(tb)) return 0;
   if (ta.join(" ") === tb.join(" ")) return 0.97;
+  // Feeds disagree about where the spaces go more often than about the letters.
+  if (squashed(ta) && squashed(ta) === squashed(tb)) return 0.96;
 
   const setA = new Set(ta);
   const setB = new Set(tb);

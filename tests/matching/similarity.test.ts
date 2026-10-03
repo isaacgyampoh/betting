@@ -33,6 +33,51 @@ describe("teamSimilarity", () => {
     expect(teamSimilarity(a, b)).toBeLessThan(MATCH_THRESHOLD);
   });
 
+  // Every pair below is one the live feeds really disagreed about. Before these, 22% of SportyBet's
+  // fixtures found no stats at all, and each one that finds none costs a pick its reason.
+  it.each([
+    ["Virgin Islands, U.S.", "US Virgin Islands"], // punctuation split the initialism
+    ["FC AshantiGold 04", "Ashanti Gold"], // the spaces and the founding year
+    ["Hamburger SV", "Hamburg"],
+    ["AD Pasto", "Deportivo Pasto"],
+    ["Argentinos JRS", "Argentinos Juniors"],
+    ["CA Central Cordoba SE", "Central Cordoba de Santiago"],
+    ["Aduana FC", "Aduana Stars"],
+    ["Real Sociedad San Sebastian B", "Real Sociedad II"], // the same reserve side, marked differently
+    ["Ireland", "Rep. Of Ireland"],
+  ])("%s ≈ %s", (a, b) => {
+    expect(teamSimilarity(a, b)).toBeGreaterThanOrEqual(MATCH_THRESHOLD);
+  });
+
+  // A qualifier that names a different side. These read as near-identical to every fuzzy rule here,
+  // and getting one wrong means publishing one team's last ten games as another's.
+  it.each([
+    ["Northern Ireland", "Ireland"],
+    ["Northern Ireland", "Rep. Of Ireland"],
+    ["Congo", "DR Congo"],
+    ["Guinea", "Equatorial Guinea"],
+    ["Guinea", "Guinea-Bissau"],
+    ["Samoa", "American Samoa"],
+    ["Sudan", "South Sudan"],
+    ["Korea Republic", "Korea DPR"],
+    ["Virgin Islands, U.S.", "British Virgin Islands"],
+    ["Cordoba", "Central Cordoba"],
+    ["New England Revolution", "England"],
+    ["AS Roma", "AS Monaco"],
+    ["Sporting CP", "Sporting Gijon"],
+  ])("%s ≠ %s", (a, b) => {
+    expect(teamSimilarity(a, b)).toBeLessThan(MATCH_THRESHOLD);
+  });
+
+  // Dropping a club-type marker must not shorten a name into one several clubs share.
+  it.each([
+    ["West Ham", "West Ham United"],
+    ["Newcastle", "Newcastle United"],
+    ["AS Roma", "Roma"],
+  ])("%s ≈ %s after the marker goes", (a, b) => {
+    expect(teamSimilarity(a, b)).toBeGreaterThanOrEqual(MATCH_THRESHOLD);
+  });
+
   it("uses learned DB aliases", () => {
     const index = buildAliasIndex([{ alias: "Legon Cities FC", canonical: "Legon Cities" }, { alias: "LCFC", canonical: "Legon Cities" }]);
     expect(teamSimilarity("LCFC", "Legon Cities", index)).toBeGreaterThanOrEqual(0.98);

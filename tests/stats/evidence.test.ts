@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evidenceFor } from "@/lib/stats/evidence";
+import { evidenceFor, possessive } from "@/lib/stats/evidence";
 import type { MatchDetail, MatchSummary, TeamForm, TeamRef } from "@/lib/stats/types";
 
 // The counts in these sentences are what a user checks us on, so they are pinned exactly.
@@ -162,4 +162,18 @@ describe("markets we hold no history for", () => {
       expect(evidenceFor({ marketId, outcome: "OVER", line: 2.5 }, detail(f, f))).toBeNull();
     },
   );
+});
+
+// English drops the second s on a name that already ends in one, and plenty of teams do. Both of
+// these were in published slips: "Bahamas's games" and "US Virgin Islands's".
+describe("possessive", () => {
+  it.each([
+    ["Bahamas", "Bahamas'"],
+    ["US Virgin Islands", "US Virgin Islands'"],
+    ["Greece", "Greece's"],
+    ["Germany", "Germany's"],
+    ["Wolves", "Wolves'"],
+  ])("%s -> %s", (name, want) => {
+    expect(possessive(name)).toBe(want);
+  });
 });
