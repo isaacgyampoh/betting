@@ -21,13 +21,28 @@ describe("queries a protected page makes", () => {
     expect(process.env.DB_QUERY_LOG, "set DB_QUERY_LOG=1 or this test proves nothing").toBe("1");
   });
 
-  it("reads the profile without writing it", async () => {
+  it("loads the profile in one query", async () => {
     const user = await createUser();
-    const before = await db.profile.findUniqueOrThrow({ where: { id: user.id } });
-    const n = await queries(() => getProfile({ id: user.id, email: user.email }));
-    expect(n).toBe(1);
-    const after = await db.profile.findUniqueOrThrow({ where: { id: user.id } });
-    expect(after.updatedAt).toEqual(before.updatedAt);
+    expect(await queries(() => getProfile({ id: user.id, email: user.email }))).toBe(1);
+  });
+
+  // It is an upsert rather than a read on purpose: Hyperdrive serves plain SELECTs from a cache it
+  // does not invalidate on writes, and a stale profile here locked people out behind the 18+ page.
+  it("sees a write to the profile immediately", async () => {
+    const user = await createUser();
+    await db.profile.update({ where: { id: user.id }, data: { displayName: "Kofi" } });
+    expect((await getProfile({ id: user.id, email: user.email })).displayName).toBe("Kofi");
+  });
+
+  it("returns every column, typed as the model", async () => {
+    const user = await createUser();
+    await db.profile.update({
+      where: { id: user.id },
+      data: { displayName: "Ama", role: "ADMIN", freeAiCredits: 2, remindersOn: true, spendNotePesewas: 5000 },
+    });
+    const profile = await getProfile({ id: user.id, email: user.email });
+    const direct = await db.profile.findUniqueOrThrow({ where: { id: user.id } });
+    expect(profile).toEqual(direct);
   });
 
   it("still creates a profile when there is none", async () => {

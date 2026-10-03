@@ -39,6 +39,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
+        {/* next-themes inlines a function from the server bundle to set the theme before paint, and
+            the bundler rewrites that function to call its own __name helper - which exists in the
+            bundle but not in the page. The inline script then throws before it can set anything,
+            so every visitor got a flash of the wrong theme. This defines the helper as the no-op it
+            is at runtime; it has to come before the theme script, so it stays first in the body. */}
+        <script dangerouslySetInnerHTML={{ __html: "globalThis.__name||=function(f){return f}" }} />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
           <Toaster position="top-center" />

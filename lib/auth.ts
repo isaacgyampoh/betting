@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { publicEnv } from "@/lib/public-env";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import type { ProfileModel } from "@/lib/generated/prisma/models";
+import type { UserRole } from "@/lib/generated/prisma/enums";
 
 export type AuthUser = { id: string; email: string | null };
 
@@ -39,22 +41,67 @@ export async function requireUser(authorization?: string | null): Promise<AuthUs
 /**
  * Loads the profile, creating it if the auth trigger hasn't (e.g. users created before the trigger).
  *
- * Read first, write only on a miss: this runs before every protected page renders, and an upsert
- * is a write even when there is nothing to write - it takes a primary connection and cannot be
- * served from anywhere nearer. For everyone but a brand-new account the row is already there.
+ * Cached for the request, because the page guard and the page itself both want the profile, and so
+ * does the account page a third time through getMe.
  *
- * Cached for the request, because the page guard and the page itself both want the profile, and
- * so does the account page a third time through getMe.
+ * One statement, and deliberately a write rather than a read.
+ *
+ * Hyperdrive serves plain SELECTs from a cache it does not invalidate on writes, so reading this
+ * row returned a stale profile for up to a minute: someone who had just confirmed they were 18 was
+ * sent straight back to the 18+ page and could not get into the app at all. Nothing in a write, or
+ * in a transaction, comes from that cache. Prisma's own upsert is correct for the same reason - it
+ * opens a transaction - but that is four round trips to another region before a page can render,
+ * where ON CONFLICT is one.
+ *
+ * The conflict branch assigns the row to itself: there is nothing to update, and overwriting the
+ * email from the token would undo a change made anywhere else.
  */
 export const getProfile = cache(async (user: AuthUser) => {
-  const existing = await db.profile.findUnique({ where: { id: user.id } });
-  if (existing) return existing;
-  return db.profile.upsert({
-    where: { id: user.id },
-    create: { id: user.id, email: user.email },
-    update: {},
-  });
+  const [row] = await db.$queryRaw<ProfileRow[]>`
+    insert into profiles (id, email) values (${user.id}::uuid, ${user.email})
+    on conflict (id) do update set id = profiles.id
+    returning *
+  `;
+  return fromRow(row);
 });
+
+type ProfileRow = {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: UserRole;
+  age_confirmed_at: Date | null;
+  free_ai_credits: number;
+  telegram_chat_id: string | null;
+  referral_code: string | null;
+  referred_by_id: string | null;
+  spend_note_pesewas: number | null;
+  reminders_on: boolean;
+  excluded_until: Date | null;
+  created_at: Date;
+  updated_at: Date;
+};
+
+function fromRow(row: ProfileRow): ProfileModel {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    role: row.role,
+    ageConfirmedAt: row.age_confirmed_at,
+    freeAiCredits: row.free_ai_credits,
+    telegramChatId: row.telegram_chat_id,
+    referralCode: row.referral_code,
+    referredById: row.referred_by_id,
+    spendNotePesewas: row.spend_note_pesewas,
+    remindersOn: row.reminders_on,
+    excludedUntil: row.excluded_until,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 /** Signed-in user, 18+ confirmed, and not on a self-imposed break. */
 export async function requireAdult(authorization?: string | null) {
