@@ -174,6 +174,22 @@
   .gc-enter { animation: gc-enter 0.22s ease-out; }
 }
 
+/* The bookmaker strip scrolls so the row reads as a list that keeps going. The track holds the set
+   twice and moves by exactly half its width, so the loop has no seam. Transform only, and it stops
+   for anyone who has asked for less motion. */
+@keyframes gc-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.gc-marquee {
+  /* Fades at both ends so items enter and leave rather than being cut off. */
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gc-marquee-track { animation: gc-marquee 26s linear infinite; }
+  .gc-marquee:hover .gc-marquee-track { animation-play-state: paused; }
+}
+
 /* Landing page demo: a walk-through of the real flow, staged with delays so it costs no
    JavaScript. It runs once rather than looping: a loop spends most of its cycle with the phone
    empty, and the first thing a visitor saw was a blank frame. */

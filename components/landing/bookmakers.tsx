@@ -1,3 +1,4 @@
+import { BookmakerStrip } from "@/components/landing/bookmaker-strip";
 import { connectedBookmakers } from "@/lib/bookmakers/registry";
 import { BOOKMAKER_SLUGS } from "@/lib/bookmakers/types";
 
@@ -26,17 +27,9 @@ export function Bookmakers() {
       </div>
 
       {connected.length > 0 && (
-        <ul className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          {connected.map((b) => (
-            <li
-              key={b.slug}
-              className="rounded-lg border border-background/20 px-5 py-3 text-base font-medium tracking-tight"
-            >
-              {b.name}
-            </li>
-          ))}
-        </ul>
+        <BookmakerStrip className="mt-8" bookmakers={connected.map((b) => ({ slug: b.slug, name: b.name }))} />
       )}
+
     </section>
   );
 }
