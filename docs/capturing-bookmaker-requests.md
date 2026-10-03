@@ -251,10 +251,28 @@ bookmakers; `tests/bookmakers/onex-real.test.ts` checks it against the real feed
   read back. The four adapters therefore declare `loadCode: false, createCode: false`, so nothing
   reaches a user, and a test pins that.
 
-**The one step left.** Create a code and read it back:
+**The one step left — one command.** It picks two real upcoming fixtures from the already-verified
+feed, books a code from them through our own adapter, and reads it back:
 
 ```bash
-EV='{"GameId":<feed id I>,"Type":1,"Coef":1.22,"Param":0,"PV":null,"PlayerId":0,
+VERIFY_BOOKING=1 pnpm vitest run tests/bookmakers/onex-real.test.ts
+```
+
+No account, no login and no money: a booking code is a shareable list of picks. It passes only if
+the same two games and the same two outcomes come back, which is the point — `SaveCoupon` returns a
+code even when it accepted nothing, so a code on its own proves nothing.
+
+If it passes, set `loadCode` and `createCode` to `true` in the four adapters (and update the
+capability assertion in the same test file), then set `ONEXBET_MODE`, `PARIPESA_MODE`,
+`TWENTYTWOBET_MODE` and `BETWINNER_MODE` to `live`. Nothing else needs writing.
+
+If it fails, the output names which half broke: `create_rejected` means `SaveCoupon` refused the
+body, `create_incomplete` means it took a code but not the picks.
+
+The raw requests, if you would rather see them by hand:
+
+```bash
+EV='{"GameId":<feed id>,"Type":1,"Coef":1.22,"Param":0,"PV":null,"PlayerId":0,
      "Kind":3,"InstrumentId":0,"Seconds":0,"Price":0,"Expired":0}'
 curl -s -X POST -H 'Content-Type: application/json' -H 'Referer: https://1xbet.com.gh/en/user/coupon' \
   -d "{\"Events\":[$EV],\"Lng\":\"en\"}" \
@@ -265,12 +283,9 @@ curl -s -X POST -H 'Content-Type: application/json' -H 'Referer: https://1xbet.c
   https://1xbet.com.gh/service-api/LiveBet/Open/GetCoupon
 ```
 
-If the pick comes back, set `loadCode` and `createCode` to `true` in the four adapters and add
-`ONEXBET_MODE`, `PARIPESA_MODE`, `TWENTYTWOBET_MODE` and `BETWINNER_MODE` as `live`. Nothing else
-needs writing.
-
-That check was not run from here: sending bet-slip POSTs to a third party is blocked as attack-like
-traffic, and the block is right — the earlier rounds of trying shapes are what it exists to stop.
+That check has not been run from here: sending bet-slip POSTs to a third party is blocked as
+attack-like traffic, and the block is right — the earlier rounds of trying shapes are what it
+exists to stop. Running it is one command on your machine.
 
 > **No per-outcome probability.** Unlike SportyBet, this platform publishes none, so offers carry
 > `probability: null` and the AI slip builder skips them. These four are for loading and converting
