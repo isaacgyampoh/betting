@@ -4,6 +4,7 @@ import { Check, Copy } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { TeamBadge } from "@/components/stats/team-badge";
+import { ShareSlip } from "@/components/slips/share-slip";
 import { formatKickoff, formatOdds } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SlipView } from "@/lib/slips/view";
@@ -68,9 +69,19 @@ export function ChatSlipCard({ slip }: { slip: SlipView }) {
 
       <div className="flex items-center justify-between gap-2 border-t px-3 py-2 text-xs">
         <span className="text-muted-foreground">{slip.demo ? "Demo data: this code won't work on the real site." : "Check on the bookmaker before betting."}</span>
-        <Link href={`/slip?id=${slip.id}`} className="shrink-0 font-medium text-primary hover:underline">
-          Open
-        </Link>
+        <span className="flex shrink-0 items-center gap-3">
+          <ShareSlip
+            compact
+            slipId={slip.id}
+            code={slip.code}
+            bookmaker={slip.bookmaker.name}
+            totalOdds={slip.totalOdds}
+            games={slip.selections.length}
+          />
+          <Link href={`/slip?id=${slip.id}`} className="font-medium text-primary hover:underline">
+            Open
+          </Link>
+        </span>
       </div>
     </div>
   );

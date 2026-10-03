@@ -247,7 +247,8 @@ export function ChatWorkspace({
           maxLength={2000}
           // One line on a 390px phone: a longer placeholder wraps and the second line is clipped.
           placeholder="Paste a code or ask anything"
-          className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none"
+          // 16px on a phone: anything smaller makes iOS zoom the whole page when the field is focused.
+          className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-1 py-2 text-base outline-none md:text-sm"
           aria-label="Message"
         />
         <Button type="submit" size="icon" className="size-10 shrink-0" disabled={busy || !input.trim()} aria-label="Send">

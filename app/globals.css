@@ -145,6 +145,26 @@
     font-variant-numeric: tabular-nums;
   }
 }
+/* Small things that separate a web page from an app on a phone. */
+@layer base {
+  html {
+    /* No grey flash on tap: the pressed states below do that job properly. */
+    -webkit-tap-highlight-color: transparent;
+    /* iOS enlarges text in landscape without this. */
+    text-size-adjust: 100%;
+    /* Anchors and focus land below the sticky header rather than under it. */
+    scroll-padding-top: 4.5rem;
+  }
+  body {
+    /* Stops the whole page rubber-banding behind a scrolled panel. */
+    overscroll-behavior-y: contain;
+  }
+  /* A long list should not drag the page with it once it reaches its end. */
+  [data-scroll-contain] {
+    overscroll-behavior: contain;
+  }
+}
+
 /* Buttons, links and cards respond to touch. Transform and opacity only, so these stay on the
    compositor and cost nothing on a mid-range phone, and the press is scaled small enough to read as
    a response rather than a bounce. */

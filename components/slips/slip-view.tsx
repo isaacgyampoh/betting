@@ -1,12 +1,13 @@
 "use client";
 
-import { ArrowLeftRight, Check, Copy, CornerDownRight, Pencil, Share2, TriangleAlert } from "lucide-react";
+import { ArrowLeftRight, Check, Copy, CornerDownRight, Pencil, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { formatKickoff, formatOdds } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SlipView as Slip } from "@/lib/slips/view";
+import { ShareSlip } from "./share-slip";
 import { EditPanel } from "./edit-panel";
 import { SelectionCard } from "./selection-card";
 
@@ -127,11 +128,15 @@ export function SlipView({ slip, onEdited, title }: { slip: Slip; onEdited?: (sl
           >
             <Pencil data-icon="inline-start" /> Edit
           </Button>
-          <Button asChild variant="ghost" className="h-11 rounded-none bg-card">
-            <a href={`/slip/${slip.id}/share`} target="_blank" rel="noopener noreferrer">
-              <Share2 data-icon="inline-start" /> Share
-            </a>
-          </Button>
+          <div className="flex h-11 items-center justify-center bg-card">
+            <ShareSlip
+              slipId={slip.id}
+              code={slip.code}
+              bookmaker={slip.bookmaker.name}
+              totalOdds={slip.totalOdds}
+              games={slip.selections.length}
+            />
+          </div>
         </div>
       </div>
 
