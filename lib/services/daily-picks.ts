@@ -220,7 +220,9 @@ export async function generateDailyPicks(now = new Date()): Promise<GenerationRe
   // day for everyone, so the stats cost is flat. There is no user here, hence the null.
   // Markets we hold history for first, so published picks carry real evidence (see build-from-today).
   const evidenced = candidates.filter((c) => hasEvidenceSupport(c.group));
-  const pool = shortlistCandidates(evidenced.length ? evidenced : candidates, DAILY_SHORTLIST);
+  // Three of a market in the pool, two in the published slip: these are the picks the public record
+  // is judged on, and the research cost here is flat - once a day, for everyone.
+  const pool = shortlistCandidates(evidenced.length ? evidenced : candidates, DAILY_SHORTLIST, { perGroup: 3 });
   const researched = await enrich(null, pool, DAILY_SHORTLIST).catch((error: unknown) => {
     logger.warn("daily.research_failed", { date, error: String(error) });
     return pool.map((p) => ({ ...p, evidence: null, gap: "error" as const, statsFixtureId: null }));
