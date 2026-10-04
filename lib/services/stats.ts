@@ -54,10 +54,31 @@ async function orBusy<T>(p: Promise<T>): Promise<T> {
   }
 }
 
-export async function listMatches(date: string): Promise<{ groups: LeagueGroup[]; source: StatsProvider["source"] }> {
+/**
+ * How many fixtures a day's list carries to the browser.
+ *
+ * A full day is about 1,300 games across every country that plays football, and all of them were
+ * being serialised into the page: 894 KB of HTML on a phone, before a single logo. Almost none of
+ * it is ever looked at - the leagues people here bet on are at the top, and anything else is a
+ * search away. Leagues are kept whole, in priority order, until this is passed.
+ */
+const MAX_LISTED = 150;
+
+export async function listMatches(
+  date: string,
+  search?: string,
+): Promise<{ groups: LeagueGroup[]; source: StatsProvider["source"]; total: number; shown: number }> {
   const provider = statsProvider();
-  const matches = await orBusy(provider.fixturesByDate(date));
-  await rememberLogos(matches);
+  const all = await orBusy(provider.fixturesByDate(date));
+  await rememberLogos(all);
+
+  // Searching runs here, over the whole day, rather than in the browser over whatever was sent:
+  // that is what lets the list be short without putting any game out of reach.
+  const needle = search?.trim().toLowerCase();
+  const matches = needle
+    ? all.filter((m) => [m.home.name, m.away.name, m.league.name, m.league.country].some((v) => v.toLowerCase().includes(needle)))
+    : all;
+
   const byLeague = new Map<number, LeagueGroup>();
   for (const m of matches) {
     const g = byLeague.get(m.league.id) ?? { league: m.league, matches: [] };
@@ -68,11 +89,21 @@ export async function listMatches(date: string): Promise<{ groups: LeagueGroup[]
     const i = PRIORITY.findIndex(([c, l]) => c === g.league.country && l === g.league.name);
     return i === -1 ? PRIORITY.length : i;
   };
-  const groups = [...byLeague.values()]
+  const ranked = [...byLeague.values()]
     .map((g) => ({ ...g, matches: g.matches.sort((a, b) => a.kickoffAt.localeCompare(b.kickoffAt)) }))
     .sort((a, b) => rank(a) - rank(b) || a.league.country.localeCompare(b.league.country) || a.league.name.localeCompare(b.league.name));
-  return { groups, source: provider.source };
+
+  // Whole leagues: half a league's fixtures reads as missing games rather than as a shorter list.
+  const groups: LeagueGroup[] = [];
+  let shown = 0;
+  for (const g of ranked) {
+    if (shown >= MAX_LISTED) break;
+    groups.push(g);
+    shown += g.matches.length;
+  }
+  return { groups, source: provider.source, total: matches.length, shown };
 }
+
 
 /**
  * @param dateHint kickoff date (YYYY-MM-DD) when known (from a match list or search): the fixture is

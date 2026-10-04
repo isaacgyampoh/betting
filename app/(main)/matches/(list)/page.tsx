@@ -31,11 +31,11 @@ const DAYS = [
  * this page needs them, so it is kept out of the way of everything that does not: the heading and
  * the day tabs render at once and stay tappable while the list arrives.
  */
-async function Fixtures({ date }: { date: string }) {
+async function Fixtures({ date, query }: { date: string; query: string }) {
   let data: Awaited<ReturnType<typeof listMatches>> | null = null;
   let error: AppError | null = null;
   try {
-    data = await listMatches(date);
+    data = await listMatches(date, query);
   } catch (err) {
     if (!(err instanceof AppError)) throw err;
     error = err;
@@ -45,7 +45,7 @@ async function Fixtures({ date }: { date: string }) {
     <>
       {data?.source === "sample" && <SampleDataNotice />}
       {error && <ApiErrorNotice code={error.code} message={error.message} />}
-      {data && <MatchList groups={data.groups} />}
+      {data && <MatchList groups={data.groups} hidden={data.total - data.shown} query={query} />}
     </>
   );
 }
@@ -63,7 +63,9 @@ function FixturesSkeleton() {
 
 export default async function MatchesPage({ searchParams }: PageProps<"/matches">) {
   await requireAdultPage("/matches");
-  const date = z.iso.date().catch(dayOffset(0)).parse((await searchParams).date);
+  const params = await searchParams;
+  const date = z.iso.date().catch(dayOffset(0)).parse(params.date);
+  const query = z.string().max(60).catch("").parse(params.q);
 
   return (
     <div className="space-y-4">
@@ -78,7 +80,7 @@ export default async function MatchesPage({ searchParams }: PageProps<"/matches"
           return (
             <Link
               key={d.offset}
-              href={`/matches?date=${value}`}
+              href={`/matches?date=${value}${query ? `&q=${encodeURIComponent(query)}` : ""}`}
               aria-current={value === date ? "page" : undefined}
               className={cn("rounded-md py-2 text-center text-xs font-medium", value === date ? "bg-background text-foreground" : "text-muted-foreground")}
             >
@@ -88,8 +90,8 @@ export default async function MatchesPage({ searchParams }: PageProps<"/matches"
         })}
       </nav>
 
-      <Suspense key={date} fallback={<FixturesSkeleton />}>
-        <Fixtures date={date} />
+      <Suspense key={`${date}:${query}`} fallback={<FixturesSkeleton />}>
+        <Fixtures date={date} query={query} />
       </Suspense>
     </div>
   );
