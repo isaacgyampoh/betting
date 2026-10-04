@@ -115,12 +115,13 @@ describe("canSettleFromScore", () => {
     ["match result", m({ type: "MATCH_RESULT", line: null, outcome: "HOME" })],
     ["double chance", m({ type: "DOUBLE_CHANCE", line: null, outcome: "HOME_DRAW" })],
     ["a team's own total", m({ type: "TEAM_OVER_UNDER", line: 1.5, outcome: "HOME_OVER" })],
+    ["a first-half line", m({ period: "H1" })],
+    ["a second-half line", m({ period: "H2" })],
   ])("settles %s", (_label, market) => {
     expect(canSettleFromScore(market)).toBe(true);
   });
 
   it.each([
-    ["a first-half line", m({ period: "H1" })],
     ["an over/under with no line", m({ line: null })],
     ["corners", m({ type: "CORNERS" })],
     ["cards", m({ type: "CARDS" })],
@@ -154,5 +155,52 @@ describe("team totals", () => {
     ["HOME_OVER", 2.5, "LOST"],
   ])("%s %s on a 2-0 is %s", (outcome, line, want) => {
     expect(settleLeg(team(outcome, line as number), finished).state).toBe(want);
+  });
+});
+
+// The provider carries a half-time score on about 94% of finished fixtures, against 16% for shot
+// and corner counts. That is the whole reason halves settle here and corners still do not.
+describe("halves", () => {
+  const match = (over: Record<string, unknown> = {}) =>
+    ({
+      id: 1,
+      home: { id: 1, name: "Arsenal", logo: null },
+      away: { id: 2, name: "Chelsea", logo: null },
+      goals: { home: 3, away: 1 },
+      halftime: { home: 1, away: 1 },
+      status: "FINISHED",
+      statusLabel: "Match Finished",
+      kickoffAt: "2026-10-04T15:00:00.000Z",
+      league: { id: 39, name: "Premier League", country: "England", logo: null, season: 2026 },
+      ...over,
+    }) as never;
+  const mk = (type: string, period: string, outcome: string, line: number | null = null) => ({ type, period, outcome, line }) as never;
+
+  // 1-1 at the break, 3-1 at the end, so the second half was 2-0.
+  it.each([
+    ["first half over 1.5", mk("OVER_UNDER", "H1", "OVER", 1.5), "WON"],
+    ["first half over 2.5", mk("OVER_UNDER", "H1", "OVER", 2.5), "LOST"],
+    ["first half both to score", mk("BTTS", "H1", "YES"), "WON"],
+    ["first half draw", mk("MATCH_RESULT", "H1", "DRAW"), "WON"],
+    ["first half home win", mk("MATCH_RESULT", "H1", "HOME"), "LOST"],
+    ["second half over 1.5", mk("OVER_UNDER", "H2", "OVER", 1.5), "WON"],
+    ["second half both to score", mk("BTTS", "H2", "YES"), "LOST"],
+    ["second half home win", mk("MATCH_RESULT", "H2", "HOME"), "WON"],
+  ])("settles %s", (_label, pick, want) => {
+    expect(settleLeg(pick, match()).state).toBe(want);
+  });
+
+  it("settles a first half while the second is still being played", () => {
+    const running = match({ status: "LIVE", statusLabel: "62'", goals: { home: 2, away: 1 } });
+    expect(settleLeg(mk("MATCH_RESULT", "H1", "DRAW"), running).state).toBe("WON");
+    // The second half is not over, so it is not called either way.
+    expect(settleLeg(mk("OVER_UNDER", "H2", "OVER", 2.5), running).state).toBe("RUNNING");
+  });
+
+  it("leaves a half unsettled when the provider has no half-time score", () => {
+    const noHt = match({ halftime: null });
+    expect(settleLeg(mk("OVER_UNDER", "H1", "OVER", 1.5), noHt).state).toBe("UNKNOWN");
+    // The full-time market on the same fixture is unaffected.
+    expect(settleLeg(mk("OVER_UNDER", "FT", "OVER", 2.5), noHt).state).toBe("WON");
   });
 });

@@ -44,6 +44,7 @@ function cacheKey(endpoint: string, params: Params) {
 // Raw response shapes (only the fields we use).
 type ApiFixture = {
   fixture: { id: number; date: string; status: { short: string; long: string; elapsed: number | null } };
+  score?: { halftime?: { home: number | null; away: number | null } | null };
   league: { id: number; name: string; country: string; logo: string | null; season: number };
   teams: { home: { id: number; name: string; logo: string | null }; away: { id: number; name: string; logo: string | null } };
   goals: { home: number | null; away: number | null };
@@ -73,6 +74,7 @@ export function toMatchSummary(f: ApiFixture): MatchSummary {
     home: { id: f.teams.home.id, name: f.teams.home.name, logo: f.teams.home.logo },
     away: { id: f.teams.away.id, name: f.teams.away.name, logo: f.teams.away.logo },
     goals: f.goals,
+    halftime: f.score?.halftime ?? null,
   };
 }
 

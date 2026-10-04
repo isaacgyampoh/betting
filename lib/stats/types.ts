@@ -13,6 +13,11 @@ export type MatchSummary = {
   home: TeamRef;
   away: TeamRef;
   goals: { home: number | null; away: number | null };
+  /**
+   * The score at half time, when the provider has it - present on about 94% of finished fixtures,
+   * against 16% for the shot and corner counts. It is what makes a first-half line settleable.
+   */
+  halftime?: { home: number | null; away: number | null } | null;
 };
 
 export type FormResult = "W" | "D" | "L";

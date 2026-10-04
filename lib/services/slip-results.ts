@@ -48,20 +48,51 @@ const total = (m: MatchSummary) => goalsOf(m).home + goalsOf(m).away;
 const finished = (m: MatchSummary) => m.status === "FINISHED";
 
 /**
+ * The goals that count for a market's period.
+ *
+ * Null when the period cannot be worked out, which is what keeps a leg honestly unsettled rather
+ * than settled from the wrong number. A first half needs the half-time score; a second half is the
+ * rest of the match, so it needs the half-time score and a finished game.
+ *
+ * The provider carries a half-time score on about 94% of finished fixtures. It does not carry shot
+ * or corner counts on more than 16%, which is why those markets are still not settled from here.
+ */
+function goalsForPeriod(m: MatchSummary, period: Market["period"]): { home: number; away: number } | null {
+  if (period === "FT") return goalsOf(m);
+  const ht = m.halftime;
+  if (!ht || ht.home === null || ht.away === null) return null;
+  if (period === "H1") return { home: ht.home, away: ht.away };
+  // The second half is whatever has been added since the break, which is knowable while it is
+  // still being played - it just is not final until the match is.
+  const full = goalsOf(m);
+  return { home: full.home - ht.home, away: full.away - ht.away };
+}
+
+/** A half is over once the half-time score exists; the match being live is not enough. */
+function periodDecided(m: MatchSummary, period: Market["period"]): boolean {
+  if (period === "FT" || period === "H2") return finished(m);
+  return m.halftime?.home !== null && m.halftime?.home !== undefined;
+}
+
+/**
  * Settles one pick against a score. `final` says whether the game is over: a pick can be won early
  * (over 1.5 with two goals in) but only lost once nothing can change it.
  */
 /**
  * Whether a final score alone can decide this market.
  *
- * Only full-time goal markets can: a corners or cards line is not in the score at all, and a
- * first-half line needs the half-time score, which we do not hold. One team's own total is in the
- * score as much as the match total is, so that counts. Everything else is reported to
- * the user as "check this at the bookmaker" rather than guessed - and nothing we cannot settle is
- * published as a daily pick, because the public record claims every pick on it ends up won or lost.
+ * Goal markets can, for either half as well as the match: the provider carries a half-time score on
+ * about 94% of finished fixtures, and the second half is the rest. One team's own total is in the
+ * score as much as the match total is, so that counts too.
+ *
+ * Corners, cards, fouls and shots cannot. They are not in a score, and the only numbers for them -
+ * the provider's match statistics - exist for 16% of finished fixtures, almost all of it the bigger
+ * competitions. Publishing a market we could settle one time in six would put the public record
+ * back where it was: slips stuck at "still running" for ever. Those stay a chat answer, where "check
+ * this one at the bookmaker" is honest and holds nothing up.
  */
 export function canSettleFromScore(pick: Market | null): boolean {
-  if (!pick || pick.period !== "FT") return false;
+  if (!pick) return false;
   switch (pick.type) {
     case "OVER_UNDER":
     case "TEAM_OVER_UNDER":
@@ -76,26 +107,34 @@ export function canSettleFromScore(pick: Market | null): boolean {
 }
 
 export function settleLeg(pick: Market | null, match: MatchSummary): { state: LegState; note: string } {
-  const g = goalsOf(match);
-  const t = total(match);
-  const final = finished(match);
-  const live = match.status === "LIVE" || final;
+  const matchFinal = finished(match);
+  const live = match.status === "LIVE" || matchFinal;
   if (!live) return { state: "NOT_STARTED", note: "Not kicked off yet." };
+
+  const unknown = {
+    state: "UNKNOWN" as const,
+    note: matchFinal ? "Finished — check this market at the bookmaker." : "Running — we can't settle this market from the score.",
+  };
+  if (!pick) return unknown;
+
+  // Everything below reads the goals for this market's period, not the match's. A half-time line is
+  // decided by the half-time score, and is already decided while the second half is still running.
+  const scoped = goalsForPeriod(match, pick.period);
+  // No half-time score yet. While the match is live that is just "too early", not "unknowable";
+  // only a finished match whose half-time score never arrived is genuinely beyond us.
+  if (!scoped) {
+    return matchFinal ? unknown : { state: "RUNNING", note: "Running — the half-time score isn't in yet." };
+  }
+  const g = scoped;
+  const t = g.home + g.away;
+  const final = periodDecided(match, pick.period);
+  const where = pick.period === "FT" ? "Finished" : pick.period === "H1" ? "At half time" : "In the second half";
 
   const decide = (won: boolean, lostWhenFinal: boolean, wonNote: string, pendingNote: string) => {
     if (won) return { state: "WON" as const, note: wonNote };
-    if (final && lostWhenFinal) return { state: "LOST" as const, note: `Finished ${g.home}-${g.away}.` };
-    return { state: final ? ("LOST" as const) : ("RUNNING" as const), note: final ? `Finished ${g.home}-${g.away}.` : pendingNote };
+    if (final && lostWhenFinal) return { state: "LOST" as const, note: `${where} ${g.home}-${g.away}.` };
+    return { state: final ? ("LOST" as const) : ("RUNNING" as const), note: final ? `${where} ${g.home}-${g.away}.` : pendingNote };
   };
-
-  // Only full-time markets can be settled from a final score; a first-half line needs the
-  // half-time score, which we do not hold.
-  if (!pick || pick.period !== "FT") {
-    return {
-      state: "UNKNOWN",
-      note: final ? "Finished — check this market at the bookmaker." : "Running — we can't settle this market from the score.",
-    };
-  }
 
   switch (pick.type) {
     case "OVER_UNDER": {
@@ -115,7 +154,7 @@ export function settleLeg(pick: Market | null, match: MatchSummary): { state: Le
         return decide(both, !both, `Both have scored (${g.home}-${g.away}).`, `${g.home}-${g.away}, still needs both to score.`);
       }
       if (both) return { state: "LOST", note: `Both scored (${g.home}-${g.away}).` };
-      return final ? { state: "WON", note: `Finished ${g.home}-${g.away}.` } : { state: "RUNNING", note: `${g.home}-${g.away}, still alive.` };
+      return final ? { state: "WON", note: `${where} ${g.home}-${g.away}.` } : { state: "RUNNING", note: `${g.home}-${g.away}, still alive.` };
     }
     case "TEAM_OVER_UNDER": {
       // One side's own goals are in the final score as much as the total is.
@@ -127,7 +166,7 @@ export function settleLeg(pick: Market | null, match: MatchSummary): { state: Le
       }
       if (side > pick.line) return { state: "LOST", note: `${who} have ${side}, under ${pick.line} has gone.` };
       return final
-        ? { state: "WON", note: `Finished ${g.home}-${g.away}; ${who} under ${pick.line}.` }
+        ? { state: "WON", note: `${where} ${g.home}-${g.away}; ${who} under ${pick.line}.` }
         : { state: "RUNNING", note: `${who} on ${side}, still under ${pick.line}.` };
     }
     case "MATCH_RESULT":
@@ -140,8 +179,8 @@ export function settleLeg(pick: Market | null, match: MatchSummary): { state: Le
         (pick.outcome === "HOME_AWAY" && leader !== "DRAW");
       if (!final) return { state: "RUNNING", note: `${g.home}-${g.away}, ${covered ? "currently covered" : "not covered yet"}.` };
       return covered
-        ? { state: "WON", note: `Finished ${g.home}-${g.away}.` }
-        : { state: "LOST", note: `Finished ${g.home}-${g.away}.` };
+        ? { state: "WON", note: `${where} ${g.home}-${g.away}.` }
+        : { state: "LOST", note: `${where} ${g.home}-${g.away}.` };
     }
   }
   return {
