@@ -46,6 +46,12 @@ For local preview secrets, copy `.dev.vars.example` to `.dev.vars` (git-ignored)
 
 The Supabase service_role key is never used. Don't add it.
 
+### Rotating any of these
+
+See [rotating-secrets.md](rotating-secrets.md): every credential, where it lives, and the order to
+replace it in without taking the site down. A credential that has been pasted into a chat, a
+screenshot or a commit is one someone else may hold, and rotating is the only fix.
+
 ### Automatic deploys (GitHub Actions)
 Every push to `main` of the private repo `isaacgyampoh/betting` runs `.github/workflows/ci.yml`:
 1. **check:** lint, typecheck, unit tests, integration tests (against a throwaway Postgres), `next build`, `pnpm cf:build`.
