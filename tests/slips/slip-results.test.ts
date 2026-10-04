@@ -114,6 +114,7 @@ describe("canSettleFromScore", () => {
     ["both teams to score", m({ type: "BTTS", line: null, outcome: "YES" })],
     ["match result", m({ type: "MATCH_RESULT", line: null, outcome: "HOME" })],
     ["double chance", m({ type: "DOUBLE_CHANCE", line: null, outcome: "HOME_DRAW" })],
+    ["a team's own total", m({ type: "TEAM_OVER_UNDER", line: 1.5, outcome: "HOME_OVER" })],
   ])("settles %s", (_label, market) => {
     expect(canSettleFromScore(market)).toBe(true);
   });
@@ -123,9 +124,35 @@ describe("canSettleFromScore", () => {
     ["an over/under with no line", m({ line: null })],
     ["corners", m({ type: "CORNERS" })],
     ["cards", m({ type: "CARDS" })],
-    ["a team total", m({ type: "TEAM_OVER_UNDER" })],
+    ["a team total with no line", m({ type: "TEAM_OVER_UNDER", line: null, outcome: "HOME_OVER" })],
     ["nothing at all", null],
   ])("does not settle %s", (_label, market) => {
     expect(canSettleFromScore(market)).toBe(false);
+  });
+});
+
+// A team's own goals are in the final score as much as the match total is, so these settle rather
+// than being handed back as "check it at the bookmaker".
+describe("team totals", () => {
+  const finished = {
+    id: 1,
+    home: { id: 1, name: "Arsenal", logo: null },
+    away: { id: 2, name: "Chelsea", logo: null },
+    goals: { home: 2, away: 0 },
+    status: "FINISHED" as const,
+    statusLabel: "Match Finished",
+    kickoffAt: "2026-10-04T15:00:00.000Z",
+    league: { id: 39, name: "Premier League", country: "England", logo: null, season: 2026 },
+  };
+  const team = (outcome: string, line: number) => ({ type: "TEAM_OVER_UNDER", period: "FT", outcome, line }) as never;
+
+  it.each([
+    ["HOME_OVER", 1.5, "WON"],
+    ["HOME_UNDER", 1.5, "LOST"],
+    ["AWAY_OVER", 0.5, "LOST"],
+    ["AWAY_UNDER", 0.5, "WON"],
+    ["HOME_OVER", 2.5, "LOST"],
+  ])("%s %s on a 2-0 is %s", (outcome, line, want) => {
+    expect(settleLeg(team(outcome, line as number), finished).state).toBe(want);
   });
 });

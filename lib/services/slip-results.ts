@@ -55,7 +55,8 @@ const finished = (m: MatchSummary) => m.status === "FINISHED";
  * Whether a final score alone can decide this market.
  *
  * Only full-time goal markets can: a corners or cards line is not in the score at all, and a
- * first-half line needs the half-time score, which we do not hold. Everything else is reported to
+ * first-half line needs the half-time score, which we do not hold. One team's own total is in the
+ * score as much as the match total is, so that counts. Everything else is reported to
  * the user as "check this at the bookmaker" rather than guessed - and nothing we cannot settle is
  * published as a daily pick, because the public record claims every pick on it ends up won or lost.
  */
@@ -63,6 +64,7 @@ export function canSettleFromScore(pick: Market | null): boolean {
   if (!pick || pick.period !== "FT") return false;
   switch (pick.type) {
     case "OVER_UNDER":
+    case "TEAM_OVER_UNDER":
       return pick.line !== null;
     case "BTTS":
     case "MATCH_RESULT":
@@ -114,6 +116,19 @@ export function settleLeg(pick: Market | null, match: MatchSummary): { state: Le
       }
       if (both) return { state: "LOST", note: `Both scored (${g.home}-${g.away}).` };
       return final ? { state: "WON", note: `Finished ${g.home}-${g.away}.` } : { state: "RUNNING", note: `${g.home}-${g.away}, still alive.` };
+    }
+    case "TEAM_OVER_UNDER": {
+      // One side's own goals are in the final score as much as the total is.
+      if (pick.line === null) break;
+      const side = pick.outcome.startsWith("HOME") ? g.home : g.away;
+      const who = pick.outcome.startsWith("HOME") ? match.home.name : match.away.name;
+      if (pick.outcome.endsWith("OVER")) {
+        return decide(side > pick.line, side <= pick.line, `${who} have ${side}, over ${pick.line} is already safe.`, `${who} on ${side}, needs over ${pick.line}.`);
+      }
+      if (side > pick.line) return { state: "LOST", note: `${who} have ${side}, under ${pick.line} has gone.` };
+      return final
+        ? { state: "WON", note: `Finished ${g.home}-${g.away}; ${who} under ${pick.line}.` }
+        : { state: "RUNNING", note: `${who} on ${side}, still under ${pick.line}.` };
     }
     case "MATCH_RESULT":
     case "DOUBLE_CHANCE": {
