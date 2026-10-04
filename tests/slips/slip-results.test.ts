@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { settleLeg } from "@/lib/services/slip-results";
+import { canSettleFromScore, settleLeg } from "@/lib/services/slip-results";
 import type { Market } from "@/lib/markets/types";
 import type { MatchStatus, MatchSummary } from "@/lib/stats/types";
 
@@ -100,5 +100,32 @@ describe("what we refuse to settle", () => {
 
   it("reports a game that hasn't kicked off", () => {
     expect(settleLeg(m("BTTS", "YES"), match(null, null, "SCHEDULED")).state).toBe("NOT_STARTED");
+  });
+});
+
+// Nothing we cannot settle from a final score is published as a daily pick: the public record says
+// every pick on it ends up won or lost, and a leg that can never be either keeps its whole slip off
+// the record for ever.
+describe("canSettleFromScore", () => {
+  const m = (over: Record<string, unknown>) => ({ type: "OVER_UNDER", period: "FT", line: 2.5, outcome: "OVER", ...over }) as never;
+
+  it.each([
+    ["full-time over/under", m({})],
+    ["both teams to score", m({ type: "BTTS", line: null, outcome: "YES" })],
+    ["match result", m({ type: "MATCH_RESULT", line: null, outcome: "HOME" })],
+    ["double chance", m({ type: "DOUBLE_CHANCE", line: null, outcome: "HOME_DRAW" })],
+  ])("settles %s", (_label, market) => {
+    expect(canSettleFromScore(market)).toBe(true);
+  });
+
+  it.each([
+    ["a first-half line", m({ period: "H1" })],
+    ["an over/under with no line", m({ line: null })],
+    ["corners", m({ type: "CORNERS" })],
+    ["cards", m({ type: "CARDS" })],
+    ["a team total", m({ type: "TEAM_OVER_UNDER" })],
+    ["nothing at all", null],
+  ])("does not settle %s", (_label, market) => {
+    expect(canSettleFromScore(market)).toBe(false);
   });
 });

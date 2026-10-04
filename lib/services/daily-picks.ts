@@ -8,6 +8,7 @@ import type { PickStatus } from "@/lib/generated/prisma/enums";
 import { getActiveSubscription } from "@/lib/services/profile";
 import { buildFromFixtures, hasEvidenceSupport, reasonFor, shortlistCandidates, toCandidates } from "@/lib/slips/fixture-picks";
 import { enrich, pickKey, rankByEvidence, reasonWithEvidence, withoutContradicted } from "@/lib/slips/enrich";
+import { canSettleFromScore } from "@/lib/services/slip-results";
 
 // Daily picks are generated once per day for everyone (not per user) to keep AI cost flat, and
 // published unchanged. Results are filled in automatically after kickoff; rows are never edited
@@ -209,7 +210,11 @@ export async function generateDailyPicks(now = new Date()): Promise<GenerationRe
     logger.error("daily.fixtures_failed", { date, error: String(error) });
     return [];
   });
-  const candidates = toCandidates(fixtures);
+  // Only picks a final score can decide. The record says every published pick ends up won or lost,
+  // and a corners line or a first-half total can never be either - it would sit at "still running"
+  // for ever, quietly keeping the slip it is on off the record with it. A user's own slip may hold
+  // any market; it just gets told to check that one at the bookmaker.
+  const candidates = toCandidates(fixtures).filter((c) => canSettleFromScore(c.market));
   if (!candidates.length) {
     logger.warn("daily.no_candidates", { date, fixtures: fixtures.length });
     return { date, created: 0, skipped: [...skipped, "No fixture today had prices we could build an honest pick from."] };

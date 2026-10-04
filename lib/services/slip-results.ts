@@ -51,6 +51,28 @@ const finished = (m: MatchSummary) => m.status === "FINISHED";
  * Settles one pick against a score. `final` says whether the game is over: a pick can be won early
  * (over 1.5 with two goals in) but only lost once nothing can change it.
  */
+/**
+ * Whether a final score alone can decide this market.
+ *
+ * Only full-time goal markets can: a corners or cards line is not in the score at all, and a
+ * first-half line needs the half-time score, which we do not hold. Everything else is reported to
+ * the user as "check this at the bookmaker" rather than guessed - and nothing we cannot settle is
+ * published as a daily pick, because the public record claims every pick on it ends up won or lost.
+ */
+export function canSettleFromScore(pick: Market | null): boolean {
+  if (!pick || pick.period !== "FT") return false;
+  switch (pick.type) {
+    case "OVER_UNDER":
+      return pick.line !== null;
+    case "BTTS":
+    case "MATCH_RESULT":
+    case "DOUBLE_CHANCE":
+      return true;
+    default:
+      return false;
+  }
+}
+
 export function settleLeg(pick: Market | null, match: MatchSummary): { state: LegState; note: string } {
   const g = goalsOf(match);
   const t = total(match);
