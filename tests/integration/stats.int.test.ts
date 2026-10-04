@@ -202,6 +202,26 @@ describe("stats service (sample provider)", () => {
     expect(detail.standings?.some((r) => r.team.id === match!.home.id)).toBe(true);
   });
 
+  // Researching a slip calls getMatchDetail once per shortlisted pick and reads only the form and
+  // the head-to-head. Everything else it was doing per pick - the table, a rate-limit check, a
+  // usage row - was round trips to a database in another region for data nobody looked at.
+  it("fetches only the sections asked for, and does not meter them", async () => {
+    const user = await createUser();
+    const slip = await createSportyBetAdapter("mock", { latencyMs: 0 }).loadCode("BC7K2Q");
+    const match = await lookupMatch("Man Utd", "Tottenham Hotspur", slip.selections[0].event.kickoffAt);
+
+    const research = await getMatchDetail(user, match!.id, undefined, { sections: ["form", "h2h"], meter: false });
+    expect(research.form.home.matches).toHaveLength(FORM_GAMES);
+    expect(research.h2h.length).toBeGreaterThan(0);
+    expect(research.standings).toBeNull();
+    expect(await db.usageLog.count({ where: { userId: user.id, kind: "STATS" } })).toBe(0);
+
+    // The match page still wants all of it, and is still one metered thing the user did.
+    const full = await getMatchDetail(user, match!.id);
+    expect(full.standings?.length).toBeGreaterThan(0);
+    expect(await db.usageLog.count({ where: { userId: user.id, kind: "STATS" } })).toBe(1);
+  });
+
   it("lists matches grouped by league with the Premier League first", async () => {
     const slip = await createSportyBetAdapter("mock", { latencyMs: 0 }).loadCode("BC7K2Q");
     const date = slip.selections[0].event.kickoffAt.toISOString().slice(0, 10);

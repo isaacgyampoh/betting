@@ -39,7 +39,8 @@ type Looked = { evidence: Evidence | null; gap: EnrichedPick["gap"]; statsFixtur
 async function evidenceForPick(user: AuthUser | null, pick: PickCandidate): Promise<Looked> {
   const match = await lookupMatch(pick.event.home, pick.event.away, pick.event.kickoffAt, pick.event.competition);
   if (!match) return { evidence: null, gap: "fixture-not-found", statsFixtureId: null };
-  const detail = await getMatchDetail(user, match.id, match.kickoffAt.slice(0, 10));
+  // Only what the evidence reads. The build that asked for this research is the metered action.
+  const detail = await getMatchDetail(user, match.id, match.kickoffAt.slice(0, 10), { sections: ["form", "h2h"], meter: false });
 
   const evidence = evidenceFor(
     { marketId: pick.raw.marketId, outcome: pick.market?.outcome ?? pick.raw.outcomeId, line: pick.market?.line ?? null },

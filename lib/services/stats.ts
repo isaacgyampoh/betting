@@ -117,9 +117,28 @@ export const H2H_GAMES = 6;
  * `user` is null for background work such as the daily-picks cron: there is nobody to meter, and
  * usage_logs has a foreign key to a real profile, so the metering is skipped rather than faked.
  */
-export async function getMatchDetail(user: AuthUser | null, fixtureId: number, dateHint?: string): Promise<MatchDetail> {
+/**
+ * What a caller actually needs, and whether this counts as a thing the user did.
+ *
+ * Researching a slip calls this once per shortlisted pick, and only ever reads the form and the
+ * head-to-head - never the table. Fetching the table anyway, metering each pick separately and
+ * writing a usage row for each one made eight picks cost about fifty round trips to a database in
+ * another region. The build that asked for the research is itself metered and rate-limited, which
+ * is what bounds it.
+ */
+export type DetailOptions = { sections?: ("form" | "h2h" | "standings")[]; meter?: boolean };
+const ALL_SECTIONS: NonNullable<DetailOptions["sections"]> = ["form", "h2h", "standings"];
+
+export async function getMatchDetail(
+  user: AuthUser | null,
+  fixtureId: number,
+  dateHint?: string,
+  opts: DetailOptions = {},
+): Promise<MatchDetail> {
+  const want = new Set(opts.sections ?? ALL_SECTIONS);
+  const meter = opts.meter ?? true;
   // Background work is bounded by its own caller, not by a per-user rate limit.
-  if (user) await enforceRateLimit({ userId: user.id, kind: "STATS", ...STATS_LIMIT });
+  if (user && meter) await enforceRateLimit({ userId: user.id, kind: "STATS", ...STATS_LIMIT });
   const provider = statsProvider();
   const fromDay =
     dateHint && /^\d{4}-\d{2}-\d{2}$/.test(dateHint)
@@ -152,16 +171,17 @@ export async function getMatchDetail(user: AuthUser | null, fixtureId: number, d
     }
   };
 
+  const skip = async <T,>(empty: T) => empty;
   const [homeLast, awayLast, h2h, standings] = await Promise.all([
     // Ten games, not five: "9 of 10" is far stronger evidence than "4 of 5", and a home/away split
     // of five leaves only two or three games a side, which says almost nothing.
-    section("form", () => provider.lastFixtures(match.home.id, FORM_GAMES), []),
-    section("form", () => provider.lastFixtures(match.away.id, FORM_GAMES), []),
-    section("h2h", () => provider.headToHead(match.home.id, match.away.id, H2H_GAMES), []),
-    section("standings", () => provider.standings(match.league.id, match.league.season), null),
+    want.has("form") ? section("form", () => provider.lastFixtures(match.home.id, FORM_GAMES), []) : skip([] as MatchSummary[]),
+    want.has("form") ? section("form", () => provider.lastFixtures(match.away.id, FORM_GAMES), []) : skip([] as MatchSummary[]),
+    want.has("h2h") ? section("h2h", () => provider.headToHead(match.home.id, match.away.id, H2H_GAMES), []) : skip([] as MatchSummary[]),
+    want.has("standings") ? section("standings", () => provider.standings(match.league.id, match.league.season), null) : skip(null),
   ]);
 
-  if (user) {
+  if (user && meter) {
     await logUsage({ userId: user.id, kind: "STATS", success: true, meta: { fixtureId, source: provider.source, unavailable: [...unavailable] } });
   }
   return {
