@@ -52,7 +52,10 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-14 pb-4">
-      <section className="grid items-center gap-8 pt-4 lg:grid-cols-2 lg:pt-10">
+      {/* Decoration only: both are aria-hidden and pointer-events: none, and the page reads the
+          same with them gone. */}
+      <section className="gc-grid relative isolate grid items-center gap-8 pt-4 lg:grid-cols-2 lg:pt-10">
+        <div className="gc-aurora" aria-hidden />
         <div className="space-y-5 text-center lg:text-left">
           <h1 className="text-[2.75rem] leading-[1.03] font-semibold tracking-[-0.03em] text-balance sm:text-6xl">
             Paste your code.
@@ -84,7 +87,7 @@ export default async function HomePage() {
         <PhoneDemo />
       </section>
 
-      <section aria-labelledby="features" className="gc-reveal">
+      <section aria-labelledby="features" className="gc-reveal gc-surface relative -mx-4 rounded-2xl px-4 py-8 sm:px-6">
         <h2 id="features" className="sr-only">
           What it does
         </h2>
@@ -105,7 +108,7 @@ export default async function HomePage() {
         <ProblemFix />
       </div>
 
-      <div className="gc-reveal">
+      <div className="gc-reveal gc-pitch relative isolate py-2">
         <HowItWorks />
       </div>
 
@@ -146,7 +149,8 @@ export default async function HomePage() {
         <InstallGuide />
       </section>
 
-      <section className="gc-reveal rounded-lg border bg-card p-6 text-center">
+      <section className="gc-reveal gc-raised relative isolate overflow-hidden rounded-2xl border bg-card p-8 text-center">
+        <div className="gc-aurora" aria-hidden />
         <h2 className="text-lg font-semibold">Paste your first code</h2>
         <p className="mt-1 text-sm text-muted-foreground">It takes a few seconds and costs nothing.</p>
         <Button asChild size="lg" className="mt-4 h-12 px-6">
