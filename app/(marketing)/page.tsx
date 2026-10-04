@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeftRight, ArrowRight, Scissors, Sparkles } from "lucide-react";
 import { Bookmakers } from "@/components/landing/bookmakers";
+import { Faq } from "@/components/landing/faq";
+import { PlansPreview } from "@/components/landing/plans-preview";
+import { TrackRecordSummary } from "@/components/landing/track-record-summary";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { InstallGuide } from "@/components/landing/install-guide";
 import { ProblemFix } from "@/components/landing/problem-fix";
 import { PhoneDemo } from "@/components/landing/phone-demo";
 import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
-import { cn } from "@/lib/utils";
+import { connectedBookmakers } from "@/lib/bookmakers/registry";
 import { getTrackRecord } from "@/lib/services/daily-picks";
 import { listActivePlans } from "@/lib/services/plans";
 
@@ -31,17 +34,6 @@ const FEATURES = [
   { icon: Scissors, title: "Cut it down", text: "Trim to the odds you want, or keep only the safest picks." },
 ];
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "win" | "loss" }) {
-  return (
-    <div className="bg-card p-4 text-center">
-      <p className={cn("text-3xl font-semibold tracking-tight tabular-nums", tone === "win" && "text-win", tone === "loss" && "text-loss")}>
-        {value}
-      </p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
-    </div>
-  );
-}
-
 export default async function HomePage() {
   const [record, plans] = await Promise.all([
     getTrackRecord(12).catch((err) => {
@@ -51,7 +43,6 @@ export default async function HomePage() {
     listActivePlans().catch(() => null),
   ]);
 
-  const settled = record ? record.won + record.lost : 0;
   const cheapest = plans?.filter((p) => p.priceGhs > 0).sort((a, b) => a.priceGhs - b.priceGhs)[0];
 
   return (
@@ -77,7 +68,13 @@ export default async function HomePage() {
               <Link href="/pricing">See plans</Link>
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">Free to paste and view. 18+.</p>
+          <p className="text-xs text-muted-foreground">
+            Free to paste and view. Every pick we publish stays on the{" "}
+            <Link href="/track-record" className="underline underline-offset-2 hover:text-foreground">
+              public record
+            </Link>
+            , won or lost. 18+.
+          </p>
         </div>
         <PhoneDemo />
       </section>
@@ -109,37 +106,17 @@ export default async function HomePage() {
         <Bookmakers />
       </div>
 
-      <section aria-labelledby="record" className="gc-reveal space-y-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 id="record" className="text-lg font-semibold">
-            Daily picks, in the open
-          </h2>
-          <Link href="/track-record" className="text-sm text-primary hover:underline">
-            Full record
-          </Link>
+      <TrackRecordSummary record={record} />
+
+      {plans?.length ? (
+        <div className="gc-reveal">
+          <PlansPreview plans={plans} />
         </div>
-        {settled > 0 ? (
-          <>
-            <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border bg-border">
-              <Stat label="Picks settled" value={String(settled)} />
-              <Stat label="Win rate" value={record!.winRate === null ? "–" : `${record!.winRate}%`} />
-              <Stat
-                label="ROI, 1 unit a pick"
-                value={record!.roi === null ? "–" : `${record!.roi}%`}
-                tone={record!.roi !== null ? (record!.roi >= 0 ? "win" : "loss") : undefined}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Every pick we publish stays on the record, won or lost. Nothing is edited or removed.
-            </p>
-          </>
-        ) : (
-          <p className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground">
-            Two picks go up every morning, built from real prices. Results appear here as the games finish — won or lost,
-            never edited, never removed.
-          </p>
-        )}
-      </section>
+      ) : null}
+
+      <div className="gc-reveal">
+        <Faq connected={connectedBookmakers().filter((b) => b.capabilities.loadCode).map((b) => b.name)} />
+      </div>
 
       <section aria-labelledby="install" className="gc-reveal grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
