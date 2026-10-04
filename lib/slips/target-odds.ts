@@ -19,6 +19,8 @@ export type Candidate = {
   statProbability?: number;
   /** Why the stats lean that way, in plain words. */
   statReason?: string;
+  /** Market family, so a slip does not come back as five versions of the same bet. */
+  group?: string;
 };
 
 export type ScoredPick = Candidate & {
@@ -66,14 +68,37 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * Finds the subset whose total odds are closest to (and at least) the target, preferring the
  * highest combined probability. Exhaustive for small slips, then a greedy fallback so it stays fast.
  */
-export function buildTargetSlip(candidates: Candidate[], target: number, opts: { maxPicks?: number } = {}): TargetSelection | null {
+export function buildTargetSlip(
+  candidates: Candidate[],
+  target: number,
+  opts: { maxPicks?: number; maxPerGroup?: Record<string, number> } = {},
+): TargetSelection | null {
   const picks = candidates.filter((c) => c.odds > 1).map(scorePick);
   if (!picks.length || target < 1) return null;
   const maxPicks = Math.min(opts.maxPicks ?? 8, picks.length);
+  const caps = opts.maxPerGroup;
+
+  // Variety is a property of the slip, so it is checked on the slip. It used to be enforced by
+  // only ever shortlisting two picks per market, which meant a five-leg target chose five from
+  // eight and had no room to choose well.
+  const withinCaps = (chosen: ScoredPick[]) => {
+    if (!caps) return true;
+    const used = new Map<string, number>();
+    for (const c of chosen) {
+      if (!c.group) continue;
+      const cap = caps[c.group];
+      if (cap === undefined) continue;
+      const n = (used.get(c.group) ?? 0) + 1;
+      if (n > cap) return false;
+      used.set(c.group, n);
+    }
+    return true;
+  };
 
   let best: { positions: number[]; total: number; probability: number } | null = null;
   const consider = (chosen: ScoredPick[]) => {
     if (!chosen.length) return;
+    if (!withinCaps(chosen)) return;
     const total = chosen.reduce((p, c) => p * c.odds, 1);
     const probability = chosen.reduce((p, c) => p * c.probability, 1);
     if (total < target - 1e-9) return; // must at least reach the target
@@ -108,8 +133,20 @@ export function buildTargetSlip(candidates: Candidate[], target: number, opts: {
   }
 
   if (!best) {
-    // Target out of reach: give the strongest slip we can (everything), and say so.
-    const all = picks.slice(0, maxPicks);
+    // Target out of reach: give the strongest slip we can, and say so. Still varied: a fallback
+    // that ignores the caps would hand back the five goals lines the caps exist to prevent.
+    const used = new Map<string, number>();
+    const all = [...picks]
+      .sort((a, b) => b.probability - a.probability)
+      .filter((c) => {
+        if (!caps || !c.group || caps[c.group] === undefined) return true;
+        const n = (used.get(c.group) ?? 0) + 1;
+        if (n > caps[c.group]) return false;
+        used.set(c.group, n);
+        return true;
+      })
+      .slice(0, maxPicks)
+      .sort((a, b) => a.position - b.position);
     const total = all.reduce((p, c) => p * c.odds, 1);
     return {
       positions: all.map((c) => c.position).sort((a, b) => a - b),

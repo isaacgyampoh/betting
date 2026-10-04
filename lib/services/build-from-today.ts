@@ -156,7 +156,14 @@ export async function buildFromToday(opts: {
   const evidenced = markets?.length ? candidates : candidates.filter((c) => hasEvidenceSupport(c.group));
   // A named-markets request keeps every pick from those markets rather than capping each group.
   const chosenMarkets = Boolean(markets?.length);
-  const pool = shortlistCandidates(evidenced.length ? evidenced : candidates, 18, { ignoreGroupCaps: chosenMarkets });
+  // Three of a market in the pool, two in the slip. The research pool is what the chooser gets to
+  // choose from, and with four researchable markets capped at two it only ever had eight - which
+  // for a five-leg target is five from eight, barely a choice at all, and nothing left when recent
+  // results veto one. The slip's own cap is applied when the combination is picked.
+  const pool = shortlistCandidates(evidenced.length ? evidenced : candidates, STATS_BUDGET, {
+    ignoreGroupCaps: chosenMarkets,
+    perGroup: 3,
+  });
   const researched = await enrich(user, pool, STATS_BUDGET);
   const { kept, dropped } = withoutContradicted(researched);
   const ranked = rankByEvidence(kept);

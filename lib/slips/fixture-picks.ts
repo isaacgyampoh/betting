@@ -318,7 +318,11 @@ const BANDS: [number, number][] = [
  * price bands so both small and large targets are reachable. Exported so recent-results research can
  * run over exactly this set before a slip is chosen from it.
  */
-export function shortlistCandidates(candidates: PickCandidate[], shortlist = 18, opts: { ignoreGroupCaps?: boolean } = {}): PickCandidate[] {
+export function shortlistCandidates(
+  candidates: PickCandidate[],
+  shortlist = 18,
+  opts: { ignoreGroupCaps?: boolean; perGroup?: number } = {},
+): PickCandidate[] {
   const byBand = BANDS.map(([lo, hi]) =>
     candidates.filter((c) => c.probability >= lo && c.probability < hi).sort((a, b) => b.probability - a.probability),
   );
@@ -336,9 +340,12 @@ export function shortlistCandidates(candidates: PickCandidate[], shortlist = 18,
         const c = band[cursor[b]++];
         if (usedEvents.has(c.event.externalId)) continue;
         const used = perGroup.get(c.group) ?? 0;
-        // The caps exist to stop a slip being five variations of one bet. Someone who asked for
-        // corners wants corners, so they do not apply then.
-        if (!opts.ignoreGroupCaps && used >= MARKET_GROUPS[c.group].maxPerSlip) continue;
+        // How many of a market may sit in the pool, which is not how many may sit in the slip:
+        // the slip's own cap is applied when the combination is chosen, so the pool can be wider
+        // than a slip and still never produce five versions of the same bet. Someone who asked for
+        // corners wants corners, so no cap applies then.
+        const cap = opts.perGroup ?? MARKET_GROUPS[c.group].maxPerSlip;
+        if (!opts.ignoreGroupCaps && used >= cap) continue;
         usedEvents.add(c.event.externalId);
         perGroup.set(c.group, used + 1);
         pool.push(c);
@@ -367,8 +374,11 @@ export function buildFromFixtures(
   const pool = preShortlisted ? candidates.slice(0, shortlist) : shortlistCandidates(candidates, shortlist, opts);
   if (!pool.length) return null;
 
-  const scored: Candidate[] = pool.map((c, i) => ({ position: i, odds: c.odds, bookmakerProbability: c.probability }));
-  const selection = buildTargetSlip(scored, target, { maxPicks });
+  const scored: Candidate[] = pool.map((c, i) => ({ position: i, odds: c.odds, bookmakerProbability: c.probability, group: c.group }));
+  const maxPerGroup = opts.ignoreGroupCaps
+    ? undefined
+    : Object.fromEntries(Object.entries(MARKET_GROUPS).map(([group, m]) => [group, m.maxPerSlip]));
+  const selection = buildTargetSlip(scored, target, { maxPicks, maxPerGroup });
   if (!selection) return null;
 
   const picks: BuiltPick[] = selection.positions.map((position, i) => {
