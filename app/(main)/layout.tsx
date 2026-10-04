@@ -10,7 +10,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       <SiteHeader />
       <SetupBanner />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">{children}</main>
-      <SiteFooter />
+      <SiteFooter compact />
       <BottomNav />
       {/* Only the signed-in app needs a live Supabase session; keeping this out of the root layout
           keeps its client off every marketing page. */}

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Lock } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { formatKickoff, formatOdds } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { DailyPickView } from "@/lib/services/daily-picks";
@@ -51,15 +50,18 @@ export function PickCard({ pick }: { pick: DailyPickView }) {
           ))}
         </ul>
       ) : (
-        <div className="space-y-3 px-4 py-5 text-center">
-          <Lock className="mx-auto size-5 text-muted-foreground" strokeWidth={1.75} />
-          <p className="text-sm text-muted-foreground">
-            Today&apos;s {pick.target} odds slip is ready with {pick.legs.length || "its"} games and the reasons behind each one.
-          </p>
-          <Button asChild size="sm">
-            <Link href="/pricing">See plans</Link>
-          </Button>
-        </div>
+        // One line, not a centred block with its own button. Two locked picks meant the same
+        // sentence and the same button twice, filling most of the screen to say one thing.
+        <p className="flex items-center gap-2.5 px-4 py-3 text-sm text-muted-foreground">
+          <Lock className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+          <span>
+            {pick.legs.length || "The"} games and the reason for each,{" "}
+            <Link href="/pricing" className="font-medium text-primary hover:underline">
+              on a plan
+            </Link>
+            .
+          </span>
+        </p>
       )}
 
       {pick.unlocked && (

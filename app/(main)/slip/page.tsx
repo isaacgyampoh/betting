@@ -29,7 +29,14 @@ export default async function SlipPage({ searchParams }: PageProps<"/slip">) {
         <h1 className="text-xl font-semibold tracking-tight">Load a booking code</h1>
         <p className="text-sm text-muted-foreground">Every game, market and price on the slip. Free.</p>
       </div>
-      <SlipWorkspace bookmakers={bookmakers} initialRecent={recent} initialSlip={initialSlip} />
+      {/* `available` is what the picker filters on. Without it every enabled bookmaker showed as a
+          choice, including the six that cannot read a code yet - so the grid was mostly dead ends
+          that failed only after someone had pasted a code into them. */}
+      <SlipWorkspace
+        bookmakers={bookmakers.map((b) => ({ ...b, available: b.canLoad }))}
+        initialRecent={recent}
+        initialSlip={initialSlip}
+      />
     </div>
   );
 }
