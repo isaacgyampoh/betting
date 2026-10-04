@@ -33,7 +33,7 @@ export function RecentSlips({ slips, activeId, onOpen }: { slips: SlipSummary[];
                     {s.bookmaker.name} · {s.selectionCount} games · {timeAgo(s.createdAt)}
                   </p>
                 </div>
-                <span className="text-sm font-semibold">{formatOdds(s.totalOdds)}</span>
+                <span className="gc-figure text-sm font-semibold">{formatOdds(s.totalOdds)}</span>
                 <ChevronRight className="size-4 text-muted-foreground" />
               </button>
             </li>

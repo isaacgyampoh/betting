@@ -43,7 +43,7 @@ export function ChatSlipCard({ slip }: { slip: SlipView }) {
           <p className="text-xs text-muted-foreground">
             {active.length} {active.length === 1 ? "game" : "games"}
           </p>
-          <p className="text-lg font-semibold">{formatOdds(slip.totalOdds)}</p>
+          <p className="gc-figure text-lg font-semibold">{formatOdds(slip.totalOdds)}</p>
         </div>
       </div>
 
@@ -63,7 +63,7 @@ export function ChatSlipCard({ slip }: { slip: SlipView }) {
               </p>
               {s.reason && <p className="mt-1 text-xs leading-snug text-muted-foreground/80">{s.reason}</p>}
             </div>
-            <span className={cn("shrink-0 font-medium", s.started && "text-loss")}>{formatOdds(s.odds)}</span>
+            <span className={cn("gc-figure shrink-0 font-medium", s.started && "text-loss")}>{formatOdds(s.odds)}</span>
           </li>
         ))}
       </ul>

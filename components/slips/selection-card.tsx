@@ -60,7 +60,7 @@ export function SelectionCard({
       </div>
 
       <div className="flex flex-col items-end justify-center">
-        <span className={cn("text-base font-semibold", skipped && "line-through")}>
+        <span className={cn("gc-figure text-base font-semibold", skipped && "line-through")}>
           {formatOdds(skipped ? (s.sourceOdds ?? null) : s.odds)}
         </span>
         {s.sourceOdds != null && !skipped && diff !== null && (

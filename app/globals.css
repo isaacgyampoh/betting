@@ -360,3 +360,12 @@
 .gc-rows > * + * {
   border-top: 1px solid var(--border);
 }
+
+/* A price is a figure. The booking-code field already uses the mono face; this puts the numbers
+   beside it in the same one, with tabular figures so a column of prices lines up on the decimal
+   the way a printed slip does. Only prices and scores - prose that mentions a number is prose. */
+.gc-figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}

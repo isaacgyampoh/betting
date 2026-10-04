@@ -76,7 +76,7 @@ export function SlipView({ slip, onEdited, title }: { slip: Slip; onEdited?: (sl
           </div>
           <div className="shrink-0 text-right">
             <p className="text-xs text-muted-foreground">Total odds</p>
-            <p className="text-2xl font-semibold">{formatOdds(slip.totalOdds)}</p>
+            <p className="gc-figure text-2xl font-semibold">{formatOdds(slip.totalOdds)}</p>
             {sourceTotal !== null && (
               <p className="text-xs text-muted-foreground">was {formatOdds(sourceTotal)}</p>
             )}

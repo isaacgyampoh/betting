@@ -44,7 +44,7 @@ export function ReadSlipConfirm({ read, onConfirm }: { read: ReadSlip; onConfirm
                   {r.match ? ` · ${formatKickoff(r.match.kickoffAt)}` : ""}
                 </p>
               </div>
-              <span className={cn("shrink-0 font-medium", r.read.odds === null && "text-muted-foreground")}>{formatOdds(r.read.odds)}</span>
+              <span className={cn("gc-figure shrink-0 font-medium", r.read.odds === null && "text-muted-foreground")}>{formatOdds(r.read.odds)}</span>
             </div>
             {r.needsConfirmation && (
               <p className="mt-1 flex items-start gap-1.5 text-xs text-loss">
@@ -60,7 +60,7 @@ export function ReadSlipConfirm({ read, onConfirm }: { read: ReadSlip; onConfirm
           <span className="text-muted-foreground">
             {read.totalOddsComputed !== null ? "Total from the prices we read" : "Total unavailable (a price was unclear)"}
           </span>
-          <span className="font-medium">{formatOdds(read.totalOddsComputed)}</span>
+          <span className="gc-figure font-medium">{formatOdds(read.totalOddsComputed)}</span>
         </div>
         {read.totalOddsRead !== null && read.totalOddsComputed !== null && Math.abs(read.totalOddsRead - read.totalOddsComputed) > 0.05 && (
           <p className="text-xs text-loss">The slip shows {formatOdds(read.totalOddsRead)}, so we may have misread a price.</p>

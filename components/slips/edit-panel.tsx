@@ -132,7 +132,7 @@ export function EditPanel({
                 {preview.groups.length > 1 ? `Slip ${i + 1}: ` : "Result: "}
                 {g.length} {g.length === 1 ? "game" : "games"} {g.length > 0 && <span className="text-muted-foreground">(#{g.join(", #")})</span>}
               </span>
-              <span className="font-semibold">{formatOdds(preview.totals[i])}</span>
+              <span className="gc-figure font-semibold">{formatOdds(preview.totals[i])}</span>
             </p>
           ))}
         </div>

@@ -18,7 +18,7 @@ export function PickCard({ pick }: { pick: DailyPickView }) {
           </p>
         </div>
         <div className="text-right">
-          <p className="text-xl font-semibold">{formatOdds(pick.totalOdds)}</p>
+          <p className="gc-figure text-xl font-semibold">{formatOdds(pick.totalOdds)}</p>
           <p className={cn("text-xs", STATUS_STYLE[pick.status])}>{STATUS_LABEL[pick.status]}</p>
         </div>
       </div>
@@ -37,7 +37,7 @@ export function PickCard({ pick }: { pick: DailyPickView }) {
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="font-medium">{formatOdds(l.odds)}</p>
+                  <p className="gc-figure font-medium">{formatOdds(l.odds)}</p>
                   {l.resultText && <p className={cn("text-xs", STATUS_STYLE[l.status])}>{l.resultText}</p>}
                 </div>
               </div>

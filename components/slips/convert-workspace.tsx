@@ -64,7 +64,7 @@ export function ConvertWorkspace({ bookmakers, source }: { bookmakers: ConvertBo
                 <p className="text-xs text-muted-foreground">{source.selectionCount} games</p>
               </div>
               <div className="text-right">
-                <p className="text-lg font-semibold">{formatOdds(source.totalOdds)}</p>
+                <p className="gc-figure text-lg font-semibold">{formatOdds(source.totalOdds)}</p>
                 <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => setUseSource(false)}>
                   Use another code
                 </Button>
