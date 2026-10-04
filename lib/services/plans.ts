@@ -61,6 +61,7 @@ let cachedPlans: { at: number; plans: PlanModel[] } | null = null;
 /** Drops the cache. For tests, and for anything that edits the plans table and reads it back. */
 export function forgetPlans() {
   cachedPlans = null;
+  verifiedAt = 0;
 }
 
 async function allPlans(): Promise<PlanModel[]> {
@@ -70,12 +71,35 @@ async function allPlans(): Promise<PlanModel[]> {
   return plans;
 }
 
+/**
+ * A miss is checked against the table before it is believed.
+ *
+ * Someone's subscription points at a plan, so a plan this does not know about means the cache is
+ * older than the row - a plan added in the last minute. Treating that as "no plan" would put a
+ * paying user on the free limits until the cache turned over, which is the one case where being a
+ * minute stale actually costs something.
+ */
+/** The newest snapshot already re-read because of a miss, so one snapshot is never re-read twice. */
+let verifiedAt = 0;
+
+async function find(match: (p: PlanModel) => boolean): Promise<PlanModel | null> {
+  const hit = (await allPlans()).find(match);
+  if (hit) return hit;
+  // A plan that genuinely does not exist must not re-read the table on every request, so the
+  // second look happens once per cache window rather than once per miss.
+  if ((cachedPlans?.at ?? 0) <= verifiedAt) return null;
+  cachedPlans = null;
+  const fresh = await allPlans();
+  verifiedAt = cachedPlans?.at ?? Date.now();
+  return fresh.find(match) ?? null;
+}
+
 export async function planById(id: string): Promise<PlanModel | null> {
-  return (await allPlans()).find((p) => p.id === id) ?? null;
+  return find((p) => p.id === id);
 }
 
 export async function planByCode(code: string): Promise<PlanModel | null> {
-  return (await allPlans()).find((p) => p.code === code) ?? null;
+  return find((p) => p.code === code);
 }
 
 /** The plan an admin is granted: any active VIP row carries the VIP limits. */

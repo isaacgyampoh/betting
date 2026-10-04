@@ -3,7 +3,7 @@ import { db, queryCounter } from "@/lib/db";
 import { getProfile } from "@/lib/auth";
 import { getAiAllowance } from "@/lib/services/ai-quota";
 import { getActiveSubscription } from "@/lib/services/profile";
-import { forgetPlans } from "@/lib/services/plans";
+import { forgetPlans, planByCode } from "@/lib/services/plans";
 import { createUser } from "./helpers";
 
 // On Workers a query is a round trip to the database before anything renders, and every protected
@@ -73,6 +73,45 @@ describe("queries a protected page makes", () => {
 
     const sub = await getActiveSubscription(user.id);
     expect(sub?.plan.code).toBe("pro_week");
+  });
+
+  // A paying user whose plan was created a minute ago must not read as having no plan: the
+  // subscription points at it, so a plan the cache has never heard of means the cache is stale.
+  it("looks again when a subscription points at a plan the cache has not seen", async () => {
+    const user = await createUser();
+    await getActiveSubscription(user.id); // fill the cache with the plans that exist now
+    const code = `brand_new_${Date.now()}`;
+    // Whatever this asserts, the plans table has to be left exactly as it was found: another test
+    // in this suite checks the full list of plan codes, and a row left behind fails it instead.
+    try {
+      const plan = await db.plan.create({
+        data: {
+          code,
+          name: "Brand New",
+          pricePesewas: 1000,
+          durationDays: 1,
+          dailyAiRequests: 5,
+          dailyTokenLimit: 50_000,
+          dailyUploads: 1,
+          dailySlipBuilds: 1,
+          dailyAnalyses: 0,
+        },
+      });
+      await db.subscription.create({
+        data: { userId: user.id, planId: plan.id, status: "ACTIVE", startsAt: new Date(), endsAt: new Date(Date.now() + 86_400_000) },
+      });
+
+      expect((await getActiveSubscription(user.id))?.plan.code).toBe(code);
+
+      // A plan that really is not there costs the second look once, not once per request.
+      forgetPlans();
+      await planByCode("no_such_plan_at_all");
+      expect(await queries(() => planByCode("no_such_plan_at_all"))).toBe(0);
+    } finally {
+      await db.subscription.deleteMany({ where: { plan: { code } } });
+      await db.plan.deleteMany({ where: { code: { startsWith: "brand_new_" } } });
+      forgetPlans();
+    }
   });
 
   it("counts a day's usage of every feature in one query", async () => {
