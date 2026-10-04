@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeftRight, ArrowRight, Scissors, Sparkles } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, CalendarCheck, Camera, LineChart, Scissors, Share2, Sparkles, Split } from "lucide-react";
 import { Bookmakers } from "@/components/landing/bookmakers";
 import { Faq } from "@/components/landing/faq";
 import { PlansPreview } from "@/components/landing/plans-preview";
@@ -32,6 +32,11 @@ const FEATURES = [
   { icon: ArrowLeftRight, title: "Convert your code", text: "Move a code between the bookmakers we're connected to, in one message." },
   { icon: Sparkles, title: "Ask for a slip", text: "\"Build me a 5 odds\" — from today's real prices, across varied markets." },
   { icon: Scissors, title: "Cut it down", text: "Trim to the odds you want, or keep only the safest picks." },
+  { icon: Camera, title: "Send a screenshot", text: "A picture of a slip from anywhere becomes games you can book." },
+  { icon: LineChart, title: "Check it running", text: "Ask how your ticket is doing and get every leg back with live scores." },
+  { icon: CalendarCheck, title: "Read the form first", text: "Recent results, home and away splits and head-to-head for any game." },
+  { icon: Share2, title: "Share the slip", text: "One image with the code, the games and the reason each one is on there." },
+  { icon: Split, title: "Split a long ticket", text: "Break twenty games into two or three slips instead of one all-or-nothing." },
 ];
 
 export default async function HomePage() {
@@ -83,12 +88,14 @@ export default async function HomePage() {
         <h2 id="features" className="sr-only">
           What it does
         </h2>
-        <div className="grid gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3">
+        {/* Two up on a phone: eight of these stacked is most of a screen each, and the section after
+            this one is the one that does the selling. */}
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border lg:grid-cols-4">
           {FEATURES.map(({ icon: Icon, title, text }) => (
-            <div key={title} className="bg-card p-5 sm:p-6">
-              <Icon className="mb-3 size-5 text-primary" strokeWidth={1.75} />
-              <p className="font-medium">{title}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{text}</p>
+            <div key={title} className="bg-card p-4 sm:p-6">
+              <Icon className="mb-2.5 size-5 text-primary sm:mb-3" strokeWidth={1.75} />
+              <p className="text-sm font-medium sm:text-base">{title}</p>
+              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{text}</p>
             </div>
           ))}
         </div>
