@@ -29,6 +29,38 @@ export type ConvertSource = { slipId: string } | { bookmaker?: BookmakerSlug; co
 
 type Converted = { draft: DraftSelection; link?: { targetExternalId: string; score: number } };
 
+type Found = { target: { externalId: string; home: string; away: string; kickoffAt: Date; competition: string | null }; offers: Awaited<ReturnType<BookmakerAdapter["getEventMarkets"]>>["offers"]; score: number };
+
+/** The same game by its shared id, or null when this bookmaker does not know it under that id. */
+async function convertById(sel: SlipRecord["selections"][number], adapter: BookmakerAdapter): Promise<Found | null> {
+  const id = sel.bookmakerEvent?.externalId;
+  // Only the Sportradar id space is shared. A bookmaker with its own ids would just 404 on this.
+  if (!id || !id.startsWith("sr:match:")) return null;
+  const hit = await adapter.getEventMarkets(id).catch((err) => {
+    // Not an outage: this bookmaker may simply not list the game. Fall back to looking it up.
+    logger.info("convert.by_id_missed", { bookmaker: adapter.slug, eventId: id, err: String(err).slice(0, 200) });
+    return null;
+  });
+  if (!hit?.offers.length) return null;
+  return { target: hit.event, offers: hit.offers, score: 1 };
+}
+
+async function convertByName(
+  sel: SlipRecord["selections"][number],
+  adapter: BookmakerAdapter,
+  aliases: AliasIndex,
+): Promise<Found | null> {
+  const candidates = await adapter.searchEvent(sel.homeTeam, sel.awayTeam, sel.kickoffAt).catch((err) => {
+    throw asBookmakerError(err, adapter.slug, "searchEvent");
+  });
+  const match = bestMatch({ home: sel.homeTeam, away: sel.awayTeam, kickoffAt: sel.kickoffAt }, candidates, aliases);
+  if (!match) return null;
+  const { offers } = await adapter.getEventMarkets(match.candidate.externalId).catch((err) => {
+    throw asBookmakerError(err, adapter.slug, "getEventMarkets");
+  });
+  return { target: match.candidate, offers, score: match.score };
+}
+
 async function convertSelection(
   sel: SlipRecord["selections"][number],
   adapter: BookmakerAdapter,
@@ -51,19 +83,19 @@ async function convertSelection(
   if (!market) return skip("UNSUPPORTED_MARKET");
   if (sel.kickoffAt <= now) return skip("EVENT_STARTED");
 
-  const candidates = await adapter.searchEvent(sel.homeTeam, sel.awayTeam, sel.kickoffAt).catch((err) => {
-    throw asBookmakerError(err, adapter.slug, "searchEvent");
-  });
-  const match = bestMatch({ home: sel.homeTeam, away: sel.awayTeam, kickoffAt: sel.kickoffAt }, candidates, aliases);
-  if (!match) return skip("EVENT_NOT_FOUND");
+  // SportyBet, MSport and Football.com all run on Sportradar ids, so the same game is the same id
+  // on each of them. Asking for it directly is exact and it is one request - where searching by
+  // name means scanning a list the bookmaker will only serve the front of. MSport's returns its
+  // earliest fifty fixtures and ignores the page number entirely, so anything kicking off later
+  // today simply could not be found, and converting a slip failed for most of the day's football.
+  const byId = await convertById(sel, adapter);
 
-  const target = match.candidate;
+  const found = byId ?? (await convertByName(sel, adapter, aliases));
+  if (!found) return skip("EVENT_NOT_FOUND");
+  const { target, offers, score } = found;
   const targetEvent = { ...target, externalId: null };
-  const { offers } = await adapter.getEventMarkets(target.externalId).catch((err) => {
-    throw asBookmakerError(err, adapter.slug, "getEventMarkets");
-  });
   const offer = offers.find((o) => o.market && sameMarket(o.market, market));
-  const link = { targetExternalId: target.externalId, score: match.score };
+  const link = { targetExternalId: target.externalId, score };
   if (!offer) return { ...skip("MARKET_NOT_FOUND", targetEvent), link };
 
   return {
