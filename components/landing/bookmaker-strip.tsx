@@ -1,21 +1,25 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-// A moving strip of the bookmakers we are connected to.
-//
-// Their logo files are theirs, so this does not use them. Each one gets its own brand colour as a
-// mark beside its name, which identifies it without copying anything. Every colour below was read
-// from that bookmaker's own site on 2026-10-02, with where it came from recorded, so none of it is
-// a guess:
-//
-//   SportyBet     #E41827  <meta name="theme-color"> on sportybet.com/gh
-//   MSport        #FFCA27  the accent in their stylesheet (index.*.css, by far its commonest colour)
-//   Football.com  #282450  <meta name="theme-color"> on football.com/gh
-//
-// A new bookmaker without an entry still shows, with a neutral mark.
-const BRAND: Record<string, string> = {
-  sportybet: "#E41827",
-  msport: "#FFCA27",
-  footballcom: "#282450",
+/**
+ * A moving strip of the bookmakers we are connected to, with their own marks.
+ *
+ * Each file in public/bookmakers was taken from that bookmaker's own site on 2026-10-04 and is
+ * served from here rather than hotlinked, so their bandwidth is not spent on our page and the strip
+ * does not break when they move a file:
+ *
+ *   sportybet.png     s.sporty.net/global/main/logo/144x144.png
+ *   msport.png        www.msport.com/static/logo/web-192.png     (from their web manifest)
+ *   footballcom.png   s.football.com/global/main/logo/144x144.png
+ *
+ * These say which bookmakers a code can be moved between. Nothing here claims a partnership, and
+ * the brand colour behind each mark is that bookmaker's own, read from their site the same way.
+ * A bookmaker with no file falls back to a coloured dot, so a newly connected one still shows.
+ */
+const BRAND: Record<string, { tint: string; logo?: string }> = {
+  sportybet: { tint: "#E41827", logo: "/bookmakers/sportybet.png" },
+  msport: { tint: "#FFCA27", logo: "/bookmakers/msport.png" },
+  footballcom: { tint: "#282450", logo: "/bookmakers/footballcom.png" },
 };
 
 export function BookmakerStrip({ bookmakers, className }: { bookmakers: { slug: string; name: string }[]; className?: string }) {
@@ -29,15 +33,27 @@ export function BookmakerStrip({ bookmakers, className }: { bookmakers: { slug: 
   return (
     <div className={cn("gc-marquee relative overflow-hidden", className)} aria-label={`Connected: ${bookmakers.map((b) => b.name).join(", ")}`}>
       <ul className="gc-marquee-track flex w-max items-center gap-3" aria-hidden>
-        {[...pass, ...pass].map((b, i) => (
-          <li
-            key={`${b.slug}-${i}`}
-            className="flex shrink-0 items-center gap-2.5 rounded-lg bg-background px-5 py-3 text-base font-medium tracking-tight text-foreground"
-          >
-            <span className="size-2.5 shrink-0 rounded-full" style={{ background: BRAND[b.slug] ?? "currentColor" }} />
-            {b.name}
-          </li>
-        ))}
+        {[...pass, ...pass].map((b, i) => {
+          const brand = BRAND[b.slug];
+          return (
+            <li
+              key={`${b.slug}-${i}`}
+              className="flex shrink-0 items-center gap-3 rounded-xl bg-background px-5 py-3.5 text-base font-medium tracking-tight text-foreground shadow-sm"
+            >
+              {brand?.logo ? (
+                <span
+                  className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg"
+                  style={{ background: `color-mix(in oklab, ${brand.tint} 14%, transparent)` }}
+                >
+                  <Image src={brand.logo} alt="" width={28} height={28} className="size-7 object-contain" />
+                </span>
+              ) : (
+                <span className="size-2.5 shrink-0 rounded-full" style={{ background: brand?.tint ?? "currentColor" }} />
+              )}
+              {b.name}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

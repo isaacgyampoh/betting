@@ -141,16 +141,22 @@ export async function convertSlip(opts: { user: AuthUser; source: ConvertSource;
     const results = await mapWithConcurrency(sources, 4, (sel) => convertSelection(sel, adapter, aliases, now));
     const ok = results.filter((r) => r.draft.status === "OK").map((r) => r.draft);
 
+    // Booking is the last step and the only one that needs the bookmaker to accept a write. The
+    // conversion itself - finding each game and reading that bookmaker's own price - has already
+    // succeeded by this point, and that is the part that is hard to do by hand. Losing all of it
+    // because the booking was refused leaves the user with nothing when we are holding the answer,
+    // so a refused booking returns the slip without a code and says so.
     let code: string | null = null;
     let expiresAt: Date | null = null;
     if (ok.length > 0) {
       const created = await adapter
         .createCode(ok.map((d) => ({ eventExternalId: d.event.externalId!, market: d.market! })))
         .catch((err) => {
-          throw asBookmakerError(err, target, "createCode");
+          logger.warn("convert.booking_refused", { ...meta, picks: ok.length, err: String(err).slice(0, 300) });
+          return null;
         });
-      code = created.code;
-      expiresAt = created.expiresAt;
+      code = created?.code ?? null;
+      expiresAt = created?.expiresAt ?? null;
     }
 
     const saved = await saveSlip({

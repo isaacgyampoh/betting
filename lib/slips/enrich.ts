@@ -31,8 +31,23 @@ export type ResearchNotes = {
 
 /** Below this, recent results actively disagree with the price and the pick is dropped. */
 export const CONTRADICTION = 0.4;
-/** Thin samples can't veto anything. */
 const MIN_SAMPLE = 6;
+
+/**
+ * The bar a pick has to clear to go on a published slip.
+ *
+ * Recent results have to exist, be counted from enough games to mean anything, and back the pick
+ * rather than merely not contradict it. A pick that rests on the bookmaker's price alone is a fine
+ * thing to hand someone who asked for a slip - it is the bookmaker's own number and it is honest
+ * about being that - but it is not something to put on a public record as a researched call.
+ */
+export const CONVICTION = 0.62;
+
+/** Picks with real results behind them, strong enough to publish. Order is kept. */
+export function withConviction(picks: EnrichedPick[]): EnrichedPick[] {
+  return picks.filter((p) => p.evidence !== null && p.evidence.sample >= MIN_SAMPLE && p.evidence.support >= CONVICTION);
+}
+/** Thin samples can't veto anything. */
 
 type Looked = { evidence: Evidence | null; gap: EnrichedPick["gap"]; statsFixtureId: number | null };
 

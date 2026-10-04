@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickKey, rankByEvidence, reasonWithEvidence, withoutContradicted, type EnrichedPick } from "@/lib/slips/enrich";
+import { pickKey, rankByEvidence, reasonWithEvidence, type EnrichedPick, withConviction, withoutContradicted } from "@/lib/slips/enrich";
 import type { PickCandidate } from "@/lib/slips/fixture-picks";
 
 const pick = (over: Partial<EnrichedPick> = {}): EnrichedPick => ({
@@ -82,5 +82,35 @@ describe("rankByEvidence", () => {
     const backed = pick({ evidence: evidence(0.9, 10), label: "backed" });
     const bare = pick({ label: "bare" });
     expect(rankByEvidence([bare, backed])[0].label).toBe("backed");
+  });
+});
+
+// Published picks carry recent results behind every leg. A pick resting on the bookmaker's price
+// alone is fine to hand someone who asked for a slip - it says so - but it is not a researched call
+// to put on a public record, and a record made of those is worth nothing.
+describe("withConviction", () => {
+  const pick = (evidence: { support: number; sample: number } | null) =>
+    ({ evidence: evidence && { ...evidence, text: "x" }, gap: "none", statsFixtureId: null }) as never;
+
+  it("keeps a pick recent results clearly back", () => {
+    expect(withConviction([pick({ support: 0.8, sample: 10 })])).toHaveLength(1);
+  });
+
+  it("drops a pick with no recent results at all", () => {
+    expect(withConviction([pick(null)])).toHaveLength(0);
+  });
+
+  it("drops a pick counted from too few games, however strong it looks", () => {
+    expect(withConviction([pick({ support: 1, sample: 3 })])).toHaveLength(0);
+  });
+
+  it("drops a pick the results merely fail to contradict", () => {
+    expect(withConviction([pick({ support: 0.5, sample: 10 })])).toHaveLength(0);
+  });
+
+  it("keeps the order it was given", () => {
+    const list = [pick({ support: 0.9, sample: 10 }), pick(null), pick({ support: 0.7, sample: 8 })];
+    const kept = withConviction(list);
+    expect(kept).toEqual([list[0], list[2]]);
   });
 });
