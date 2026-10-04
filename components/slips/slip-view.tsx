@@ -47,7 +47,7 @@ export function SlipView({ slip, onEdited, title }: { slip: Slip; onEdited?: (sl
 
   return (
     <section aria-label={title ?? "Slip"} className="space-y-3">
-      <div className="rounded-lg border bg-card">
+      <div className="gc-panel">
         <div className="flex items-start justify-between gap-3 p-4">
           <div className="min-w-0 space-y-1">
             <p className="text-xs text-muted-foreground">
@@ -175,7 +175,7 @@ export function SlipView({ slip, onEdited, title }: { slip: Slip; onEdited?: (sl
         </ul>
       )}
 
-      <ol className="divide-y overflow-hidden rounded-lg border">
+      <ol className="gc-panel divide-y">
         {active.map((s) => (
           <SelectionCard key={s.position} selection={s} selectable={editing} selected={removeSel.has(s.position)} onToggle={() => toggle(s.position)} />
         ))}
@@ -184,7 +184,7 @@ export function SlipView({ slip, onEdited, title }: { slip: Slip; onEdited?: (sl
       {skipped.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Not carried over ({skipped.length})</h3>
-          <ol className="divide-y overflow-hidden rounded-lg border">
+          <ol className="gc-panel divide-y">
             {skipped.map((s) => (
               <SelectionCard key={s.position} selection={s} />
             ))}

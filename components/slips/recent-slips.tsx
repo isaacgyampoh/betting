@@ -16,7 +16,7 @@ export function RecentSlips({ slips, activeId, onOpen }: { slips: SlipSummary[];
           Slips you load will appear here.
         </p>
       ) : (
-        <ul className="divide-y rounded-lg border bg-card">
+        <ul className="gc-panel divide-y">
           {slips.map((s) => (
             <li key={s.id}>
               <button

@@ -117,7 +117,7 @@ export function SlipWorkspace({
 
   return (
     <div className="space-y-6">
-      <form onSubmit={load} className="space-y-4 rounded-lg border bg-card p-4">
+      <form onSubmit={load} className="gc-panel space-y-4 p-4">
         <BookmakerPicker label="Bookmaker" options={bookmakers} value={bookmaker} onChange={setBookmaker} withAuto />
         <CodeInput value={code} onChange={setCode} />
         <Button type="submit" size="lg" className="h-11 w-full" disabled={pending || !code.trim()}>

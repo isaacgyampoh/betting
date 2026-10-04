@@ -20,7 +20,7 @@ export function MatchList({ groups, hidden, query }: { groups: Group[]; hidden: 
       )}
 
       {groups.map((g) => (
-        <section key={g.league.id} className="overflow-hidden rounded-lg border bg-card">
+        <section key={g.league.id} className="gc-panel">
           <h2 className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground">
             <TeamBadge team={{ id: g.league.id, name: g.league.name, logo: null }} size={16} logo={false} />
             <span className="truncate">

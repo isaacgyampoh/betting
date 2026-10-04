@@ -329,3 +329,34 @@
     0 1px 2px color-mix(in oklab, var(--foreground) 6%, transparent),
     0 12px 32px -18px color-mix(in oklab, var(--foreground) 28%, transparent);
 }
+
+/* --- Panels ---------------------------------------------------------------
+   One surface, two shapes. On a phone it runs to both edges with a hairline above and below,
+   the way a settings list does: the 32px the card border and its margins were taking back is
+   most of a column of text on a 390px screen, and a card floating inside a page that is already
+   one column was drawing a box around the only thing there.
+
+   From the small breakpoint up, where there is width to spare and more than one thing side by
+   side, it is a card again.
+
+   The negative margin cancels the app shell's own px-4, so a panel is full-bleed while its rows
+   keep their own gutter - the divider reaches the edge, the text does not. */
+.gc-panel {
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-inline: -1rem;
+}
+@media (min-width: 640px) {
+  .gc-panel {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-inline: 0;
+    overflow: hidden;
+  }
+}
+
+/* A panel's rows: hairline between, never around. */
+.gc-rows > * + * {
+  border-top: 1px solid var(--border);
+}

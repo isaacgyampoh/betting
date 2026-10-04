@@ -51,7 +51,7 @@ function ResultRow({ m }: { m: MatchSummary }) {
 
 function FormCard({ form }: { form: TeamForm }) {
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <div className="gc-panel">
       <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
         <span className="flex min-w-0 items-center gap-2 font-medium">
           <TeamBadge team={form.team} size={24} /> <span className="truncate">{form.team.name}</span>
@@ -70,7 +70,7 @@ function FormCard({ form }: { form: TeamForm }) {
 function Standings({ d }: { d: MatchDetail }) {
   const ids = new Set([d.match.home.id, d.match.away.id]);
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card">
+    <div className="gc-panel overflow-x-auto">
       <table className="w-full text-sm tabular-nums">
         <thead className="text-xs text-muted-foreground">
           <tr className="border-b">
@@ -116,7 +116,7 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
 
   return (
     <div className="space-y-6">
-      <header className="rounded-lg border bg-card p-4">
+      <header className="gc-panel p-4">
         <p className="mb-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
           {m.league.logo && <TeamBadge team={{ id: m.league.id, name: m.league.name, logo: m.league.logo }} size={16} />}
           <span>
@@ -161,7 +161,7 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
 
       {insights.length > 0 && (
         <Section title="Key numbers">
-          <ul className="space-y-1.5 rounded-lg border bg-card p-4 text-sm">
+          <ul className="gc-panel space-y-1.5 p-4 text-sm">
             {insights.map((s) => (
               <li key={s} className="flex gap-2">
                 <span className="text-muted-foreground">·</span> {s}
@@ -188,7 +188,7 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
         {d.unavailable.includes("h2h") ? (
           <PlanNote what="Head-to-head results" />
         ) : d.h2h.length ? (
-          <ul className="divide-y rounded-lg border bg-card">{d.h2h.map((h) => <ResultRow key={h.id} m={h} />)}</ul>
+          <ul className="gc-panel divide-y">{d.h2h.map((h) => <ResultRow key={h.id} m={h} />)}</ul>
         ) : (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No previous meetings found.</p>
         )}

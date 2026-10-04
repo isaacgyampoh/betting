@@ -26,7 +26,7 @@ export function ChatSlipCard({ slip }: { slip: SlipView }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-card text-sm">
+    <div className="gc-panel text-sm">
       <div className="flex items-start justify-between gap-3 border-b px-3 py-2.5">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{slip.bookmaker.name}</p>

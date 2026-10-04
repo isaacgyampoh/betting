@@ -9,7 +9,7 @@ const STATUS_LABEL: Record<string, string> = { WON: "Won", LOST: "Lost", VOID: "
 
 export function PickCard({ pick }: { pick: DailyPickView }) {
   return (
-    <section className="overflow-hidden rounded-lg border bg-card">
+    <section className="gc-panel">
       <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
         <div>
           <p className="text-sm font-medium">Daily {pick.target} odds</p>

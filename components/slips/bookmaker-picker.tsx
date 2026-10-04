@@ -53,9 +53,14 @@ export function BookmakerPicker({
               disabled={disabled}
               title={b.available === false ? `${b.name} isn't connected yet` : undefined}
               onClick={() => onChange(b.slug)}
+              // No border on the unselected ones: a grid of outlined boxes inside a panel is three
+              // nested frames deep before any content. A filled chip is the control; the selected
+              // one is the only thing that needs an outline.
               className={cn(
-                "h-10 truncate rounded-lg border px-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                value === b.slug ? "border-primary bg-card text-foreground ring-1 ring-primary" : "bg-card text-muted-foreground hover:text-foreground",
+                "h-10 truncate rounded-lg px-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                value === b.slug
+                  ? "bg-card text-foreground ring-2 ring-primary"
+                  : "bg-secondary text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
               {b.name}
