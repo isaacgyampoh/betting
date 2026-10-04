@@ -293,7 +293,9 @@ export async function settleDailyPicks(
     market: unknown;
   }) => Promise<{ status: PickStatus; resultText: string } | null>,
 ): Promise<{ settled: number }> {
-  const open = await db.dailyPick.findMany({ where: { status: "PENDING" }, include: pickInclude });
+  // Oldest first, so a backlog drains in the order it built up rather than whichever way the
+  // database happened to return it.
+  const open = await db.dailyPick.findMany({ where: { status: "PENDING" }, include: pickInclude, orderBy: { forDate: "asc" } });
   let settled = 0;
 
   for (const pick of open) {
@@ -311,8 +313,19 @@ export async function settleDailyPicks(
     if (!changed) continue;
 
     const legs = await db.dailyPickLeg.findMany({ where: { pickId: pick.id } });
+    // One lost leg loses the accumulator, whatever the others do. Waiting for every leg to resolve
+    // first left slips pending for ever: a slip with a loser and one leg the score cannot decide -
+    // a corners or cards line - would never settle, so a published loss never reached the record.
+    // The record this product is judged on was filling up with "still running" instead of losses.
+    if (legs.some((l) => l.status === "LOST")) {
+      await db.dailyPick.update({ where: { id: pick.id }, data: { status: "LOST", settledAt: new Date() } });
+      settled++;
+      logger.info("daily.settled", { pickId: pick.id, target: pick.target, status: "LOST", decided: "a leg lost" });
+      continue;
+    }
+    // A win needs every leg in: one unresolved leg could still lose it.
     if (legs.some((l) => l.status === "PENDING")) continue;
-    const status: PickStatus = legs.some((l) => l.status === "LOST") ? "LOST" : legs.every((l) => l.status === "VOID") ? "VOID" : "WON";
+    const status: PickStatus = legs.every((l) => l.status === "VOID") ? "VOID" : "WON";
     await db.dailyPick.update({ where: { id: pick.id }, data: { status, settledAt: new Date() } });
     settled++;
     logger.info("daily.settled", { pickId: pick.id, target: pick.target, status });

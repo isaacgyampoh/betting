@@ -97,6 +97,46 @@ describe("daily picks", () => {
     expect(settled.legs.map((l) => l.resultText).sort()).toEqual(["0-3", "2-1"]);
   });
 
+  // This is how the public record filled up with "still running" instead of losses: a slip with a
+  // loser and one leg the score cannot decide - a corners or cards line - waited for every leg to
+  // resolve, and the undecidable one never did.
+  it("settles as lost on one lost leg, without waiting for the rest", async () => {
+    await db.dailyPick.deleteMany();
+    const pick = await publish({ date: ghanaDate(), target: 5, totalOdds: 5.1, legs: 3 });
+
+    await settleDailyPicks(async (leg) => (leg.apiFootballFixtureId === 900001 ? { status: "LOST", resultText: "0-3" } : null));
+
+    const settled = await db.dailyPick.findUniqueOrThrow({ where: { id: pick.id }, include: { legs: true } });
+    expect(settled.status).toBe("LOST");
+    expect(settled.settledAt).not.toBeNull();
+    // The other two were never decided, and are not pretended to be.
+    expect(settled.legs.filter((l) => l.status === "PENDING")).toHaveLength(2);
+  });
+
+  it("still waits for every leg before calling a win", async () => {
+    await db.dailyPick.deleteMany();
+    const pick = await publish({ date: ghanaDate(), target: 2, totalOdds: 2.2, legs: 2 });
+
+    await settleDailyPicks(async (leg) => (leg.apiFootballFixtureId === 900000 ? { status: "WON", resultText: "2-1" } : null));
+    expect((await db.dailyPick.findUniqueOrThrow({ where: { id: pick.id } })).status).toBe("PENDING");
+
+    await settleDailyPicks(async (leg) => (leg.apiFootballFixtureId === 900001 ? { status: "WON", resultText: "1-0" } : null));
+    expect((await db.dailyPick.findUniqueOrThrow({ where: { id: pick.id } })).status).toBe("WON");
+  });
+
+  it("settles the oldest pick first, so a backlog drains in order", async () => {
+    await db.dailyPick.deleteMany();
+    await publish({ date: "2026-09-10", target: 2, totalOdds: 2.0, legs: 1 });
+    await publish({ date: "2026-09-11", target: 2, totalOdds: 2.0, legs: 1 });
+
+    const order: string[] = [];
+    await settleDailyPicks(async (leg) => {
+      order.push(leg.kickoffAt.toISOString().slice(0, 10));
+      return { status: "LOST", resultText: "0-1" };
+    });
+    expect(order).toEqual(["2026-09-10", "2026-09-11"]);
+  });
+
   it("one pick per target per day", async () => {
     await db.dailyPick.deleteMany();
     await publish({ date: "2026-09-19", target: 2, totalOdds: 2.0 });
