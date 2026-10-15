@@ -4,4 +4,9 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug only: allows cleartext to a development server on this machine. See
+         res/xml/network_security_config.xml. A release build has neither this attribute nor that
+         file, so it keeps Android's default and refuses cleartext everywhere. -->
+    <application android:networkSecurityConfig="@xml/network_security_config" />
 </manifest>

@@ -1,4 +1,4 @@
-package win.gameclaw.gameclaw_app
+package win.gameclaw.app
 
 import io.flutter.embedding.android.FlutterActivity
 

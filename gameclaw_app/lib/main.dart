@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/router.dart';
+import 'data/retry.dart';
 import 'theme/tokens.dart';
 
 void main() {
@@ -14,7 +15,7 @@ void main() {
     systemNavigationBarColor: GcColors.surface,
     systemNavigationBarIconBrightness: Brightness.light,
   ));
-  runApp(const ProviderScope(child: GameClawApp()));
+  runApp(const ProviderScope(retry: gcRetry, child: GameClawApp()));
 }
 
 class GameClawApp extends ConsumerWidget {

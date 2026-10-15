@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only. This file lives in src/debug, so it is compiled into a debug APK and is not
+  present in a release one - a release build keeps Android's default, which refuses cleartext to
+  every host.
+
+  The exception is narrow on purpose: a development server on this machine, reached either through
+  `adb reverse tcp:3000 tcp:3000` (localhost) or from an emulator (10.0.2.2). Nothing else is
+  permitted in cleartext even in debug.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../theme/tokens.dart';
-
 /// The bottom navigation, and the Android back button.
 ///
 /// Back goes to the previous tab's stack rather than closing the app: Android's default here
@@ -40,37 +38,6 @@ class GcShell extends StatelessWidget {
             NavigationDestination(icon: Icon(Icons.bolt_outlined), selectedIcon: Icon(Icons.bolt), label: 'Claw'),
             NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// A screen that has nothing to show yet, and says so rather than pretending.
-///
-/// Every one of these is wired to the real navigation and will be replaced by the real screen as
-/// its data path lands. None of them displays invented fixtures, scores or prices.
-class GcPlaceholder extends StatelessWidget {
-  const GcPlaceholder({super.key, required this.title, required this.note});
-
-  final String title;
-  final String note;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: GcSpace.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title, style: GcType.title, textAlign: TextAlign.center),
-              const SizedBox(height: GcSpace.sm),
-              Text(note, style: GcType.caption, textAlign: TextAlign.center),
-            ],
-          ),
         ),
       ),
     );
