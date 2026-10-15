@@ -3,6 +3,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { BottomNav } from "@/components/bottom-nav";
 import { SetupBanner } from "@/components/setup-banner";
 import { SessionKeeper } from "@/components/session-keeper";
+import { NativeBridge } from "@/components/native-bridge";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,6 +16,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       {/* Only the signed-in app needs a live Supabase session; keeping this out of the root layout
           keeps its client off every marketing page. */}
       <SessionKeeper />
+      {/* No-op in a browser; supplies the hardware back button, status bar and external-link
+          handling when this same site is running inside the Android shell. */}
+      <NativeBridge />
     </>
   );
 }

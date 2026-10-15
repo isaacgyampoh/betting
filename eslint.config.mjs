@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The Android shell: Gradle build output and Capacitor's own generated bridge, neither of
+    // which is ours to lint. The shell's own sources are checked by the Android toolchain.
+    "mobile/android/**",
+    "mobile/node_modules/**",
     // Generated: Cloudflare runtime types and OpenNext / Wrangler build output.
     "cloudflare-env.d.ts",
     ".open-next/**",

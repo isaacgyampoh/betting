@@ -54,3 +54,14 @@ next-env.d.ts
 /.wrangler/
 .dev.vars*
 !.dev.vars.example
+
+# Android shell: Gradle output and local SDK pointers. The project itself is committed.
+mobile/node_modules/
+mobile/android/app/build/
+mobile/android/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/app/src/main/assets/public/
+mobile/android/app/release/
+*.keystore
+*.jks

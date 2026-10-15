@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">GameClaw</string>
+    <string name="title_activity_main">GameClaw</string>
+    <string name="package_name">win.gameclaw.app</string>
+    <string name="custom_url_scheme">win.gameclaw.app</string>
+</resources>

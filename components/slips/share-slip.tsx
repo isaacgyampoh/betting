@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Loader2, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { shareNatively } from "@/components/native-bridge";
 
 // Sharing a slip the way a phone shares anything else: the system sheet, straight into WhatsApp.
 //
@@ -49,6 +50,13 @@ export function ShareSlip({ slipId, code, bookmaker, totalOdds, games, className
             return;
           }
         }
+      }
+      // Inside the Android shell the system sheet is the one the rest of the phone uses, and it
+      // reaches WhatsApp where the webview's own is patchy. It only handles text and a link, so
+      // it comes after the attempt to share the image itself.
+      if (await shareNatively({ title: "GameClaw slip", text, url })) {
+        setState("idle");
+        return;
       }
       if (typeof navigator.share === "function") {
         await navigator.share({ text, url });
