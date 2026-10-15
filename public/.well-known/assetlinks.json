@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "win.gameclaw.app",
+      "sha256_cert_fingerprints": [
+        "28:8D:F0:CF:59:AB:DA:86:1A:F6:D0:40:F3:F4:72:94:42:F6:45:B9:1F:21:2C:AE:9C:EB:09:2B:97:49:07:E5"
+      ]
+    }
+  }
+]

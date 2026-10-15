@@ -22,6 +22,30 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!--
+                Sign-in has to come back here, not to a browser tab.
+
+                Google's consent screen and an emailed magic link both finish by redirecting to
+                gameclaw.win/auth/..., and without this Android hands that to Chrome: the session
+                cookie is then set in Chrome's jar and the app, which has its own, is still sitting
+                on the sign-in screen. Verified on a Pixel - the button span for ever.
+
+                autoVerify makes this an App Link, checked against
+                https://gameclaw.win/.well-known/assetlinks.json, so only a build signed with a
+                listed certificate can claim these URLs. It also means no chooser dialog.
+
+                Scoped to the auth paths plus shared slips, deliberately: claiming the whole domain
+                would swallow every gameclaw.win link on the phone, including ones someone opened
+                on purpose in a browser.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="gameclaw.win" android:pathPrefix="/auth/" />
+                <data android:scheme="https" android:host="gameclaw.win" android:pathPrefix="/slip/" />
+            </intent-filter>
+
         </activity>
 
         <provider

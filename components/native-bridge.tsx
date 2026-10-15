@@ -94,6 +94,36 @@ export function NativeBridge() {
     return () => handle?.remove?.();
   }, [router]);
 
+  // Sign-in finishes in a browser, and Android hands the redirect back here as an App Link. The
+  // webview has to be told to go there: otherwise the app is resumed still sitting on the sign-in
+  // screen while the session cookie sits in Chrome's jar. This is what made the Google button spin
+  // for ever on a real Pixel.
+  useEffect(() => {
+    const app = bridge()?.Plugins?.App;
+    if (!app?.addListener) return;
+    let handle: { remove?: () => void } | undefined;
+
+    void (app.addListener as (e: string, cb: (d: { url?: string }) => void) => Promise<{ remove?: () => void }>)(
+      "appUrlOpen",
+      ({ url }) => {
+        if (!url) return;
+        let target: URL;
+        try {
+          target = new URL(url);
+        } catch {
+          return;
+        }
+        // Only our own origin, so a crafted link cannot point the app somewhere else.
+        if (target.origin !== window.location.origin) return;
+        router.replace(`${target.pathname}${target.search}`);
+      },
+    ).then((h) => {
+      handle = h;
+    });
+
+    return () => handle?.remove?.();
+  }, [router]);
+
   // A link off our own origin - a bookmaker, a support page - opens in the system browser. Inside
   // the shell there is no address bar and no back affordance, so following one in place strands
   // the user on someone else's site.
