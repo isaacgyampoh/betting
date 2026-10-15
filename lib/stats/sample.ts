@@ -116,6 +116,20 @@ export const sampleStatsProvider: StatsProvider = {
     const [x, y] = [homeId, awayId].sort((p, q) => p - q);
     return Array.from({ length: count }, (_, i) => pastMatch(a, b, 180 * (i + 1), league, `${x}-${y}:h2h:${i}`));
   },
+  // The sample set carries a short timeline and full coverage, so tests exercise the same shapes
+  // the live provider returns rather than only the empty case.
+  // Arguments ignored on purpose: one fixed timeline, so tests are deterministic.
+  async events() {
+    return [
+      { minute: 23, extra: null, side: "HOME" as const, type: "GOAL" as const, player: "Marcus Rashford", other: "Bruno Fernandes", detail: "Normal Goal" },
+      { minute: 58, extra: null, side: "AWAY" as const, type: "YELLOW" as const, player: "Cristian Romero", other: null, detail: "Yellow Card" },
+      { minute: 71, extra: null, side: "AWAY" as const, type: "GOAL" as const, player: "Son Heung-Min", other: null, detail: "Normal Goal" },
+      { minute: 90, extra: 3, side: "HOME" as const, type: "SUBSTITUTION" as const, player: "Antony", other: "Alejandro Garnacho", detail: "Substitution 3" },
+    ];
+  },
+  async coverage() {
+    return { events: true, lineups: true, statistics: true, playerStats: true, standings: true };
+  },
   async standings(leagueId) {
     const teams = leagueTeams(leagueId);
     const fillers = ["Rovers", "Athletic", "City", "United", "Stars", "Wanderers"].map((s) => team(`${Object.values(LEAGUES).find((l) => l.id === leagueId)?.country ?? "Sample"} ${s}`));

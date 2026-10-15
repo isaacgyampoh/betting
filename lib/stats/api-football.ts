@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import type { MatchStatus, MatchSummary, StandingRow, StatsProvider } from "@/lib/stats/types";
+import type { MatchEvent, MatchStatus, MatchSummary, StandingRow, StatsProvider } from "@/lib/stats/types";
 
 // API-Football v3 (https://www.api-football.com/documentation-v3). Every response is cached in
 // Postgres (stats_cache) so repeated views cost nothing against the daily request quota.
@@ -75,6 +75,61 @@ export function toMatchSummary(f: ApiFixture): MatchSummary {
     away: { id: f.teams.away.id, name: f.teams.away.name, logo: f.teams.away.logo },
     goals: f.goals,
     halftime: f.score?.halftime ?? null,
+  };
+}
+
+type ApiEvent = {
+  time: { elapsed: number | null; extra: number | null };
+  team: { id: number };
+  player: { name: string | null } | null;
+  assist: { name: string | null } | null;
+  type: string;
+  detail: string;
+};
+
+type ApiLeague = {
+  seasons?: {
+    year: number;
+    current: boolean;
+    coverage?: {
+      standings?: boolean;
+      fixtures?: { events?: boolean; lineups?: boolean; statistics_fixtures?: boolean; statistics_players?: boolean };
+    };
+  }[];
+};
+
+/**
+ * The provider's wording into ours. Anything it calls something we do not model keeps its own
+ * words in `detail` rather than being forced into the nearest type.
+ */
+function toMatchEvent(e: ApiEvent, homeTeamId: number): MatchEvent {
+  const detail = e.detail ?? "";
+  const type: MatchEvent["type"] =
+    e.type === "Goal"
+      ? detail === "Own Goal"
+        ? "OWN_GOAL"
+        : detail === "Penalty"
+          ? "PENALTY"
+          : detail === "Missed Penalty"
+            ? "PENALTY_MISSED"
+            : "GOAL"
+      : e.type === "Card"
+        ? detail === "Red Card"
+          ? "RED"
+          : /second yellow/i.test(detail)
+            ? "SECOND_YELLOW"
+            : "YELLOW"
+        : e.type === "subst"
+          ? "SUBSTITUTION"
+          : "VAR";
+  return {
+    minute: e.time?.elapsed ?? 0,
+    extra: e.time?.extra ?? null,
+    side: e.team?.id === homeTeamId ? "HOME" : "AWAY",
+    type,
+    player: e.player?.name ?? null,
+    other: e.assist?.name ?? null,
+    detail,
   };
 }
 
@@ -249,6 +304,29 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
         .filter((m) => m.status === "FINISHED")
         .sort((x, y) => y.kickoffAt.localeCompare(x.kickoffAt))
         .slice(0, count);
+    },
+    /**
+     * Goals, cards and substitutions. Cached briefly while a match is live and for a day once it
+     * is not: a finished timeline never changes, and a live one is the point of opening the page.
+     */
+    async events(fixtureId, homeTeamId) {
+      const rows = await call<ApiEvent>("/fixtures/events", { fixture: fixtureId }, 2 * MIN, "fixtures-events");
+      return rows
+        .map((e) => toMatchEvent(e, homeTeamId))
+        .sort((a, b) => a.minute - b.minute || (a.extra ?? 0) - (b.extra ?? 0));
+    },
+    async coverage(leagueId, season) {
+      const rows = await call<ApiLeague>("/leagues", { id: leagueId }, 24 * HOUR);
+      const year = rows[0]?.seasons?.find((x) => x.year === season) ?? rows[0]?.seasons?.find((x) => x.current);
+      if (!year) return null;
+      const f = year.coverage?.fixtures ?? {};
+      return {
+        events: !!f.events,
+        lineups: !!f.lineups,
+        statistics: !!f.statistics_fixtures,
+        playerStats: !!f.statistics_players,
+        standings: !!year.coverage?.standings,
+      };
     },
     async standings(leagueId, season) {
       const rows = await call<{ league: { standings: ApiStanding[][] } }>("/standings", { league: leagueId, season }, 6 * HOUR, `standings-season-${season}`);

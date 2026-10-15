@@ -7,6 +7,7 @@ import { ApiErrorNotice } from "@/components/api-error-notice";
 import { AnalysisPanel } from "@/components/stats/analysis-panel";
 import { FormChips } from "@/components/stats/form-chips";
 import { SampleDataNotice } from "@/components/stats/sample-badge";
+import { MatchTimeline } from "@/components/stats/match-timeline";
 import { TeamBadge } from "@/components/stats/team-badge";
 import { Button } from "@/components/ui/button";
 import { requireAdultPage } from "@/lib/auth-pages";
@@ -154,6 +155,21 @@ export default async function MatchPage({ params, searchParams }: PageProps<"/ma
       {d.busy && (
         <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
           Some stats are busy right now (high demand). Refresh in a minute to fill them in.
+        </p>
+      )}
+
+      {/* The timeline goes above the analysis: what happened comes before what it means. */}
+      {(d.events.length > 0 || d.coverage?.events === false) && (
+        <Section title="Match events">
+          <MatchTimeline events={d.events} coverage={d.coverage} />
+        </Section>
+      )}
+
+      {/* Said once, here, rather than left as empty panels further down. */}
+      {d.coverage && !d.coverage.statistics && (
+        <p className="text-xs text-muted-foreground">
+          {m.league.country} · {m.league.name} doesn&apos;t publish shot, corner or possession counts, so this page
+          shows goals, cards and form instead of a statistics panel.
         </p>
       )}
 

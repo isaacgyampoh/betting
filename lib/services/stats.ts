@@ -7,7 +7,7 @@ import { bestMatch, levelFromCompetition, withSquadLevel } from "@/lib/matching/
 import { createApiFootballProvider, StatsPlanLimitError, StatsRateLimitError } from "@/lib/stats/api-football";
 import { buildTeamForm } from "@/lib/stats/form";
 import { sampleStatsProvider } from "@/lib/stats/sample";
-import type { MatchDetail, MatchSummary, StatsProvider } from "@/lib/stats/types";
+import type { MatchDetail, MatchEvent, MatchSummary, StatsProvider } from "@/lib/stats/types";
 import { getAliasIndex } from "@/lib/services/events";
 import { rememberLogos } from "@/lib/services/team-logos";
 import { enforceRateLimit, logUsage } from "@/lib/services/usage";
@@ -126,8 +126,8 @@ export const H2H_GAMES = 6;
  * another region. The build that asked for the research is itself metered and rate-limited, which
  * is what bounds it.
  */
-export type DetailOptions = { sections?: ("form" | "h2h" | "standings")[]; meter?: boolean };
-const ALL_SECTIONS: NonNullable<DetailOptions["sections"]> = ["form", "h2h", "standings"];
+export type DetailOptions = { sections?: ("form" | "h2h" | "standings" | "events")[]; meter?: boolean };
+const ALL_SECTIONS: NonNullable<DetailOptions["sections"]> = ["form", "h2h", "standings", "events"];
 
 export async function getMatchDetail(
   user: AuthUser | null,
@@ -172,13 +172,17 @@ export async function getMatchDetail(
   };
 
   const skip = async <T,>(empty: T) => empty;
-  const [homeLast, awayLast, h2h, standings] = await Promise.all([
+  const [homeLast, awayLast, h2h, standings, events, coverage] = await Promise.all([
     // Ten games, not five: "9 of 10" is far stronger evidence than "4 of 5", and a home/away split
     // of five leaves only two or three games a side, which says almost nothing.
     want.has("form") ? section("form", () => provider.lastFixtures(match.home.id, FORM_GAMES), []) : skip([] as MatchSummary[]),
     want.has("form") ? section("form", () => provider.lastFixtures(match.away.id, FORM_GAMES), []) : skip([] as MatchSummary[]),
     want.has("h2h") ? section("h2h", () => provider.headToHead(match.home.id, match.away.id, H2H_GAMES), []) : skip([] as MatchSummary[]),
     want.has("standings") ? section("standings", () => provider.standings(match.league.id, match.league.season), null) : skip(null),
+    // The timeline is the match centre's spine, so a competition that does not carry events says so
+    // rather than showing an empty panel.
+    want.has("events") ? section("events", () => provider.events(match.id, match.home.id), []) : skip([] as MatchEvent[]),
+    want.has("events") ? provider.coverage(match.league.id, match.league.season).catch(() => null) : skip(null),
   ]);
 
   if (user && meter) {
@@ -189,6 +193,8 @@ export async function getMatchDetail(
     form: { home: buildTeamForm(match.home, homeLast), away: buildTeamForm(match.away, awayLast) },
     h2h: h2h.filter((m) => m.status === "FINISHED").sort((a, b) => b.kickoffAt.localeCompare(a.kickoffAt)),
     standings,
+    events,
+    coverage,
     unavailable: [...unavailable],
     busy,
     source: provider.source,

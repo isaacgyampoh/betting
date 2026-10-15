@@ -44,7 +44,6 @@ export type SlipResults = {
 };
 
 const goalsOf = (m: MatchSummary) => ({ home: m.goals.home ?? 0, away: m.goals.away ?? 0 });
-const total = (m: MatchSummary) => goalsOf(m).home + goalsOf(m).away;
 const finished = (m: MatchSummary) => m.status === "FINISHED";
 
 /**

@@ -85,6 +85,74 @@ describe("API-Football client caching", () => {
     expect(fail).toHaveBeenCalledTimes(2);
   });
 
+  // The provider's wording is not ours: a goal, an own goal, a penalty and a missed penalty all
+  // arrive as type "Goal" and are told apart by `detail`, and a second yellow is a "Card".
+  it("maps the provider's event wording to our types, and keeps the side right", async () => {
+    await db.statsCache.deleteMany();
+    const ev = (type: string, detail: string, teamId: number, elapsed: number, extra: number | null = null) => ({
+      time: { elapsed, extra },
+      team: { id: teamId },
+      player: { name: "A Player" },
+      assist: { name: null },
+      type,
+      detail,
+    });
+    const body = {
+      errors: [],
+      response: [
+        ev("Goal", "Normal Goal", 1, 23),
+        ev("Goal", "Own Goal", 2, 40),
+        ev("Goal", "Penalty", 1, 55),
+        ev("Goal", "Missed Penalty", 2, 60),
+        ev("Card", "Yellow Card", 2, 12),
+        ev("Card", "Second Yellow card", 1, 70),
+        ev("Card", "Red Card", 2, 80),
+        ev("subst", "Substitution 1", 1, 46),
+        ev("Var", "Goal cancelled", 2, 90, 2),
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })));
+
+    const events = await createApiFootballProvider("k").events(555, /* home */ 1);
+
+    expect(events.map((e) => e.type)).toEqual([
+      "YELLOW", "GOAL", "OWN_GOAL", "SUBSTITUTION", "PENALTY", "PENALTY_MISSED", "SECOND_YELLOW", "RED", "VAR",
+    ]);
+    // Sorted by minute, then by added time.
+    expect(events.map((e) => e.minute)).toEqual([12, 23, 40, 46, 55, 60, 70, 80, 90]);
+    expect(events.at(-1)).toMatchObject({ extra: 2, detail: "Goal cancelled" });
+    // Team 1 is the home side, so everything else is away.
+    expect(events.filter((e) => e.side === "HOME").map((e) => e.minute)).toEqual([23, 46, 55, 70]);
+  });
+
+  it("reads a competition's coverage from the provider rather than assuming it", async () => {
+    await db.statsCache.deleteMany();
+    const body = {
+      errors: [],
+      response: [
+        {
+          seasons: [
+            { year: 2025, current: false, coverage: { standings: true, fixtures: { events: true, lineups: true, statistics_fixtures: true, statistics_players: true } } },
+            // The Ghana Premier League's real shape: a timeline and a table, no shot counts.
+            { year: 2026, current: true, coverage: { standings: true, fixtures: { events: true, lineups: true, statistics_fixtures: false, statistics_players: false } } },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })));
+
+    const provider = createApiFootballProvider("k");
+    expect(await provider.coverage(570, 2026)).toEqual({
+      events: true,
+      lineups: true,
+      statistics: false,
+      playerStats: false,
+      standings: true,
+    });
+    // An unknown season falls back to the current one rather than inventing coverage.
+    expect(await provider.coverage(570, 1999)).toMatchObject({ statistics: false });
+  });
+
   it("raises STATS_UNAVAILABLE when the API fails with nothing cached", async () => {
     await db.statsCache.deleteMany();
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network down"); }));

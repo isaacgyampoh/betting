@@ -46,7 +46,7 @@ const detail = (home: TeamForm, away: TeamForm, h2h: MatchSummary[] = []): Match
   form: { home, away },
   h2h,
   standings: null,
-  unavailable: [],
+  unavailable: [], events: [], coverage: null,
   busy: false,
   source: "api-football",
 });
