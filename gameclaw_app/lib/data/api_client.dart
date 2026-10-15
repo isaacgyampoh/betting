@@ -1,0 +1,138 @@
+import 'package:dio/dio.dart';
+
+/// Where the app talks to its backend.
+///
+/// Supplied at build time (`--dart-define=GC_API_BASE=...`) and never hard-coded, because the
+/// production host is a deployment decision rather than a source-code one, and because the same
+/// binary has to be pointable at a local server during development.
+///
+/// Nothing privileged lives in here. The app holds a user's session token and nothing else: the
+/// bookmaker credentials, the football provider key and the database all stay behind this
+/// boundary, on the server, where a decompiled APK cannot reach them.
+class ApiConfig {
+  const ApiConfig({required this.baseUrl});
+
+  /// Set at build time with `--dart-define=GC_API_BASE=...`. The default keeps a fresh checkout
+  /// running without a flag; `10.0.2.2` is how an Android emulator reaches the host machine.
+  static const _fromEnv = String.fromEnvironment(
+    'GC_API_BASE',
+    defaultValue: 'http://10.0.2.2:3000/api/v1',
+  );
+
+  factory ApiConfig.fromEnvironment() => const ApiConfig(baseUrl: _fromEnv);
+
+  final String baseUrl;
+}
+
+/// What went wrong, in terms a screen can act on.
+///
+/// Every failure becomes one of these, so no widget ever has to catch a DioException or know that
+/// Dio exists. The distinction that matters to a user is offline (worth retrying now) versus the
+/// server said no (retrying will not help).
+sealed class ApiFailure implements Exception {
+  const ApiFailure(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// No usable connection. The only failure where an immediate retry is worth offering.
+class OfflineFailure extends ApiFailure {
+  const OfflineFailure() : super("You're offline. Check your connection and try again.");
+}
+
+class TimeoutFailure extends ApiFailure {
+  const TimeoutFailure() : super('That took too long. Try again in a moment.');
+}
+
+/// The session is gone or was never there; the caller should send the user to sign in.
+class UnauthorizedFailure extends ApiFailure {
+  const UnauthorizedFailure() : super('Please sign in to continue.');
+}
+
+/// The server answered with a refusal and its own message, which is better than anything
+/// invented here - it knows why.
+class ServerFailure extends ApiFailure {
+  const ServerFailure(super.message, {required this.status, this.code});
+  final int status;
+  final String? code;
+}
+
+class UnknownFailure extends ApiFailure {
+  const UnknownFailure([super.message = 'Something went wrong.']);
+}
+
+/// Supplies the bearer token, if there is one. Kept as a function so the client never holds a
+/// stale copy: the token is read at the moment of the request, after any refresh.
+typedef TokenReader = Future<String?> Function();
+
+class ApiClient {
+  ApiClient({required ApiConfig config, TokenReader? token, Dio? dio})
+      : _token = token,
+        _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: config.baseUrl,
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 20),
+              // Non-2xx is handled below rather than thrown as a transport error, so a refusal
+              // the server explained keeps its explanation.
+              validateStatus: (_) => true,
+              headers: const {'accept': 'application/json'},
+            )) {
+    _dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) async {
+      final value = await _token?.call();
+      if (value != null && value.isNotEmpty) {
+        options.headers['authorization'] = 'Bearer $value';
+      }
+      handler.next(options);
+    }));
+  }
+
+  final Dio _dio;
+  final TokenReader? _token;
+
+  /// A GET returning the `data` envelope every endpoint uses.
+  Future<T> get<T>(String path, {Map<String, dynamic>? query, CancelToken? cancel}) =>
+      _send<T>(() => _dio.get<dynamic>(path, queryParameters: query, cancelToken: cancel));
+
+  Future<T> post<T>(String path, {Object? body, CancelToken? cancel}) =>
+      _send<T>(() => _dio.post<dynamic>(path, data: body, cancelToken: cancel));
+
+  Future<T> _send<T>(Future<Response<dynamic>> Function() run) async {
+    final Response<dynamic> response;
+    try {
+      response = await run();
+    } on DioException catch (error) {
+      throw switch (error.type) {
+        DioExceptionType.connectionTimeout ||
+        DioExceptionType.receiveTimeout ||
+        DioExceptionType.sendTimeout =>
+          const TimeoutFailure(),
+        DioExceptionType.connectionError => const OfflineFailure(),
+        DioExceptionType.cancel => const UnknownFailure('Cancelled.'),
+        _ => const UnknownFailure(),
+      };
+    }
+
+    final status = response.statusCode ?? 0;
+    final body = response.data;
+
+    if (status == 401 || status == 403) throw const UnauthorizedFailure();
+
+    if (status < 200 || status >= 300) {
+      // The API answers failures as { error: { code, message } }. Prefer its wording.
+      final error = body is Map<String, dynamic> ? body['error'] as Map<String, dynamic>? : null;
+      throw ServerFailure(
+        error?['message'] as String? ?? 'The server could not complete that request.',
+        status: status,
+        code: error?['code'] as String?,
+      );
+    }
+
+    if (body is! Map<String, dynamic>) throw const UnknownFailure('Unexpected response from the server.');
+    final data = body['data'];
+    if (data is! T) throw const UnknownFailure('Unexpected response from the server.');
+    return data;
+  }
+}
