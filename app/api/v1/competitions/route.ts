@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { ok, route } from "@/lib/api";
-import { requireAdult } from "@/lib/auth";
+import { optionalAdult } from "@/lib/auth";
+import { clientIpHash } from "@/lib/request";
+import { meterPublicBrowse } from "@/lib/services/usage";
 import { listCompetitions } from "@/lib/services/directory";
 
 const querySchema = z.object({
@@ -11,7 +13,8 @@ const querySchema = z.object({
 });
 
 export const GET = route(async (req) => {
-  await requireAdult(req.headers.get("authorization"));
+  const { user } = await optionalAdult(req.headers.get("authorization"));
+  await meterPublicBrowse(user?.id, clientIpHash(req));
   const q = querySchema.parse(Object.fromEntries(req.nextUrl.searchParams));
   return ok(await listCompetitions(q));
 });

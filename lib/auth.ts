@@ -124,6 +124,42 @@ function fromRow(row: ProfileRow): ProfileModel {
 }
 
 /** Signed-in user, 18+ confirmed, and not on a self-imposed break. */
+/**
+ * The football pages, for whoever is looking at them.
+ *
+ * Scores, fixtures, results, tables, squads and the match centre are not betting features: they
+ * are the reason to open the app at all, and a registration wall in front of them is a wall in
+ * front of the product. A visitor gets them signed out; signing in is for the things that are
+ * genuinely about an account - a slip, a conversation with Claw, a followed team.
+ *
+ * Signing in still matters here, because a signed-in reader is still a person we know things
+ * about. Self-exclusion is honoured: somebody who has asked us to stop showing them betting is
+ * not handed a betting product again because they happened to open a league table. The 18+
+ * question is not asked of a visitor reading a scoreline, and is still asked before anything
+ * that stakes money.
+ *
+ * Returns a null user for a visitor, and for a token that does not verify. An expired session
+ * should degrade to the public experience rather than throw a wall at somebody mid-browse; the
+ * endpoints that need a real user ask for one with requireUser.
+ */
+export async function optionalAdult(authorization?: string | null) {
+  // Identity is an enhancement here, not a precondition, so failing to work out who somebody is
+  // must not take the page down. Anything that throws while resolving a session - a malformed
+  // token, an unreachable auth service, a cookie store that is not there - leaves a visitor
+  // looking at the scores, which is exactly what they would have seen anyway.
+  const user = await getAuthUser(authorization).catch(() => null);
+  if (!user) return { user: null, profile: null };
+
+  const profile = await getProfile(user);
+  if (profile.excludedUntil && profile.excludedUntil > new Date()) {
+    throw new AppError(
+      "FORBIDDEN",
+      `You're taking a break until ${profile.excludedUntil.toISOString().slice(0, 10)}. Support is on our responsible gambling page.`,
+    );
+  }
+  return { user, profile };
+}
+
 export async function requireAdult(authorization?: string | null) {
   const user = await requireUser(authorization);
   const profile = await getProfile(user);
