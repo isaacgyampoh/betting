@@ -18,7 +18,7 @@ class GcShell extends StatelessWidget {
     (Icons.bolt_outlined, Icons.bolt, 'Live'),
     (Icons.star_outline_rounded, Icons.star_rounded, 'Following'),
     (Icons.auto_awesome_outlined, Icons.auto_awesome, 'Claw'),
-    (Icons.insights_outlined, Icons.insights, 'Record'),
+    (Icons.swap_horiz_rounded, Icons.swap_horiz_rounded, 'Convert'),
     (Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
   ];
 

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/age_gate_screen.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/claw/claw_screen.dart';
+import '../features/convert/convert_screen.dart';
 import '../features/record/record_screen.dart';
 import '../features/favourites/favourites_screen.dart';
 import '../features/home/live_centre.dart';
@@ -75,10 +76,18 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [GoRoute(path: '/claw', builder: (_, __) => const ClawScreen())],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/record', builder: (_, __) => const RecordScreen())],
+            routes: [GoRoute(path: '/convert', builder: (_, __) => const ConvertScreen())],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen())],
+            routes: [
+              GoRoute(
+                path: '/profile',
+                builder: (_, __) => const ProfileScreen(),
+                // Pushed rather than a tab: a published record is something you check now and
+                // then, and the fifth tab is better spent on something you do.
+                routes: [GoRoute(path: 'record', builder: (_, __) => const RecordScreen())],
+              ),
+            ],
           ),
         ],
       ),

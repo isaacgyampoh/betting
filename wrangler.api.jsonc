@@ -31,7 +31,7 @@
     // Must be this Worker's own origin. scripts/cf-build.mjs refuses to build while it is still
     // the placeholder, because a wrong value here is baked into the bundle and silently sends
     // auth redirects to the website.
-    "NEXT_PUBLIC_SITE_URL": "https://REPLACE-ME.workers.dev",
+    "NEXT_PUBLIC_SITE_URL": "https://gameclaw-api.nanagyams99.workers.dev",
     "NEXT_PUBLIC_SUPABASE_URL": "https://qefedcphkmxuxjetmtqw.supabase.co",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlZmVkY3Boa214dXhqZXRtdHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NjE0NTUsImV4cCI6MjEwNjMzNzQ1NX0.0uK_oW-vIBwPfpg1qXi53BjXpF2XjfsdUz2SO9hYh6g",
     "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "pk_live_9d21dd9b8bd208a10cd1a1195a0dbd1d477894b1",

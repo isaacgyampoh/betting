@@ -45,6 +45,16 @@ class ProfileScreen extends ConsumerWidget {
                       onSignOut: () => ref.read(signOutProvider)(),
                     ),
             ),
+            const GcSectionHeader(title: 'Our record'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+              child: GcButton(
+                label: 'Every slip we have published',
+                kind: GcButtonKind.secondary,
+                icon: Icons.insights_outlined,
+                onPressed: () => context.push('/profile/record'),
+              ),
+            ),
             const GcSectionHeader(title: 'Staying in control'),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: GcSpace.gutter),

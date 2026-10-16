@@ -890,6 +890,36 @@ class SlipWarning {
       SlipWarning(code: json['code'] as String? ?? '', message: json['message'] as String? ?? '');
 }
 
+/// A bookmaker, and what it can actually do.
+///
+/// The two capabilities are independent and both matter to the user before they start: a
+/// bookmaker that can read a code but not issue one can be a source but never a destination, and
+/// offering it as a destination would end in a slip that was built and never booked.
+class Bookmaker {
+  const Bookmaker({
+    required this.slug,
+    required this.name,
+    required this.canLoad,
+    required this.canBook,
+  });
+
+  final String slug;
+  final String name;
+
+  /// Can read an existing booking code.
+  final bool canLoad;
+
+  /// Can issue a new booking code - which is what makes it a possible destination.
+  final bool canBook;
+
+  factory Bookmaker.fromJson(Map<String, dynamic> json) => Bookmaker(
+    slug: json['slug'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    canLoad: json['canLoad'] == true,
+    canBook: json['canBook'] == true,
+  );
+}
+
 /// A booking code on a bookmaker, and the picks behind it.
 class Slip {
   const Slip({
@@ -903,6 +933,7 @@ class Slip {
     required this.warnings,
     required this.demo,
     required this.expiresAtUtc,
+    this.parent,
   });
 
   final String id;
@@ -923,6 +954,19 @@ class Slip {
 
   final DateTime? expiresAtUtc;
 
+  /// The slip this one was converted from, when it was. Its presence is what makes a result a
+  /// conversion rather than a fresh slip, and it carries the source bookmaker's own name and code
+  /// so both ends can be shown side by side.
+  final SlipOrigin? parent;
+
+  /// Selections the destination bookmaker could not carry across. Kept on the slip and shown,
+  /// never dropped: a slip that quietly loses two legs between being read and being booked is
+  /// worse than one that says what it could not take.
+  List<Selection> get unmatched => [
+    for (final s in selections)
+      if (!s.status.isOk) s,
+  ];
+
   factory Slip.fromJson(Map<String, dynamic> json) {
     final bookmaker = json['bookmaker'] as Map<String, dynamic>? ?? const {};
     return Slip(
@@ -942,8 +986,28 @@ class Slip {
       expiresAtUtc: json['expiresAt'] == null
           ? null
           : DateTime.parse(json['expiresAt'] as String).toUtc(),
+      parent: json['parent'] == null
+          ? null
+          : SlipOrigin.fromJson(json['parent'] as Map<String, dynamic>),
     );
   }
+}
+
+/// Where a converted slip came from.
+class SlipOrigin {
+  const SlipOrigin({required this.id, required this.bookmakerName, required this.code});
+
+  final String id;
+  final String bookmakerName;
+
+  /// Null when the source slip was built but never booked.
+  final String? code;
+
+  factory SlipOrigin.fromJson(Map<String, dynamic> json) => SlipOrigin(
+    id: json['id'] as String? ?? '',
+    bookmakerName: (json['bookmaker'] as Map<String, dynamic>?)?['name'] as String? ?? '',
+    code: json['code'] as String?,
+  );
 }
 
 /// What the user has left today.

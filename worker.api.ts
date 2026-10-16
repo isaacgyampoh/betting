@@ -32,6 +32,23 @@ const worker = {
       );
     }
 
+    // Two families of route must never run on this Worker, and neither is blocked by accident:
+    //
+    //  * /api/v1/cron/* publishes and settles the daily picks. Those run on the website Worker's
+    //    Cron Triggers. Reachable here, they would let a second caller settle a published record
+    //    that is meant never to be edited after the fact.
+    //  * /api/v1/webhooks/* is Paystack settling payments. Paystack is configured to deliver to
+    //    the website, and a payment handled twice is a real-money mistake.
+    //
+    // Neither has its secret set here either, so both would already fail - but failing because a
+    // secret is missing is an accident, and this is a decision.
+    if (url.pathname.startsWith("/api/v1/cron/") || url.pathname.startsWith("/api/v1/webhooks/")) {
+      return Response.json(
+        { error: { code: "NOT_FOUND", message: "Not served on the API host." } },
+        { status: 404, headers: { "cache-control": "no-store" } },
+      );
+    }
+
     if (!url.pathname.startsWith("/api/")) {
       return Response.json(
         { error: { code: "NOT_FOUND", message: "This host serves the GameClaw API only." } },

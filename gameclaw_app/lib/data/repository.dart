@@ -159,3 +159,42 @@ class ChatTurn {
   ChatTurn copyWith({bool? failed}) =>
       ChatTurn(role: role, text: text, slips: slips, failed: failed ?? this.failed);
 }
+
+/// Reading a booking code, and converting one bookmaker's slip to another.
+///
+/// Nothing here is cacheable. A slip's prices go stale in minutes and a booking code is issued
+/// once, so a cached conversion would be a code that may no longer price what it says it does.
+class SlipsRepository {
+  SlipsRepository({required ApiClient api}) : _api = api;
+
+  final ApiClient _api;
+
+  /// Every bookmaker the server has enabled, with what each can do.
+  Future<List<Bookmaker>> bookmakers() async {
+    final list = await _api.get<List<dynamic>>('/bookmakers');
+    return list.map((b) => Bookmaker.fromJson(b as Map<String, dynamic>)).toList(growable: false);
+  }
+
+  /// Reads an existing booking code. [bookmaker] may be omitted, and the server detects it from
+  /// the code's own shape - which is what lets a user paste a code without knowing or caring
+  /// which bookmaker issued it.
+  Future<Slip> load({required String code, String? bookmaker}) async {
+    final json = await _api.post<Map<String, dynamic>>(
+      '/slips/load',
+      body: {'code': code, if (bookmaker != null) 'bookmaker': bookmaker},
+    );
+    return Slip.fromJson(json);
+  }
+
+  /// Converts a loaded slip to another bookmaker.
+  ///
+  /// The result is whatever the server actually managed to book. It may carry fewer usable
+  /// selections than the source and it may carry no code at all; both are reported as they are.
+  Future<Slip> convert({required String slipId, required String target}) async {
+    final json = await _api.post<Map<String, dynamic>>(
+      '/slips/convert',
+      body: {'slipId': slipId, 'target': target},
+    );
+    return Slip.fromJson(json);
+  }
+}

@@ -38,6 +38,17 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   return ChatRepository(api: ref.watch(apiClientProvider));
 });
 
+final slipsRepositoryProvider = Provider<SlipsRepository>((ref) {
+  ref.watch(isSignedInProvider);
+  return SlipsRepository(api: ref.watch(apiClientProvider));
+});
+
+/// The bookmakers the server has enabled. Read once per session: the list changes when an
+/// integration is turned on, which is a deploy, not something that happens while the app is open.
+final bookmakersProvider = FutureProvider<List<Bookmaker>>(
+  (ref) => ref.watch(slipsRepositoryProvider).bookmakers(),
+);
+
 /// Today in UTC as YYYY-MM-DD, which is how the server keys a matchday.
 String utcDay(DateTime day) {
   final d = day.toUtc();

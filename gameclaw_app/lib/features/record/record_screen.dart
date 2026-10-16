@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/providers.dart';
 import '../../data/repository.dart';
 import '../../domain/models.dart';
 import '../../theme/tokens.dart';
+import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_pick_card.dart';
 import '../../ui/components/gc_skeleton.dart';
 import '../../ui/components/gc_states.dart';
@@ -27,9 +29,25 @@ class RecordScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.md, GcSpace.gutter, GcSpace.sm),
-              child: Text('Record', style: GcType.display),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                GcSpace.sm,
+                GcSpace.sm,
+                GcSpace.gutter,
+                GcSpace.sm,
+              ),
+              child: Row(
+                children: [
+                  GcIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    colour: GcColors.ink,
+                    tooltip: 'Back',
+                    onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
+                  ),
+                  const SizedBox(width: GcSpace.xs),
+                  Text('Record', style: GcType.display),
+                ],
+              ),
             ),
             Expanded(
               child: RefreshIndicator(
