@@ -170,7 +170,17 @@ export async function sendToUser(userId: string, message: PushMessage): Promise<
             android: {
               priority: "HIGH",
               collapseKey: message.collapseKey,
-              notification: { channelId: "gameclaw_matches" },
+              notification: {
+                // Must match PushService._channelId and the manifest's default. A channel's
+                // sound is fixed when it is first created, so the id carries a version: naming
+                // the old one here would play the system default no matter what the app declares.
+                channelId: "gameclaw_matches_v2",
+                // res/raw/gameclaw_alert.wav, by resource name without the extension. Android
+                // uses the channel's sound on 8.0+; this covers anything older and keeps the
+                // two from disagreeing.
+                sound: "gameclaw_alert",
+                defaultVibrateTimings: true,
+              },
             },
           },
         }),

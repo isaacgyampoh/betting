@@ -45,9 +45,13 @@
 
         <!-- The channel a notification lands in when the app is not running. It is created in
              Dart too, but Android needs it before the first message arrives or it is dropped. -->
+        <!-- Must match PushService._channelId. A message arriving while the app is not running
+             is posted by the Firebase SDK itself, which reads the channel from here; point it at
+             the old id and that notification plays the system default while a foreground one
+             plays ours. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="gameclaw_matches" />
+            android:value="gameclaw_matches_v2" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
