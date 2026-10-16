@@ -233,6 +233,16 @@ class _FakeAuth implements AuthClient {
     email: 'user@example.com',
   );
 
+  AuthSession? googleSession;
+  int googleCalls = 0;
+
+  @override
+  Future<AuthSession> signInWithGoogle({GoogleIdTokenSource? source}) async {
+    googleCalls++;
+    if (failWith != null) throw failWith!;
+    return googleSession ?? _fresh();
+  }
+
   @override
   Future<AuthSession> refresh(String refreshToken) async {
     refreshCalls++;

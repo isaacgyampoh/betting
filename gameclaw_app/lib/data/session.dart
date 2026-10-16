@@ -74,6 +74,13 @@ class SessionController extends AsyncNotifier<AuthSession?> {
     return true;
   }
 
+  /// Signs in with Google. Returns normally, or throws an [ApiFailure] the screen can show.
+  Future<void> signInWithGoogle() async {
+    final session = await ref.read(authClientProvider).signInWithGoogle();
+    await ref.read(secureStoreProvider).writeSession(session);
+    state = AsyncData(session);
+  }
+
   Future<void> signOut() async {
     final current = state.value;
     state = const AsyncData(null);

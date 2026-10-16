@@ -47,6 +47,14 @@ class TimeoutFailure extends ApiFailure {
 }
 
 /// The session is gone or was never there; the caller should send the user to sign in.
+/// The person backed out of something they started, such as the Google account chooser.
+///
+/// Separate from the other failures because it is not one: nothing went wrong, and a screen that
+/// shows a red message here is blaming someone for changing their mind.
+class CancelledFailure extends ApiFailure {
+  const CancelledFailure() : super('Cancelled.');
+}
+
 class UnauthorizedFailure extends ApiFailure {
   const UnauthorizedFailure() : super('Please sign in to continue.');
 }

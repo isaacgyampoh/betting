@@ -25,6 +25,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _password = TextEditingController();
 
   bool _creating = false;
+  bool _busy = false;
   String? _error;
   String? _notice;
 
@@ -33,6 +34,31 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     _email.dispose();
     _password.dispose();
     super.dispose();
+  }
+
+  /// Signs in with the Google account on the phone.
+  ///
+  /// Backing out of the account chooser is not an error and leaves the screen as it was.
+  Future<void> _google() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _error = null;
+      _notice = null;
+      _busy = true;
+    });
+    try {
+      await ref.read(sessionProvider.notifier).signInWithGoogle();
+      if (!mounted) return;
+      context.pushReplacement('/age');
+    } on CancelledFailure {
+      if (mounted) setState(() => _busy = false);
+    } on ApiFailure catch (failure) {
+      if (!mounted) return;
+      setState(() {
+        _error = failure.message;
+        _busy = false;
+      });
+    }
   }
 
   Future<void> _submit() async {
@@ -77,6 +103,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     final configured = ref.watch(supabaseConfigProvider).isConfigured;
+    final google = ref.watch(supabaseConfigProvider).hasGoogle;
 
     return Scaffold(
       body: SafeArea(
@@ -119,7 +146,42 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       icon: Icons.warning_amber_rounded,
                     ),
                   ],
+                  if (configured && !google) ...[
+                    const SizedBox(height: GcSpace.lg),
+                    const GcNote(
+                      'Continue with Google is not available in this build. It needs a Web OAuth '
+                      'client id, and an Android OAuth client registered against this app\'s '
+                      'package name and signing fingerprint.',
+                      icon: Icons.info_outline_rounded,
+                    ),
+                  ],
                   const SizedBox(height: GcSpace.xxl),
+                  // Offered first, and deliberately. Creating an account by email depends on a
+                  // confirmation message arriving; Google needs nothing to arrive at all.
+                  if (google) ...[
+                    GcButton(
+                      label: 'Continue with Google',
+                      icon: Icons.account_circle_outlined,
+                      size: GcButtonSize.large,
+                      kind: GcButtonKind.secondary,
+                      onPressed: _busy ? null : _google,
+                    ),
+                    const SizedBox(height: GcSpace.lg),
+                    Row(
+                      children: [
+                        Expanded(child: Divider(color: gc(context).border)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: GcSpace.md),
+                          child: Text(
+                            'or',
+                            style: GcType.caption.copyWith(color: gc(context).inkFaint),
+                          ),
+                        ),
+                        Expanded(child: Divider(color: gc(context).border)),
+                      ],
+                    ),
+                    const SizedBox(height: GcSpace.lg),
+                  ],
                   Form(
                     key: _form,
                     child: Column(

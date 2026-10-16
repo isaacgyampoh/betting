@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import 'api_client.dart';
 
@@ -15,19 +16,43 @@ import 'api_client.dart';
 /// shipped it in its bundle - so it is not a secret being leaked into an APK. The service key,
 /// which does grant everything, is not here and never will be.
 class SupabaseConfig {
-  const SupabaseConfig({required this.url, required this.anonKey});
+  const SupabaseConfig({required this.url, required this.anonKey}) : googleServerClientId = '';
+
+  const SupabaseConfig.withGoogle({
+    required this.url,
+    required this.anonKey,
+    required this.googleServerClientId,
+  });
 
   static const _url = String.fromEnvironment('GC_SUPABASE_URL');
   static const _anonKey = String.fromEnvironment('GC_SUPABASE_ANON_KEY');
 
-  factory SupabaseConfig.fromEnvironment() => const SupabaseConfig(url: _url, anonKey: _anonKey);
+  /// The **Web** OAuth client id, not the Android one.
+  ///
+  /// This is the counter-intuitive part of native Google sign-in and the usual reason it fails.
+  /// The Android client is what lets Google trust the app - it is matched by package name and
+  /// signing fingerprint and is never named in code. The web client is what the ID token is
+  /// *addressed to*, and both Google and Supabase check that audience, so it is the one the app
+  /// has to hand over. Supplying the Android id here produces a token Supabase rejects.
+  static const _googleServerClientId = String.fromEnvironment('GC_GOOGLE_SERVER_CLIENT_ID');
+
+  factory SupabaseConfig.fromEnvironment() => const SupabaseConfig.withGoogle(
+    url: _url,
+    anonKey: _anonKey,
+    googleServerClientId: _googleServerClientId,
+  );
 
   final String url;
   final String anonKey;
+  final String googleServerClientId;
 
   /// False in a build with no auth flags passed. The sign-in screen then says so plainly rather
   /// than offering a form that cannot work.
   bool get isConfigured => url.isNotEmpty && anonKey.isNotEmpty;
+
+  /// Whether this build can offer Google at all. False is a configuration fact, not a failure,
+  /// and the screen says which piece is missing rather than showing a button that dead-ends.
+  bool get hasGoogle => isConfigured && googleServerClientId.isNotEmpty;
 }
 
 /// A signed-in session.
@@ -98,6 +123,26 @@ class SignUpResult {
   final bool needsEmailConfirmation;
 }
 
+/// Obtains a Google ID token for the given Web OAuth client id.
+///
+/// A seam, so the exchange with Supabase can be tested without the platform plugin, which cannot
+/// run outside a device. The production implementation is [_googleIdToken]; everything that can
+/// actually be reasoned about lives on the other side of it.
+typedef GoogleIdTokenSource = Future<String?> Function(String serverClientId);
+
+Future<String?> _googleIdToken(String serverClientId) async {
+  final google = GoogleSignIn.instance;
+  await google.initialize(serverClientId: serverClientId);
+  if (!google.supportsAuthenticate()) {
+    throw const GoogleSignInException(
+      code: GoogleSignInExceptionCode.unknownError,
+      description: 'Google sign-in is not available on this device.',
+    );
+  }
+  final account = await google.authenticate();
+  return account.authentication.idToken;
+}
+
 class AuthClient {
   AuthClient({required SupabaseConfig config, Dio? dio})
     : _config = config,
@@ -122,6 +167,58 @@ class AuthClient {
 
   Future<AuthSession> signIn({required String email, required String password}) async {
     final body = await _post('/token?grant_type=password', {'email': email, 'password': password});
+    final session = AuthSession.fromAuthResponse(body);
+    if (session == null) throw const UnknownFailure('Signed in, but no session came back.');
+    return session;
+  }
+
+  /// Signs in with the Google account already on the phone.
+  ///
+  /// This is the native flow, not a browser redirect: Google hands back an ID token and Supabase
+  /// exchanges it for a session. Nothing opens a web view, nothing comes back through a deep
+  /// link, and there is no redirect URL to get wrong - which removes the part of OAuth that most
+  /// often breaks on Android.
+  ///
+  /// Three things have to line up before this can work, and the app can only supply one of them:
+  ///   - an Android OAuth client registered against this package name and signing fingerprint,
+  ///     which is how Google decides the caller is really GameClaw;
+  ///   - a Web OAuth client, whose id is passed as [SupabaseConfig.googleServerClientId] and is
+  ///     the audience of the token both Google and Supabase check;
+  ///   - that same Web client id configured on Supabase's Google provider.
+  /// Any of them missing produces a failure the user can act on, rather than a spinner.
+  Future<AuthSession> signInWithGoogle({GoogleIdTokenSource? source}) async {
+    if (!_config.hasGoogle) {
+      throw const UnknownFailure('Google sign-in is not configured in this build.');
+    }
+
+    final String? idToken;
+    try {
+      idToken = await (source ?? _googleIdToken)(_config.googleServerClientId);
+    } on GoogleSignInException catch (error) {
+      throw switch (error.code) {
+        // Backing out of the account chooser is a decision, not a fault. Reporting it as an error
+        // puts a red message on screen for someone who simply changed their mind.
+        GoogleSignInExceptionCode.canceled => const CancelledFailure(),
+        GoogleSignInExceptionCode.interrupted ||
+        GoogleSignInExceptionCode.providerConfigurationError => UnknownFailure(
+          'Google sign-in is not set up for this app yet. ${error.description ?? ''}'.trim(),
+        ),
+        _ => UnknownFailure(error.description ?? 'Google sign-in did not complete.'),
+      };
+    }
+
+    if (idToken == null) {
+      // Google authenticated the person but gave us nothing Supabase can verify. In practice this
+      // means the Web client id is wrong or is not the one Google issued the token for.
+      throw const UnknownFailure(
+        'Google did not return a usable token. Check the Web client id this build was given.',
+      );
+    }
+
+    final body = await _post('/token?grant_type=id_token', {
+      'provider': 'google',
+      'id_token': idToken,
+    });
     final session = AuthSession.fromAuthResponse(body);
     if (session == null) throw const UnknownFailure('Signed in, but no session came back.');
     return session;
