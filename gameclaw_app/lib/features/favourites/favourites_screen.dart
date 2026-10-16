@@ -95,7 +95,8 @@ class _Followed extends StatelessWidget {
           for (final fixture in fixtures)
             GcFixtureRow(
               fixture: fixture,
-              onTap: () => context.push('/following/match/${fixture.id}'),
+              onTap: () =>
+                  context.push('/following/match/${fixture.id}?date=${matchDayOf(fixture)}'),
             ),
         ] else if (day.hasValue) ...[
           const GcSectionHeader(title: 'Today', dense: true),

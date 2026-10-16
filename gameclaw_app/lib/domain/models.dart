@@ -1284,3 +1284,12 @@ class ChatResult {
         .toList(growable: false),
   );
 }
+
+/// The matchday a fixture belongs to, as the server groups days: UTC, `YYYY-MM-DD`.
+///
+/// Passed to the match centre as `?date=`, which lets the server find the fixture in a day it
+/// has already fetched instead of asking the provider for that one fixture by id.
+String matchDayOf(Fixture fixture) =>
+    '${fixture.kickoffUtc.toUtc().year.toString().padLeft(4, '0')}-'
+    '${fixture.kickoffUtc.toUtc().month.toString().padLeft(2, '0')}-'
+    '${fixture.kickoffUtc.toUtc().day.toString().padLeft(2, '0')}';

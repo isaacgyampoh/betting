@@ -41,6 +41,14 @@ class GcTextField extends StatefulWidget {
 class _GcTextFieldState extends State<GcTextField> {
   late bool _hidden = widget.obscure;
 
+  /// True for a field holding something typed verbatim rather than written: an email address, a
+  /// password, a booking code. The keyboard should not capitalise, correct or suggest into any
+  /// of them.
+  bool get _isAddress =>
+      widget.obscure ||
+      widget.keyboardType == TextInputType.emailAddress ||
+      widget.keyboardType == TextInputType.visiblePassword;
+
   @override
   Widget build(BuildContext context) {
     return TextFormField(
@@ -48,6 +56,14 @@ class _GcTextFieldState extends State<GcTextField> {
       enabled: widget.enabled,
       obscureText: _hidden,
       keyboardType: widget.keyboardType,
+      // An email address has no capital first letter, and the Gboard default supplied one:
+      // typing an address on the Pixel produced "GC.device@..." before the user noticed. The
+      // sign-in happened to survive it because the identity provider lowercases addresses, but
+      // the field should not have been fighting the user in the first place. Autocorrect and
+      // suggestions are wrong on an address for the same reason.
+      textCapitalization: _isAddress ? TextCapitalization.none : TextCapitalization.sentences,
+      autocorrect: !_isAddress,
+      enableSuggestions: !_isAddress,
       autofillHints: widget.autofillHints,
       textInputAction: widget.textInputAction,
       onFieldSubmitted: widget.onSubmitted,

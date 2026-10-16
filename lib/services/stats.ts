@@ -25,19 +25,62 @@ export function statsProvider(): StatsProvider {
   return cachedProvider;
 }
 
-// Leagues Ghanaian bettors care about most, shown first.
+// What a day's list leads with, in order.
+//
+// This was a Ghana list, and GameClaw is not a Ghana product: Ghana Premier League sat second,
+// above the Champions League. The order below is the global one - the competitions the most
+// people follow, wherever they are - and every pair is checked against the provider's own
+// catalogue, because the rank is matched on exact strings and a near-miss is a dead entry that
+// silently ranks nothing. "Süper Lig" carries its umlaut, Libertadores is filed under
+// "CONMEBOL Libertadores", and the AFC's top tier is "AFC Champions League Elite".
+//
+// Anything not listed sorts alphabetically by country behind these, which is why an ordinary
+// weekday used to open on Albania and Algeria. Widening this list is what fixes that; a real
+// popularity signal per competition would fix it better, and is not something the provider gives.
 const PRIORITY: [country: string, league: string][] = [
+  // European club football, and the continental cups that outrank domestic weekends.
+  ["World", "UEFA Champions League"],
   ["England", "Premier League"],
-  ["Ghana", "Premier League"],
   ["Spain", "La Liga"],
   ["Italy", "Serie A"],
   ["Germany", "Bundesliga"],
   ["France", "Ligue 1"],
-  ["World", "UEFA Champions League"],
   ["World", "UEFA Europa League"],
-  ["England", "Championship"],
-  ["Netherlands", "Eredivisie"],
+  ["World", "UEFA Europa Conference League"],
+  // National-team football displaces club football whenever it is on.
+  ["World", "World Cup"],
+  ["World", "Euro Championship"],
+  ["World", "UEFA Nations League"],
+  ["World", "World Cup - Qualification Europe"],
+  // The rest of the world's best-followed domestic leagues.
+  ["Brazil", "Serie A"],
+  ["Argentina", "Liga Profesional Argentina"],
   ["Portugal", "Primeira Liga"],
+  ["Netherlands", "Eredivisie"],
+  ["Mexico", "Liga MX"],
+  ["Turkey", "Süper Lig"],
+  ["Belgium", "Jupiler Pro League"],
+  ["Scotland", "Premiership"],
+  ["England", "Championship"],
+  ["USA", "Major League Soccer"],
+  ["Saudi-Arabia", "Pro League"],
+  ["Japan", "J1 League"],
+  ["South-Korea", "K League 1"],
+  // Continental competitions outside Europe.
+  ["World", "CONMEBOL Libertadores"],
+  ["World", "CONMEBOL Sudamericana"],
+  ["World", "AFC Champions League Elite"],
+  ["World", "CAF Champions League"],
+  ["World", "CONCACAF Champions League"],
+  // Africa's larger domestic leagues, in their own right rather than as a home market.
+  ["Egypt", "Premier League"],
+  ["South-Africa", "Premier Soccer League"],
+  ["Nigeria", "NPFL"],
+  ["Ghana", "Premier League"],
+  // Second tiers people still follow in numbers.
+  ["Italy", "Serie B"],
+  ["Spain", "Segunda División"],
+  ["Germany", "2. Bundesliga"],
 ];
 
 export type LeagueGroup = { league: MatchSummary["league"]; matches: MatchSummary[] };

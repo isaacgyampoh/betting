@@ -120,7 +120,7 @@ class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> {
                     favourites: favourites,
                     favouritesOnly: _favouritesOnly,
                     competitions: _competitions,
-                    onTapFixture: (f) => context.push('/home/match/${f.id}'),
+                    onTapFixture: (f) => context.push('/home/match/${f.id}?date=${matchDayOf(f)}'),
                     onToggleFavourite: (team) => ref.read(toggleFavouriteProvider)(team),
                   ),
                 ),

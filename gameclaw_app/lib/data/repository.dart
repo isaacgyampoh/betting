@@ -155,6 +155,9 @@ class ChatRepository {
         if (matchId != null) 'matchId': matchId,
         if (seenSlipIds.isNotEmpty) 'seenSlipIds': seenSlipIds,
       },
+      // Claw reads fixtures, prices and form before it answers, and the route is declared
+      // `maxDuration = 60` for that reason. Anything shorter here throws away finished work.
+      receiveTimeout: const Duration(seconds: 70),
     );
     return ChatResult.fromJson(json);
   }

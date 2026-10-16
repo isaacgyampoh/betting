@@ -40,8 +40,19 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
   );
 
+  /// Like [byId], but keeps the `?date=` hint the caller attached. It is only ever a hint: a
+  /// deep link that arrives without one still opens the match, just by the slower route.
+  GoRoute byIdWithDate(String prefix, Widget Function(MatchRef) build) => GoRoute(
+    path: '$prefix/:id',
+    builder: (context, state) {
+      final id = int.tryParse(state.pathParameters['id'] ?? '');
+      if (id == null) return const _BadRoute();
+      return build(MatchRef(id, state.uri.queryParameters['date']));
+    },
+  );
+
   List<RouteBase> footballRoutes() => [
-    byId('match', (id) => MatchScreen(fixtureId: id)),
+    byIdWithDate('match', (at) => MatchScreen(match: at)),
     byId('team', (id) => TeamScreen(teamId: id)),
     byId('competition', (id) => CompetitionScreen(competitionId: id)),
     GoRoute(path: 'competitions', builder: (_, __) => const CompetitionsScreen()),

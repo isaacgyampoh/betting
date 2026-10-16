@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/models.dart';
@@ -61,9 +62,33 @@ final matchDayProvider = FutureProvider.family<Cached<MatchDay>, String>(
   (ref, date) => ref.watch(repositoryProvider).matchDay(date),
 );
 
-final matchDetailProvider = FutureProvider.family<Cached<MatchDetail>, int>(
-  (ref, id) => ref.watch(repositoryProvider).matchDetail(id),
+/// Keyed by the fixture and the matchday it was opened from.
+///
+/// The date is not decoration. Without it the server has to ask the provider for this one
+/// fixture by id, which is a separate upstream call that can be refused on its own; with it the
+/// server finds the fixture in the day it already holds. A match opened from a day list that
+/// loaded a moment ago should never fail to open.
+final matchDetailProvider = FutureProvider.family<Cached<MatchDetail>, MatchRef>(
+  (ref, at) => ref.watch(repositoryProvider).matchDetail(at.id, dateHint: at.date),
 );
+
+/// A fixture plus the day it belongs to, as a value so Riverpod can key a family on it.
+@immutable
+class MatchRef {
+  const MatchRef(this.id, [this.date]);
+
+  /// Builds the reference from a fixture, using its own kick-off day as the hint.
+  factory MatchRef.of(Fixture fixture) => MatchRef(fixture.id, matchDayOf(fixture));
+
+  final int id;
+  final String? date;
+
+  @override
+  bool operator ==(Object other) => other is MatchRef && other.id == id && other.date == date;
+
+  @override
+  int get hashCode => Object.hash(id, date);
+}
 
 final teamProvider = FutureProvider.family<Cached<TeamPage>, int>(
   (ref, id) => ref.watch(repositoryProvider).team(id),

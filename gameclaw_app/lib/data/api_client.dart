@@ -82,6 +82,13 @@ class UnknownFailure extends ApiFailure {
 /// stale copy: the token is read at the moment of the request, after any refresh.
 typedef TokenReader = Future<String?> Function();
 
+/// How long an ordinary read may take to answer.
+///
+/// Short on purpose: these endpoints answer from cache or from one upstream call, and a screen
+/// that hangs for a minute on a dead connection is worse than one that says so. The Claw
+/// conversation is the documented exception and passes its own, longer budget per request.
+const Duration kGcReceiveTimeout = Duration(seconds: 20);
+
 class ApiClient {
   ApiClient({required ApiConfig config, TokenReader? token, Dio? dio})
     : _token = token,
@@ -91,7 +98,7 @@ class ApiClient {
             BaseOptions(
               baseUrl: config.baseUrl,
               connectTimeout: const Duration(seconds: 10),
-              receiveTimeout: const Duration(seconds: 20),
+              receiveTimeout: kGcReceiveTimeout,
               // Non-2xx is handled below rather than thrown as a transport error, so a refusal
               // the server explained keeps its explanation.
               validateStatus: (_) => true,
@@ -115,11 +122,39 @@ class ApiClient {
   final TokenReader? _token;
 
   /// A GET returning the `data` envelope every endpoint uses.
-  Future<T> get<T>(String path, {Map<String, dynamic>? query, CancelToken? cancel}) =>
-      _send<T>(() => _dio.get<dynamic>(path, queryParameters: query, cancelToken: cancel));
+  Future<T> get<T>(
+    String path, {
+    Map<String, dynamic>? query,
+    CancelToken? cancel,
+    Duration? receiveTimeout,
+  }) => _send<T>(
+    () => _dio.get<dynamic>(
+      path,
+      queryParameters: query,
+      cancelToken: cancel,
+      options: _withTimeout(receiveTimeout),
+    ),
+  );
 
-  Future<T> post<T>(String path, {Object? body, CancelToken? cancel}) =>
-      _send<T>(() => _dio.post<dynamic>(path, data: body, cancelToken: cancel));
+  Future<T> post<T>(String path, {Object? body, CancelToken? cancel, Duration? receiveTimeout}) =>
+      _send<T>(
+        () => _dio.post<dynamic>(
+          path,
+          data: body,
+          cancelToken: cancel,
+          options: _withTimeout(receiveTimeout),
+        ),
+      );
+
+  /// The default twenty seconds suits a football endpoint answering from cache. It is the wrong
+  /// budget for an endpoint that thinks: the server declares `maxDuration = 60` for the Claw
+  /// conversation, and a real reply measured 20.07 seconds against production - sixty-nine
+  /// milliseconds past the client's patience. The answer was complete and correct, and the app
+  /// threw it away and showed "that took too long". A per-request override is the fix; raising
+  /// the global timeout instead would make every ordinary screen hang for a minute on a dead
+  /// connection.
+  Options? _withTimeout(Duration? receiveTimeout) =>
+      receiveTimeout == null ? null : Options(receiveTimeout: receiveTimeout);
 
   /// DELETE with a body, which is unusual but is what unregistering a device takes: the token
   /// identifies the row and does not belong in a URL, where it would end up in access logs.

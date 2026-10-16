@@ -50,10 +50,14 @@ class GcEmpty extends StatelessWidget {
             Text(note, style: GcType.caption, textAlign: TextAlign.center),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: GcSpace.xl),
+              // Primary, not secondary. On an empty or failed screen this button is the only
+              // thing to do, and a secondary fill is a near-white rectangle on a white canvas -
+              // on the Pixel in daylight "Sign in", "Find matches" and "Try again" all read as
+              // disabled controls. A button that is the single way forward should look like it.
               GcButton(
                 label: actionLabel!,
                 onPressed: onAction,
-                kind: GcButtonKind.secondary,
+                kind: GcButtonKind.primary,
                 size: GcButtonSize.small,
                 expand: false,
               ),

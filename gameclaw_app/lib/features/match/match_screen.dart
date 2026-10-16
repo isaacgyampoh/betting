@@ -28,9 +28,10 @@ import '../../ui/components/gc_tabs.dart';
 /// Tabs appear only when there is something behind them. A Statistics tab that is always empty is
 /// worse than no tab: it promises data the provider does not give us, every single time.
 class MatchScreen extends ConsumerStatefulWidget {
-  const MatchScreen({super.key, required this.fixtureId});
+  const MatchScreen({super.key, required this.match});
 
-  final int fixtureId;
+  /// The fixture, plus the day it was opened from when the caller knew it.
+  final MatchRef match;
 
   @override
   ConsumerState<MatchScreen> createState() => _MatchScreenState();
@@ -41,7 +42,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final request = ref.watch(matchDetailProvider(widget.fixtureId));
+    final request = ref.watch(matchDetailProvider(widget.match));
     final favourites = ref.watch(favouriteIdsProvider).value ?? const <int>{};
 
     return Scaffold(
@@ -56,7 +57,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen> {
               Expanded(
                 child: GcError(
                   error: error,
-                  onRetry: () => ref.invalidate(matchDetailProvider(widget.fixtureId)),
+                  onRetry: () => ref.invalidate(matchDetailProvider(widget.match)),
                 ),
               ),
             ],
@@ -67,7 +68,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen> {
             onTab: (i) => setState(() => _tab = i),
             favourites: favourites,
             onToggleFavourite: (team) => ref.read(toggleFavouriteProvider)(team),
-            onRefresh: () => ref.refresh(matchDetailProvider(widget.fixtureId).future),
+            onRefresh: () => ref.refresh(matchDetailProvider(widget.match).future),
           ),
         ),
       ),

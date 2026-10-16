@@ -287,7 +287,7 @@ class _Fixtures extends StatelessWidget {
           const Divider(height: 1, indent: GcSpace.gutter, endIndent: GcSpace.gutter),
       itemBuilder: (context, i) => GcFixtureRow(
         fixture: fixtures[i],
-        onTap: () => context.push('/home/match/${fixtures[i].id}'),
+        onTap: () => context.push('/home/match/${fixtures[i].id}?date=${matchDayOf(fixtures[i])}'),
       ),
     );
   }
