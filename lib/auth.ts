@@ -60,11 +60,28 @@ export async function requireUser(authorization?: string | null): Promise<AuthUs
  * to this function.
  */
 export const getProfile = cache(async (user: AuthUser) => {
-  const [row] = await db.$queryRaw<ProfileRow[]>`
-    insert into profiles (id, email) values (${user.id}::uuid, ${user.email})
-    on conflict (id) do update set id = profiles.id
-    returning *
-  `;
+  let row: ProfileRow | undefined;
+  try {
+    [row] = await db.$queryRaw<ProfileRow[]>`
+      insert into profiles (id, email) values (${user.id}::uuid, ${user.email})
+      on conflict (id) do update set id = profiles.id
+      returning *
+    `;
+  } catch (err) {
+    // 23503 is a foreign key violation, and profiles.id references auth.users.id. The only way to
+    // get here is a token for a user who no longer exists: the signature is still valid and the
+    // expiry has not passed, but the account behind it was deleted. That is an unauthorised
+    // request, not a server fault, and answering 500 makes the app retry it four times and show
+    // "something went wrong" to someone whose real problem is that they need to sign in again.
+    // Found with a token held by a phone across an account deletion.
+    if (typeof err === "object" && err !== null && (err as { code?: string }).code === "P2003") {
+      throw new AppError("UNAUTHORIZED", "Please sign in again.", { cause: err });
+    }
+    if (err instanceof Error && /23503/.test(err.message)) {
+      throw new AppError("UNAUTHORIZED", "Please sign in again.", { cause: err });
+    }
+    throw err;
+  }
   return fromRow(row);
 });
 

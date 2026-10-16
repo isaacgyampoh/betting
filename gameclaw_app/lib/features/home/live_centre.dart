@@ -7,9 +7,12 @@ import '../../data/providers.dart';
 import '../../data/repository.dart';
 import '../../domain/models.dart';
 import '../../theme/tokens.dart';
+import '../../ui/components/gc_button.dart';
+import '../../ui/components/gc_crest.dart';
 import '../../ui/components/gc_chip.dart';
 import '../../ui/components/gc_fixture_row.dart';
 import '../../ui/components/gc_skeleton.dart';
+import '../../ui/components/gc_sheet.dart';
 import '../../ui/components/gc_states.dart';
 import '../../ui/components/gc_tabs.dart';
 
@@ -52,6 +55,11 @@ class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> {
   LiveFilter _filter = LiveFilter.live;
   bool _favouritesOnly = false;
 
+  /// Competition ids the user has narrowed to. Empty means every competition, which is the
+  /// default and the common case - a filter that starts with something excluded hides football
+  /// the user never asked to hide.
+  Set<int> _competitions = {};
+
   /// The filter the user last chose explicitly. Until they do, the screen picks the one with
   /// something in it - opening on an empty Live tab at 3am is a worse default than opening on
   /// whatever is actually on.
@@ -76,6 +84,9 @@ class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> {
               onSelectDay: (day) => setState(() {
                 _day = day;
                 _filterChosen = false;
+                // A competition chosen for one day may not play on another; keeping the filter
+                // across days is how a screen ends up empty for no visible reason.
+                _competitions = {};
               }),
               filter: _filter,
               onFilter: (f) => setState(() {
@@ -85,6 +96,8 @@ class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> {
               favouritesOnly: _favouritesOnly,
               favouriteCount: favourites.length,
               onFavouritesOnly: () => setState(() => _favouritesOnly = !_favouritesOnly),
+              competitionCount: _competitions.length,
+              onCompetitions: () => _pickCompetitions(request.value?.value),
             ),
             Expanded(
               child: RefreshIndicator(
@@ -105,6 +118,7 @@ class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> {
                     filter: _resolve(cached.value),
                     favourites: favourites,
                     favouritesOnly: _favouritesOnly,
+                    competitions: _competitions,
                     onTapFixture: (f) => context.push('/home/match/${f.id}'),
                     onToggleFavourite: (team) => ref.read(toggleFavouriteProvider)(team),
                   ),
@@ -115,6 +129,21 @@ class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> {
         ),
       ),
     );
+  }
+
+  /// Narrows to chosen competitions, from whichever ones this day actually has.
+  ///
+  /// The list is built from the loaded day rather than from a fixed catalogue: offering a
+  /// competition that has no match today is offering an empty screen.
+  Future<void> _pickCompetitions(MatchDay? day) async {
+    if (day == null) return;
+    final chosen = await showGcSheet<Set<int>>(
+      context: context,
+      title: 'Competitions',
+      subtitle: 'Showing ${day.groups.length} with matches on this day',
+      child: _CompetitionPicker(day: day, selected: _competitions),
+    );
+    if (chosen != null && mounted) setState(() => _competitions = chosen);
   }
 
   /// Falls back to the first filter with something in it, until the user picks one themselves.
@@ -147,6 +176,8 @@ class _Header extends StatelessWidget {
     required this.favouritesOnly,
     required this.favouriteCount,
     required this.onFavouritesOnly,
+    required this.competitionCount,
+    required this.onCompetitions,
   });
 
   final List<DateTime> days;
@@ -158,6 +189,8 @@ class _Header extends StatelessWidget {
   final bool favouritesOnly;
   final int favouriteCount;
   final VoidCallback onFavouritesOnly;
+  final int competitionCount;
+  final VoidCallback onCompetitions;
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +217,7 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
-              if (favouriteCount > 0)
+              if (favouriteCount > 0) ...[
                 GcFilterChip(
                   label: 'Following',
                   icon: Icons.star_rounded,
@@ -192,6 +225,15 @@ class _Header extends StatelessWidget {
                   onTap: onFavouritesOnly,
                   count: favouriteCount,
                 ),
+                const SizedBox(width: GcSpace.sm),
+              ],
+              GcFilterChip(
+                label: 'Leagues',
+                icon: Icons.tune_rounded,
+                selected: competitionCount > 0,
+                onTap: onCompetitions,
+                count: competitionCount > 0 ? competitionCount : null,
+              ),
             ],
           ),
         ),
@@ -242,6 +284,7 @@ class _Body extends StatelessWidget {
     required this.filter,
     required this.favourites,
     required this.favouritesOnly,
+    required this.competitions,
     required this.onTapFixture,
     required this.onToggleFavourite,
   });
@@ -250,6 +293,7 @@ class _Body extends StatelessWidget {
   final LiveFilter filter;
   final Set<int> favourites;
   final bool favouritesOnly;
+  final Set<int> competitions;
   final ValueChanged<Fixture> onTapFixture;
   final ValueChanged<Team> onToggleFavourite;
 
@@ -281,7 +325,8 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     final groups = [
       for (final group in cached.value.groups)
-        if (group.fixtures.any(_kept))
+        if ((competitions.isEmpty || competitions.contains(group.competition.id)) &&
+            group.fixtures.any(_kept))
           LeagueGroup(
             competition: group.competition,
             fixtures: [
@@ -297,14 +342,18 @@ class _Body extends StatelessWidget {
           const SizedBox(height: GcSpace.xxl),
           GcEmpty(
             icon: favouritesOnly ? Icons.star_outline_rounded : Icons.sports_soccer_outlined,
-            title: favouritesOnly
+            title: competitions.isNotEmpty
+                ? 'Nothing in those leagues'
+                : favouritesOnly
                 ? 'None of your teams here'
                 : switch (filter) {
                     LiveFilter.live => 'Nothing live right now',
                     LiveFilter.upcoming => 'No matches left today',
                     LiveFilter.results => 'No results yet',
                   },
-            note: favouritesOnly
+            note: competitions.isNotEmpty
+                ? 'No match in the leagues you picked is in this list. Clear the Leagues filter to see everything.'
+                : favouritesOnly
                 ? 'No followed team has a match in this list. Turn off Following to see everything.'
                 : switch (filter) {
                     LiveFilter.live => 'No match on this day is in play. Try Upcoming or Results.',
@@ -363,6 +412,110 @@ class _Body extends StatelessWidget {
               style: GcType.caption.copyWith(color: GcColors.inkFaint),
               textAlign: TextAlign.center,
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Pick which competitions to show, from the ones this day actually has.
+///
+/// Selection is applied on Done rather than live, so a user who taps four leagues does not watch
+/// the list behind them rebuild four times.
+class _CompetitionPicker extends StatefulWidget {
+  const _CompetitionPicker({required this.day, required this.selected});
+
+  final MatchDay day;
+  final Set<int> selected;
+
+  @override
+  State<_CompetitionPicker> createState() => _CompetitionPickerState();
+}
+
+class _CompetitionPickerState extends State<_CompetitionPicker> {
+  late final Set<int> _chosen = {...widget.selected};
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: ListView.builder(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: GcSpace.sm),
+            itemCount: widget.day.groups.length,
+            itemBuilder: (context, i) {
+              final group = widget.day.groups[i];
+              final on = _chosen.contains(group.competition.id);
+              return InkWell(
+                onTap: () => setState(() {
+                  on ? _chosen.remove(group.competition.id) : _chosen.add(group.competition.id);
+                }),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: GcSpace.gutter,
+                    vertical: GcSpace.md,
+                  ),
+                  child: Row(
+                    children: [
+                      GcCrest(
+                        url: group.competition.logoUrl,
+                        name: group.competition.name,
+                        size: GcSize.crestMd,
+                      ),
+                      const SizedBox(width: GcSpace.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              group.competition.name,
+                              style: GcType.bodyStrong.copyWith(fontSize: 14.5),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '${group.competition.country} · ${group.fixtures.length} '
+                              '${group.fixtures.length == 1 ? 'match' : 'matches'}',
+                              style: GcType.caption.copyWith(fontSize: 11.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        on ? Icons.check_circle_rounded : Icons.circle_outlined,
+                        size: 20,
+                        color: on ? GcColors.accent : GcColors.inkFaint,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(GcSpace.md),
+          child: Row(
+            children: [
+              Expanded(
+                child: GcButton(
+                  label: 'All leagues',
+                  kind: GcButtonKind.secondary,
+                  onPressed: _chosen.isEmpty ? null : () => Navigator.of(context).pop(<int>{}),
+                ),
+              ),
+              const SizedBox(width: GcSpace.sm),
+              Expanded(
+                child: GcButton(
+                  label: _chosen.isEmpty ? 'Done' : 'Show ${_chosen.length}',
+                  onPressed: () => Navigator.of(context).pop(_chosen),
+                ),
+              ),
+            ],
           ),
         ),
       ],
