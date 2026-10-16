@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/providers.dart';
@@ -306,18 +307,23 @@ class _Side extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        GcCrest(url: team.logoUrl, name: team.name, size: GcSize.crestLg),
-        const SizedBox(height: GcSpace.md),
-        Text(
-          team.name,
-          style: GcType.heading,
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
+    return InkWell(
+      // The crest is the obvious thing to tap to find out about a side, so it is.
+      onTap: () => context.push('/home/team/${team.id}'),
+      borderRadius: BorderRadius.circular(GcRadius.md),
+      child: Column(
+        children: [
+          GcCrest(url: team.logoUrl, name: team.name, size: GcSize.crestLg),
+          const SizedBox(height: GcSpace.md),
+          Text(
+            team.name,
+            style: GcType.heading,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 }

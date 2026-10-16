@@ -58,6 +58,35 @@ class FootballRepository {
         list.map((p) => DailyPick.fromJson(p as Map<String, dynamic>)).toList(growable: false),
   );
 
+  /// Everything a team page shows, in one request: profile, recent results, upcoming fixtures,
+  /// form and squad. One round trip rather than five, because on a slow connection the difference
+  /// is the page arriving at once or in pieces.
+  Future<Cached<TeamPage>> team(int id) => _read(
+    key: 'team:$id',
+    fetch: () => _api.get<Map<String, dynamic>>('/teams/$id'),
+    parse: TeamPage.fromJson,
+  );
+
+  Future<Cached<CompetitionPage>> competition(int id) => _read(
+    key: 'competition:$id',
+    fetch: () => _api.get<Map<String, dynamic>>('/competitions/$id'),
+    parse: CompetitionPage.fromJson,
+  );
+
+  /// The competition catalogue, filtered on the server. About 1,250 competitions across 171
+  /// countries exist, so the filtering has to happen where the whole list is.
+  Future<Cached<CompetitionDirectory>> competitions({String? country, String? search}) => _read(
+    key: 'competitions:${country ?? ''}:${search ?? ''}',
+    fetch: () => _api.get<Map<String, dynamic>>(
+      '/competitions',
+      query: {
+        if (country != null) 'country': country,
+        if (search != null && search.isNotEmpty) 'search': search,
+      },
+    ),
+    parse: CompetitionDirectory.fromJson,
+  );
+
   Future<Cached<TrackRecord>> trackRecord() => _read(
     key: 'picks:record',
     fetch: () => _api.get<Map<String, dynamic>>('/picks/track-record'),

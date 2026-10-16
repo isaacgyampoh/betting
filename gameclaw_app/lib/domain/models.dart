@@ -395,6 +395,217 @@ class StandingRow {
   );
 }
 
+/// A club or national side, beyond the id and crest a fixture carries.
+class TeamProfile {
+  const TeamProfile({
+    required this.id,
+    required this.name,
+    this.logoUrl,
+    this.code,
+    this.country,
+    this.founded,
+    this.national = false,
+    this.venueName,
+    this.venueCity,
+    this.venueCapacity,
+  });
+
+  final int id;
+  final String name;
+  final String? logoUrl;
+
+  /// Three-letter code, when the provider has one.
+  final String? code;
+  final String? country;
+  final int? founded;
+
+  /// A national side has no club squad and no league table in the usual sense.
+  final bool national;
+  final String? venueName;
+  final String? venueCity;
+  final int? venueCapacity;
+
+  Team get asTeam => Team(id: id, name: name, logoUrl: logoUrl);
+
+  factory TeamProfile.fromJson(Map<String, dynamic> json) {
+    final venue = json['venue'] as Map<String, dynamic>?;
+    return TeamProfile(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? '',
+      logoUrl: json['logo'] as String?,
+      code: json['code'] as String?,
+      country: json['country'] as String?,
+      founded: (json['founded'] as num?)?.toInt(),
+      national: json['national'] == true,
+      venueName: venue?['name'] as String?,
+      venueCity: venue?['city'] as String?,
+      venueCapacity: (venue?['capacity'] as num?)?.toInt(),
+    );
+  }
+}
+
+class SquadPlayer {
+  const SquadPlayer({required this.name, this.number, this.position, this.age, this.photoUrl});
+
+  final String name;
+  final int? number;
+
+  /// The provider's own wording: Goalkeeper, Defender, Midfielder, Attacker.
+  final String? position;
+  final int? age;
+  final String? photoUrl;
+
+  factory SquadPlayer.fromJson(Map<String, dynamic> json) => SquadPlayer(
+    name: json['name'] as String? ?? '',
+    number: (json['number'] as num?)?.toInt(),
+    position: json['position'] as String?,
+    age: (json['age'] as num?)?.toInt(),
+    photoUrl: json['photo'] as String?,
+  );
+}
+
+/// Everything a team page shows, in one response.
+class TeamPage {
+  const TeamPage({
+    required this.team,
+    required this.recent,
+    required this.upcoming,
+    required this.form,
+    required this.squad,
+    required this.unavailable,
+  });
+
+  final TeamProfile team;
+
+  /// Most recent first.
+  final List<Fixture> recent;
+  final List<Fixture> upcoming;
+  final TeamForm? form;
+
+  /// Empty for a national side between tournaments, and for competitions the provider carries no
+  /// squad for. Absent, not a team with no players.
+  final List<SquadPlayer> squad;
+
+  /// Sections the provider had nothing for, so the page says which rather than showing a blank.
+  final List<String> unavailable;
+
+  factory TeamPage.fromJson(Map<String, dynamic> json) => TeamPage(
+    team: TeamProfile.fromJson(json['team'] as Map<String, dynamic>? ?? const {}),
+    recent: (json['recent'] as List<dynamic>? ?? const [])
+        .map((f) => Fixture.fromJson(f as Map<String, dynamic>))
+        .toList(growable: false),
+    upcoming: (json['upcoming'] as List<dynamic>? ?? const [])
+        .map((f) => Fixture.fromJson(f as Map<String, dynamic>))
+        .toList(growable: false),
+    form: json['form'] == null ? null : TeamForm.fromJson(json['form'] as Map<String, dynamic>),
+    squad: (json['squad'] as List<dynamic>? ?? const [])
+        .map((p) => SquadPlayer.fromJson(p as Map<String, dynamic>))
+        .toList(growable: false),
+    unavailable: (json['unavailable'] as List<dynamic>? ?? const []).cast<String>(),
+  );
+}
+
+/// A competition in the catalogue, with what its current season actually carries.
+class CompetitionSummary {
+  const CompetitionSummary({
+    required this.id,
+    required this.name,
+    required this.country,
+    required this.type,
+    this.logoUrl,
+    this.flagUrl,
+    this.season,
+    this.coverage,
+  });
+
+  final int id;
+  final String name;
+  final String country;
+
+  /// "League" or "Cup". A cup has no table, which is why a competition page must know.
+  final String type;
+  final String? logoUrl;
+  final String? flagUrl;
+  final int? season;
+  final Coverage? coverage;
+
+  bool get isCup => type.toLowerCase() == 'cup';
+
+  factory CompetitionSummary.fromJson(Map<String, dynamic> json) => CompetitionSummary(
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    name: json['name'] as String? ?? '',
+    country: json['country'] as String? ?? '',
+    type: json['type'] as String? ?? 'League',
+    logoUrl: json['logo'] as String?,
+    flagUrl: json['flag'] as String?,
+    season: (json['season'] as num?)?.toInt(),
+    coverage: json['coverage'] == null
+        ? null
+        : Coverage.fromJson(json['coverage'] as Map<String, dynamic>),
+  );
+}
+
+class CompetitionCountry {
+  const CompetitionCountry({required this.name, required this.competitions, this.flagUrl});
+
+  final String name;
+  final int competitions;
+  final String? flagUrl;
+
+  factory CompetitionCountry.fromJson(Map<String, dynamic> json) => CompetitionCountry(
+    name: json['name'] as String? ?? '',
+    competitions: (json['competitions'] as num?)?.toInt() ?? 0,
+    flagUrl: json['flag'] as String?,
+  );
+}
+
+/// A page of the competition catalogue, with every country alongside it.
+class CompetitionDirectory {
+  const CompetitionDirectory({
+    required this.countries,
+    required this.competitions,
+    required this.total,
+  });
+
+  final List<CompetitionCountry> countries;
+  final List<CompetitionSummary> competitions;
+
+  /// How many matched before paging, so a trimmed list can say so.
+  final int total;
+
+  factory CompetitionDirectory.fromJson(Map<String, dynamic> json) => CompetitionDirectory(
+    countries: (json['countries'] as List<dynamic>? ?? const [])
+        .map((c) => CompetitionCountry.fromJson(c as Map<String, dynamic>))
+        .toList(growable: false),
+    competitions: (json['competitions'] as List<dynamic>? ?? const [])
+        .map((c) => CompetitionSummary.fromJson(c as Map<String, dynamic>))
+        .toList(growable: false),
+    total: (json['total'] as num?)?.toInt() ?? 0,
+  );
+}
+
+/// A competition's own page: what it is, and its table when it has one.
+class CompetitionPage {
+  const CompetitionPage({required this.competition, required this.standings});
+
+  final CompetitionSummary competition;
+
+  /// Null for a cup, for a season that has not started, and for a competition whose coverage says
+  /// it has no table - three different reasons the page tells apart.
+  final List<StandingRow>? standings;
+
+  factory CompetitionPage.fromJson(Map<String, dynamic> json) => CompetitionPage(
+    competition: CompetitionSummary.fromJson(
+      json['competition'] as Map<String, dynamic>? ?? const {},
+    ),
+    standings: json['standings'] == null
+        ? null
+        : (json['standings'] as List<dynamic>)
+              .map((r) => StandingRow.fromJson(r as Map<String, dynamic>))
+              .toList(growable: false),
+  );
+}
+
 /// One side's team statistics, as the provider reported them.
 ///
 /// Every field is nullable and every null means "not reported", never zero. A competition that

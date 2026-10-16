@@ -5,12 +5,15 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/age_gate_screen.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/claw/claw_screen.dart';
+import '../features/competition/competition_screen.dart';
+import '../features/competition/competitions_screen.dart';
 import '../features/convert/convert_screen.dart';
 import '../features/record/record_screen.dart';
 import '../features/favourites/favourites_screen.dart';
 import '../features/home/live_centre.dart';
 import '../features/match/match_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/team/team_screen.dart';
 import '../theme/tokens.dart';
 import 'shell.dart';
 
@@ -25,15 +28,23 @@ import 'shell.dart';
 final _rootKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
-  // A relative path: as a child of /home it resolves to /home/match/42.
-  GoRoute matchRoute() => GoRoute(
-    path: 'match/:id',
+  // Relative paths: as children of /home these resolve to /home/match/42 and so on, which keeps
+  // each screen inside the tab it was opened from. A match opened from Following belongs to
+  // Following's stack, and backing out of it lands there.
+  GoRoute byId(String prefix, Widget Function(int) build) => GoRoute(
+    path: '$prefix/:id',
     builder: (context, state) {
       final id = int.tryParse(state.pathParameters['id'] ?? '');
-      if (id == null) return const _BadRoute();
-      return MatchScreen(fixtureId: id);
+      return id == null ? const _BadRoute() : build(id);
     },
   );
+
+  List<RouteBase> footballRoutes() => [
+    byId('match', (id) => MatchScreen(fixtureId: id)),
+    byId('team', (id) => TeamScreen(teamId: id)),
+    byId('competition', (id) => CompetitionScreen(competitionId: id)),
+    GoRoute(path: 'competitions', builder: (_, __) => const CompetitionsScreen()),
+  ];
 
   return GoRouter(
     navigatorKey: _rootKey,
@@ -59,7 +70,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/home',
                 builder: (_, __) => const LiveCentreScreen(),
-                routes: [matchRoute()],
+                routes: footballRoutes(),
               ),
             ],
           ),
@@ -68,7 +79,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/following',
                 builder: (_, __) => const FavouritesScreen(),
-                routes: [matchRoute()],
+                routes: footballRoutes(),
               ),
             ],
           ),

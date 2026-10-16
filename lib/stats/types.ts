@@ -158,6 +158,43 @@ export type Lineup = {
   substitutes: LineupPlayer[];
 };
 
+/** A club or national side, beyond the id and crest a fixture carries. */
+export type TeamProfile = {
+  id: number;
+  name: string;
+  logo: string | null;
+  /** Three-letter code, when the provider has one. */
+  code: string | null;
+  country: string | null;
+  founded: number | null;
+  /** True for a national team, which has no league table or squad in the club sense. */
+  national: boolean;
+  venue: { name: string | null; city: string | null; capacity: number | null } | null;
+};
+
+export type SquadPlayer = {
+  id: number | null;
+  name: string;
+  number: number | null;
+  /** Goalkeeper, Defender, Midfielder, Attacker - the provider's own wording. */
+  position: string | null;
+  age: number | null;
+  photo: string | null;
+};
+
+/** A competition in the catalogue, with what its current season actually carries. */
+export type CompetitionSummary = {
+  id: number;
+  name: string;
+  country: string;
+  logo: string | null;
+  flag: string | null;
+  /** "League" or "Cup". A cup has no table, which is why a competition page must know. */
+  type: string;
+  season: number | null;
+  coverage: LeagueCoverage | null;
+};
+
 export interface StatsProvider {
   readonly source: StatsSource;
   fixturesByDate(date: string): Promise<MatchSummary[]>; // YYYY-MM-DD (UTC)
@@ -173,4 +210,12 @@ export interface StatsProvider {
   statistics(fixtureId: number, homeTeamId: number): Promise<TeamStatistics[]>;
   /** Line-ups, home side first. Empty when the competition does not carry them. */
   lineups(fixtureId: number, homeTeamId: number): Promise<Lineup[]>;
+  /** A team's own details. Null when the provider does not know the id. */
+  team(teamId: number): Promise<TeamProfile | null>;
+  /** A team's next fixtures, soonest first. */
+  upcomingFixtures(teamId: number, count: number): Promise<MatchSummary[]>;
+  /** A team's current squad. Empty for a competition or side the provider does not carry one for. */
+  squad(teamId: number): Promise<SquadPlayer[]>;
+  /** Every competition the provider's plan exposes, with each one's coverage. */
+  competitions(): Promise<CompetitionSummary[]>;
 }

@@ -5,6 +5,7 @@ import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import type {
+  CompetitionSummary,
   Lineup,
   LineupPlayer,
   MatchEvent,
@@ -159,6 +160,15 @@ function homeFirst<T extends { team: { id: number } }>(rows: T[], homeTeamId: nu
   return [...rows].sort((a, b) => (a.team.id === homeTeamId ? -1 : b.team.id === homeTeamId ? 1 : 0));
 }
 
+type ApiTeamProfile = {
+  team: { id: number; name: string; logo: string | null; code: string | null; country: string | null; founded: number | null; national: boolean };
+  venue: { name: string | null; city: string | null; capacity: number | null } | null;
+};
+
+type ApiSquad = {
+  players: { id: number | null; name: string; number: number | null; position: string | null; age: number | null; photo: string | null }[] | null;
+};
+
 const STATUS: Record<string, MatchStatus> = {
   TBD: "SCHEDULED", NS: "SCHEDULED",
   "1H": "LIVE", HT: "LIVE", "2H": "LIVE", ET: "LIVE", BT: "LIVE", P: "LIVE", SUSP: "LIVE", INT: "LIVE", LIVE: "LIVE",
@@ -190,6 +200,10 @@ type ApiEvent = {
 };
 
 type ApiLeague = {
+  // Only `seasons` was needed while this type served coverage() alone; the catalogue needs the
+  // rest of what /leagues returns.
+  league?: { id: number; name: string; type?: string; logo?: string | null };
+  country?: { name?: string; flag?: string | null };
   seasons?: {
     year: number;
     current: boolean;
@@ -377,7 +391,19 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
     }
 
     const payload = (body.response ?? []) as T[];
-    await writeCache(key, endpoint, params, payload as unknown as Prisma.InputJsonValue, new Date(Date.now() + ttlMs));
+
+    // Best effort. The data is already in hand, and failing the request because it could not be
+    // cached would throw away a good answer to save a later one - exactly backwards.
+    //
+    // This is not hypothetical: the competition catalogue is one response carrying about 1,250
+    // leagues, and the first uncached call for it returned a 500 from production while every
+    // later call succeeded. A write that large can be refused where a small one is not, and the
+    // caller should never see the difference.
+    try {
+      await writeCache(key, endpoint, params, payload as unknown as Prisma.InputJsonValue, new Date(Date.now() + ttlMs));
+    } catch (err) {
+      logger.warn("stats.cache_write_failed", { endpoint, key, size: JSON.stringify(payload).length, err });
+    }
     return payload;
   }
 
@@ -435,6 +461,79 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
     async lineups(fixtureId, homeTeamId) {
       const rows = await call<ApiLineup>("/fixtures/lineups", { fixture: fixtureId }, 10 * MIN, "fixtures-lineups");
       return homeFirst(rows.map(toLineup), homeTeamId);
+    },
+    /** A team's own details. Clubs are renamed and rebuilt rarely, so this is cached for a day. */
+    async team(teamId) {
+      const rows = await call<ApiTeamProfile>("/teams", { id: teamId }, 24 * HOUR);
+      const row = rows[0];
+      if (!row) return null;
+      return {
+        id: row.team.id,
+        name: row.team.name,
+        logo: row.team.logo,
+        code: row.team.code,
+        country: row.team.country,
+        founded: row.team.founded,
+        national: row.team.national === true,
+        venue: row.venue?.name ? row.venue : null,
+      };
+    },
+    /**
+     * The next fixtures. Cached for an hour: a fixture list changes when a match is moved, which
+     * is news on the day and irrelevant the rest of the time.
+     */
+    async upcomingFixtures(teamId, count) {
+      const rows = await call<ApiFixture>("/fixtures", { team: teamId, next: count }, HOUR, "fixtures-next");
+      return rows.map(toMatchSummary).sort((a, b) => a.kickoffAt.localeCompare(b.kickoffAt));
+    },
+    /**
+     * The squad. Empty for national sides between tournaments and for competitions the provider
+     * does not carry one for - absent, not a team with no players.
+     */
+    async squad(teamId) {
+      const rows = await call<ApiSquad>("/players/squads", { team: teamId }, 24 * HOUR);
+      return (rows[0]?.players ?? []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        number: p.number,
+        position: p.position,
+        age: p.age,
+        photo: p.photo,
+      }));
+    },
+    /**
+     * The whole catalogue. One call returns every competition the plan exposes - 1,249 of them
+     * across 171 countries when this was written - so it is cached for a day and filtered in the
+     * service rather than re-fetched per country.
+     */
+    async competitions() {
+      const rows = await call<ApiLeague>("/leagues", {}, 24 * HOUR, "leagues-all");
+      // A row without a league object is not a competition. Dropped rather than rendered as one
+      // with an empty name.
+      return rows.flatMap((row): CompetitionSummary[] => {
+        const league = row.league;
+        if (!league) return [];
+        const season = row.seasons?.find((s) => s.current) ?? row.seasons?.at(-1);
+        const f = season?.coverage?.fixtures ?? {};
+        return [{
+          id: league.id,
+          name: league.name,
+          country: row.country?.name ?? "",
+          logo: league.logo ?? null,
+          flag: row.country?.flag ?? null,
+          type: league.type ?? "League",
+          season: season?.year ?? null,
+          coverage: season
+            ? {
+                events: !!f.events,
+                lineups: !!f.lineups,
+                statistics: !!f.statistics_fixtures,
+                playerStats: !!f.statistics_players,
+                standings: !!season.coverage?.standings,
+              }
+            : null,
+        }];
+      });
     },
     async coverage(leagueId, season) {
       const rows = await call<ApiLeague>("/leagues", { id: leagueId }, 24 * HOUR);

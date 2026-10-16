@@ -234,6 +234,13 @@ class _Header extends StatelessWidget {
                 onTap: onCompetitions,
                 count: competitionCount > 0 ? competitionCount : null,
               ),
+              const SizedBox(width: GcSpace.sm),
+              GcFilterChip(
+                label: 'Browse',
+                icon: Icons.public_rounded,
+                selected: false,
+                onTap: () => context.push('/home/competitions'),
+              ),
             ],
           ),
         ),

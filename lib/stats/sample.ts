@@ -130,6 +130,46 @@ export const sampleStatsProvider: StatsProvider = {
   async coverage() {
     return { events: true, lineups: true, statistics: true, playerStats: true, standings: true };
   },
+  async team(teamId: number) {
+    const found = Object.values(LEAGUES).flatMap((l) => leagueTeams(l.id)).find((t) => t.id === teamId);
+    if (!found) return null;
+    return {
+      id: found.id,
+      name: found.name,
+      logo: found.logo,
+      code: found.name.slice(0, 3).toUpperCase(),
+      country: "Sample",
+      founded: 1900,
+      national: false,
+      venue: { name: `${found.name} Stadium`, city: "Sample City", capacity: 30000 },
+    };
+  },
+  async upcomingFixtures(teamId: number, count: number) {
+    const league = Object.values(LEAGUES)[0];
+    const teams = leagueTeams(league.id);
+    const self = teams.find((t) => t.id === teamId) ?? teams[0];
+    const others = teams.filter((t) => t.id !== self.id);
+    return Array.from({ length: count }, (_, i) =>
+      pastMatch(self, others[i % others.length], -7 * (i + 1), league, `${self.id}:next:${i}`),
+    );
+  },
+  // Deliberately empty: the live provider returns no squad for plenty of sides, and anything
+  // downstream has to treat that as absent rather than as a team with no players.
+  async squad() {
+    return [];
+  },
+  async competitions() {
+    return Object.values(LEAGUES).map((l) => ({
+      id: l.id,
+      name: l.name,
+      country: l.country,
+      logo: null,
+      flag: null,
+      type: "League",
+      season: 2026,
+      coverage: { events: true, lineups: true, statistics: true, playerStats: true, standings: true },
+    }));
+  },
   // One fixed set, so tests are deterministic. Deliberately includes a null: the live provider
   // sends explicit nulls for counts it does not have, and anything downstream that turns those
   // into zeros is claiming something did not happen when it is simply unknown.

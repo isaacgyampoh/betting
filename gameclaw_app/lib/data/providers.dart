@@ -63,6 +63,22 @@ final matchDetailProvider = FutureProvider.family<Cached<MatchDetail>, int>(
   (ref, id) => ref.watch(repositoryProvider).matchDetail(id),
 );
 
+final teamProvider = FutureProvider.family<Cached<TeamPage>, int>(
+  (ref, id) => ref.watch(repositoryProvider).team(id),
+);
+
+final competitionProvider = FutureProvider.family<Cached<CompetitionPage>, int>(
+  (ref, id) => ref.watch(repositoryProvider).competition(id),
+);
+
+/// The catalogue, keyed by the filter applied to it. A record rather than two providers, so a
+/// country and a search term cannot get out of step.
+typedef CompetitionQuery = ({String? country, String? search});
+
+final competitionsProvider = FutureProvider.family<Cached<CompetitionDirectory>, CompetitionQuery>(
+  (ref, q) => ref.watch(repositoryProvider).competitions(country: q.country, search: q.search),
+);
+
 final todaysPicksProvider = FutureProvider<Cached<List<DailyPick>>>(
   (ref) => ref.watch(repositoryProvider).todaysPicks(),
 );
