@@ -48,6 +48,38 @@ void main() {
       });
     }
 
+    // Panels must be visible against the canvas. The thresholds differ by appearance on purpose,
+    // and the numbers come from measuring, not taste.
+    //
+    // The light palette originally sat at 1.081 and on the device every panel, input and
+    // secondary button vanished into the background. The dark palette is 1.065 - LOWER - and
+    // reads perfectly well, because a step between near-blacks is far easier to see than the
+    // same ratio between near-whites. So a single threshold across both would either pass the
+    // broken light palette or fail the working dark one.
+    test('light: a panel is clearly distinguishable from the canvas', () {
+      const p = GcPalette.light;
+      expect(
+        contrast(p.surface, p.canvas),
+        greaterThan(1.10),
+        reason: 'the broken light palette measured 1.081 here',
+      );
+      expect(contrast(p.surfaceRaised, p.surface), greaterThan(1.08));
+    });
+
+    test('dark: a panel is distinguishable from the canvas', () {
+      const p = GcPalette.dark;
+      expect(contrast(p.surface, p.canvas), greaterThan(1.05));
+      expect(contrast(p.surfaceRaised, p.surface), greaterThan(1.05));
+    });
+
+    for (final (name, p) in [('dark', GcPalette.dark), ('light', GcPalette.light)]) {
+      test('$name: a strong border reads against a raised surface', () {
+        // A secondary button is a raised fill with this border. In light mode a hairline on
+        // near-white is invisible, which is why secondary uses borderStrong.
+        expect(contrast(p.borderStrong, p.surfaceRaised), greaterThan(1.15));
+      });
+    }
+
     test('the light palette is genuinely light and the dark one genuinely dark', () {
       expect(GcPalette.light.canvas.computeLuminance(), greaterThan(0.8));
       expect(GcPalette.dark.canvas.computeLuminance(), lessThan(0.05));

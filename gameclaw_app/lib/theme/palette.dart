@@ -90,16 +90,18 @@ class GcPalette extends ThemeExtension<GcPalette> {
 
   /// Light.
   ///
-  /// Off-white rather than pure white: a dense list of hairlines on #FFFFFF glares, and the
-  /// panels need somewhere to sit. The outcome colours are darkened because the dark-theme greens
-  /// and reds are far too pale to read on a light background.
+  /// The canvas is pure white so the surfaces have somewhere to go. The first attempt used an
+  /// off-white canvas with barely-grey panels, and on the device every panel, input and secondary
+  /// button vanished into the background - about a 3% difference, which reads as nothing. Dark
+  /// mode is forgiving here because a lifted surface glows; light mode is not, because a lifted
+  /// surface has to get darker and there is far less room.
   static const light = GcPalette(
-    canvas: Color(0xFFFBFBFC),
-    surface: Color(0xFFF2F2F4),
-    surfaceRaised: Color(0xFFE9E9ED),
+    canvas: Color(0xFFFFFFFF),
+    surface: Color(0xFFF1F1F5),
+    surfaceRaised: Color(0xFFE4E4EB),
     surfaceOverlay: Color(0xFFFFFFFF),
-    border: Color(0xFFE2E2E8),
-    borderStrong: Color(0xFFC9C9D2),
+    border: Color(0xFFDCDCE4),
+    borderStrong: Color(0xFFBBBBC8),
     ink: Color(0xFF111114),
     inkMuted: Color(0xFF5B5B66),
     inkFaint: Color(0xFF8A8A95),

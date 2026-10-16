@@ -340,6 +340,27 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
     return started;
   }
 
+  /**
+   * How far past its own expiry a cached answer may still be served when the provider is down.
+   *
+   * Serving stale beats serving nothing - for a minute. It does not beat serving nothing for
+   * three days, and this is not hypothetical: a provider rate-limit caused the fixture list for
+   * 2026-10-13 to be answered from a snapshot taken at 12:42 that day, so three days later the
+   * app showed 136 matches still "scheduled" and four still in play, with running clocks, on a
+   * date that was long over. The provider itself had 274 finished and nothing live.
+   *
+   * An hour is the most a football score can be wrong by and still be worth showing.
+   */
+  const STALE_GRACE_MS = 60 * 60_000;
+
+  /** A cached answer that is expired, but not so expired that showing it would be a lie. */
+  function servableStale<T>(hit: { payload: unknown; expiresAt: Date } | null): T[] | null {
+    if (!hit) return null;
+    const expiredFor = Date.now() - hit.expiresAt.getTime();
+    if (expiredFor > STALE_GRACE_MS) return null;
+    return hit.payload as T[];
+  }
+
   async function fetchOnce<T>(endpoint: string, params: Params, ttlMs: number, capability?: string): Promise<T[]> {
     if (capability) await capabilityBlocked(capability);
     const key = cacheKey(endpoint, params);
@@ -365,7 +386,8 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
       body = await res.json();
     } catch (err) {
       logger.error("stats.request_failed", { endpoint, params, err });
-      if (hit) return hit.payload as unknown as T[]; // serve stale rather than nothing
+      const stale = servableStale<T>(hit);
+      if (stale) return stale; // recently expired beats nothing
       throw new AppError("STATS_UNAVAILABLE", "Match stats are unavailable right now. Please try again later.", { cause: err });
     }
 
@@ -381,12 +403,14 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
     }
     if ((body.errors as Record<string, unknown> | undefined)?.rateLimit) {
       logger.warn("stats.rate_limited", { endpoint, params });
-      if (hit) return hit.payload as unknown as T[]; // stale beats nothing
+      const stale = servableStale<T>(hit);
+      if (stale) return stale; // recently expired beats nothing
       throw new StatsRateLimitError(endpoint);
     }
     if (errors.length) {
       logger.error("stats.api_error", { endpoint, params, errors: body.errors });
-      if (hit) return hit.payload as unknown as T[];
+      const stale = servableStale<T>(hit);
+      if (stale) return stale;
       throw new AppError("STATS_UNAVAILABLE", "Match stats are unavailable right now. Please try again later.");
     }
 

@@ -85,7 +85,13 @@ class _GcButtonState extends State<GcButton> {
         gc(context).border,
       ),
       GcButtonKind.primary => (gc(context).accent, gc(context).onAccent, null),
-      GcButtonKind.secondary => (gc(context).surfaceRaised, gc(context).ink, gc(context).border),
+      // borderStrong, not border: a secondary button has to read as pressable, and in light
+      // mode a hairline border on a near-white fill is invisible.
+      GcButtonKind.secondary => (
+        gc(context).surfaceRaised,
+        gc(context).ink,
+        gc(context).borderStrong,
+      ),
       GcButtonKind.ghost => (Colors.transparent, gc(context).inkMuted, null),
       GcButtonKind.destructive => (Colors.transparent, gc(context).loss, gc(context).loss),
     };
