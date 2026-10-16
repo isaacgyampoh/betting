@@ -84,9 +84,11 @@ typedef TokenReader = Future<String?> Function();
 
 class ApiClient {
   ApiClient({required ApiConfig config, TokenReader? token, Dio? dio})
-      : _token = token,
-        _dio = dio ??
-            Dio(BaseOptions(
+    : _token = token,
+      _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: config.baseUrl,
               connectTimeout: const Duration(seconds: 10),
               receiveTimeout: const Duration(seconds: 20),
@@ -94,14 +96,19 @@ class ApiClient {
               // the server explained keeps its explanation.
               validateStatus: (_) => true,
               headers: const {'accept': 'application/json'},
-            )) {
-    _dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) async {
-      final value = await _token?.call();
-      if (value != null && value.isNotEmpty) {
-        options.headers['authorization'] = 'Bearer $value';
-      }
-      handler.next(options);
-    }));
+            ),
+          ) {
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          final value = await _token?.call();
+          if (value != null && value.isNotEmpty) {
+            options.headers['authorization'] = 'Bearer $value';
+          }
+          handler.next(options);
+        },
+      ),
+    );
   }
 
   final Dio _dio;
@@ -122,8 +129,7 @@ class ApiClient {
       throw switch (error.type) {
         DioExceptionType.connectionTimeout ||
         DioExceptionType.receiveTimeout ||
-        DioExceptionType.sendTimeout =>
-          const TimeoutFailure(),
+        DioExceptionType.sendTimeout => const TimeoutFailure(),
         DioExceptionType.connectionError => const OfflineFailure(),
         DioExceptionType.cancel => const UnknownFailure('Cancelled.'),
         _ => const UnknownFailure(),
@@ -154,7 +160,9 @@ class ApiClient {
       );
     }
 
-    if (body is! Map<String, dynamic>) throw const UnknownFailure('Unexpected response from the server.');
+    if (body is! Map<String, dynamic>) {
+      throw const UnknownFailure('Unexpected response from the server.');
+    }
     final data = body['data'];
     if (data is! T) throw const UnknownFailure('Unexpected response from the server.');
     return data;

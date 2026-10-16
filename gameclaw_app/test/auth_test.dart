@@ -13,8 +13,9 @@ void main() {
     Future<Object> failureFrom(int status, Map<String, dynamic> body) async {
       final client = ApiClient(
         config: const ApiConfig(baseUrl: 'https://example.invalid/api/v1'),
-        dio: Dio(BaseOptions(baseUrl: 'https://example.invalid/api/v1', validateStatus: (_) => true))
-          ..httpClientAdapter = _Canned(status, body),
+        dio: Dio(
+          BaseOptions(baseUrl: 'https://example.invalid/api/v1', validateStatus: (_) => true),
+        )..httpClientAdapter = _Canned(status, body),
       );
       try {
         await client.get<Map<String, dynamic>>('/matches');
@@ -26,14 +27,19 @@ void main() {
 
     test('401 means sign in', () async {
       expect(
-        await failureFrom(401, {'error': {'code': 'UNAUTHORIZED', 'message': 'Please sign in to continue.'}}),
+        await failureFrom(401, {
+          'error': {'code': 'UNAUTHORIZED', 'message': 'Please sign in to continue.'},
+        }),
         isA<UnauthorizedFailure>(),
       );
     });
 
     test('403 with AGE_NOT_CONFIRMED means confirm your age, not sign in again', () async {
       final failure = await failureFrom(403, {
-        'error': {'code': 'AGE_NOT_CONFIRMED', 'message': 'Please confirm you are 18 or older to continue.'}
+        'error': {
+          'code': 'AGE_NOT_CONFIRMED',
+          'message': 'Please confirm you are 18 or older to continue.',
+        },
       });
       expect(failure, isA<AgeNotConfirmedFailure>());
       expect(failure, isNot(isA<UnauthorizedFailure>()));
@@ -41,7 +47,7 @@ void main() {
 
     test('403 for a self-exclusion keeps the server wording, which says until when', () async {
       final failure = await failureFrom(403, {
-        'error': {'code': 'FORBIDDEN', 'message': "You're taking a break until 2026-12-01."}
+        'error': {'code': 'FORBIDDEN', 'message': "You're taking a break until 2026-12-01."},
       });
       expect(failure, isA<ForbiddenFailure>());
       expect((failure as ApiFailure).message, contains('2026-12-01'));
@@ -50,11 +56,11 @@ void main() {
 
   group('AuthSession', () {
     AuthSession at(Duration fromNow) => AuthSession(
-          accessToken: 'a',
-          refreshToken: 'r',
-          expiresAtUtc: DateTime.now().toUtc().add(fromNow),
-          email: 'x@y.z',
-        );
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresAtUtc: DateTime.now().toUtc().add(fromNow),
+      email: 'x@y.z',
+    );
 
     test('a token about to expire counts as expired', () {
       // A token that expires while the request is in flight was already too old to send.
@@ -64,7 +70,9 @@ void main() {
 
     test('survives a round trip through storage', () {
       final original = at(const Duration(hours: 1));
-      final restored = AuthSession.fromJson(jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>)!;
+      final restored = AuthSession.fromJson(
+        jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>,
+      )!;
       expect(restored.accessToken, original.accessToken);
       expect(restored.refreshToken, original.refreshToken);
       expect(restored.email, original.email);
@@ -77,7 +85,12 @@ void main() {
     });
 
     test("a sign-up that returns no session is Supabase asking for email confirmation", () {
-      expect(AuthSession.fromAuthResponse(const {'user': {'email': 'x@y.z'}}), isNull);
+      expect(
+        AuthSession.fromAuthResponse(const {
+          'user': {'email': 'x@y.z'},
+        }),
+        isNull,
+      );
       expect(
         AuthSession.fromAuthResponse(const {
           'access_token': 'a',
@@ -92,18 +105,22 @@ void main() {
 
   group('AuthClient', () {
     AuthClient clientFor(int status, Map<String, dynamic> body) => AuthClient(
-          config: const SupabaseConfig(url: 'https://p.supabase.co', anonKey: 'anon'),
-          dio: Dio(BaseOptions(baseUrl: 'https://p.supabase.co/auth/v1', validateStatus: (_) => true))
-            ..httpClientAdapter = _Canned(status, body),
-        );
+      config: const SupabaseConfig(url: 'https://p.supabase.co', anonKey: 'anon'),
+      dio: Dio(BaseOptions(baseUrl: 'https://p.supabase.co/auth/v1', validateStatus: (_) => true))
+        ..httpClientAdapter = _Canned(status, body),
+    );
 
     test("Supabase's own wording for a bad password reaches the user", () async {
       // "Invalid login credentials" is better than anything we would write, and it is what the
       // user will find if they search for it.
       await expectLater(
-        clientFor(400, {'error_code': 'invalid_credentials', 'msg': 'Invalid login credentials'})
-            .signIn(email: 'a@b.c', password: 'wrong'),
-        throwsA(isA<ServerFailure>().having((e) => e.message, 'message', 'Invalid login credentials')),
+        clientFor(400, {
+          'error_code': 'invalid_credentials',
+          'msg': 'Invalid login credentials',
+        }).signIn(email: 'a@b.c', password: 'wrong'),
+        throwsA(
+          isA<ServerFailure>().having((e) => e.message, 'message', 'Invalid login credentials'),
+        ),
       );
     });
 
@@ -135,7 +152,11 @@ class _Canned implements HttpClientAdapter {
   final Map<String, dynamic> body;
 
   @override
-  Future<ResponseBody> fetch(RequestOptions options, Stream<List<int>>? stream, Future<void>? cancelFuture) async {
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<List<int>>? stream,
+    Future<void>? cancelFuture,
+  ) async {
     return ResponseBody.fromString(
       jsonEncode(body),
       status,

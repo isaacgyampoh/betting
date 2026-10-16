@@ -35,14 +35,13 @@ class ChatState {
     AiAllowance? allowance,
     ApiFailure? error,
     bool clearError = false,
-  }) =>
-      ChatState(
-        turns: turns ?? this.turns,
-        sending: sending ?? this.sending,
-        quickReplies: quickReplies ?? this.quickReplies,
-        allowance: allowance ?? this.allowance,
-        error: clearError ? null : (error ?? this.error),
-      );
+  }) => ChatState(
+    turns: turns ?? this.turns,
+    sending: sending ?? this.sending,
+    quickReplies: quickReplies ?? this.quickReplies,
+    allowance: allowance ?? this.allowance,
+    error: clearError ? null : (error ?? this.error),
+  );
 }
 
 class ChatController extends Notifier<ChatState> {
@@ -51,9 +50,9 @@ class ChatController extends Notifier<ChatState> {
 
   /// Slips already shown, so the server does not send the same card twice in one conversation.
   List<String> get _seen => [
-        for (final turn in state.turns)
-          for (final slip in turn.slips) slip.id,
-      ];
+    for (final turn in state.turns)
+      for (final slip in turn.slips) slip.id,
+  ];
 
   Future<void> send(String text) async {
     final message = text.trim();
@@ -68,10 +67,15 @@ class ChatController extends Notifier<ChatState> {
     );
 
     try {
-      final result = await ref.read(chatRepositoryProvider).send(
+      final result = await ref
+          .read(chatRepositoryProvider)
+          .send(
             // Only turns that were actually delivered: a failed turn was never seen by the server,
             // and replaying it as history would answer it twice.
-            history: [for (final t in state.turns) if (!t.failed) t],
+            history: [
+              for (final t in state.turns)
+                if (!t.failed) t,
+            ],
             seenSlipIds: _seen,
           );
       state = state.copyWith(

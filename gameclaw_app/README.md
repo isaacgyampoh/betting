@@ -88,13 +88,30 @@ deployment is the alternative. Nothing in the code depends on which is chosen.
 
 ```
 lib/
-  app/        navigation shell and router
-  data/       API client, failures, repositories, local cache, token store
-  domain/     models - the app's own view of football
-  features/   one directory per tab, plus the match centre
-  theme/      design tokens
-  ui/         widgets shared across screens
+  app/              navigation shell and router
+  data/             API client, failures, repositories, local cache, session
+  domain/           models - the app's own view of football
+  features/         one directory per tab, plus auth and the match centre
+  theme/tokens.dart the design system's primitives
+  ui/components/    the design system's widgets
 ```
+
+## The design system
+
+One place decides what things look like. `theme/tokens.dart` holds the colours, the 4pt spacing
+scale, the radii, the fixed component heights, the motion durations and the type scale;
+`ui/components/` holds the widgets built from them. Nothing outside those two directories
+hard-codes a colour, a gap or a duration.
+
+The direction is a dark, dense, information-first product read on a phone, often outdoors and
+often one-handed. That drives the rest: near-black surfaces so a bright field never washes out a
+score; one electric-lime accent spent only on what is live or actionable, so that when it appears
+it means something; hairlines instead of cards, because thirty fixtures do not need thirty boxes
+around them; and tabular figures everywhere a number appears, because a column of scores that does
+not line up is a column nobody scans.
+
+Tabs appear only when there is something behind them. A Statistics tab that is always empty is
+worse than no tab: it promises data the provider does not give us, every single time.
 
 ## Two rules the code enforces
 

@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../data/api_client.dart';
 import '../../data/providers.dart';
 import '../../theme/tokens.dart';
-import '../../ui/section.dart';
+import '../../ui/components/gc_button.dart';
+import '../../ui/components/gc_input.dart';
+import '../../ui/components/gc_states.dart';
 
 /// Sign in, or make an account. One screen for both, because they are the same two fields and a
 /// user who picked the wrong one should not have to go anywhere to fix it.
@@ -22,8 +24,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _password = TextEditingController();
 
   bool _creating = false;
-  bool _busy = false;
-  bool _showPassword = false;
   String? _error;
   String? _notice;
 
@@ -35,9 +35,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_form.currentState!.validate() || _busy) return;
+    FocusScope.of(context).unfocus();
+    if (!_form.currentState!.validate()) return;
     setState(() {
-      _busy = true;
       _error = null;
       _notice = null;
     });
@@ -47,13 +47,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
     try {
       if (_creating) {
-        final signedIn = await ref.read(sessionProvider.notifier).signUp(email: email, password: password);
+        final signedIn = await ref
+            .read(sessionProvider.notifier)
+            .signUp(email: email, password: password);
         if (!mounted) return;
         if (!signedIn) {
-          // The project requires email confirmation. Saying so is the whole message - there is
-          // nothing else for the user to do here and no session to send them on with.
+          // The project requires email confirmation. That is the whole message: there is nothing
+          // else for the user to do here and no session to send them on with.
           setState(() {
-            _busy = false;
             _notice = 'Check $email for a confirmation link, then come back and sign in.';
             _creating = false;
           });
@@ -68,10 +69,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       context.pushReplacement('/age');
     } on ApiFailure catch (failure) {
       if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = failure.message;
-      });
+      setState(() => _error = failure.message);
     }
   }
 
@@ -80,139 +78,140 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     final configured = ref.watch(supabaseConfigProvider).isConfigured;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
-        ),
-        title: Text(_creating ? 'Create account' : 'Sign in'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(GcSpace.lg),
-        children: [
-          if (!configured) ...[
-            const GcNote(
-              'This build has no sign-in configured. It was built without the Supabase flags, so '
-              'the form below cannot work.',
+      body: SafeArea(
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: GcIconButton(
+                icon: Icons.close_rounded,
+                colour: GcColors.ink,
+                tooltip: 'Close',
+                onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+              ),
             ),
-            const SizedBox(height: GcSpace.lg),
-          ],
-          Text(
-            _creating
-                ? 'An account keeps your slips and your conversation with Claw across devices.'
-                : 'Scores and the published record are open to everyone. Signing in is for '
-                    'building slips.',
-            style: GcType.body,
-          ),
-          const SizedBox(height: GcSpace.xl),
-          Form(
-            key: _form,
-            child: Column(
-              children: [
-                TextFormField(
-                  controller: _email,
-                  enabled: !_busy,
-                  keyboardType: TextInputType.emailAddress,
-                  autofillHints: const [AutofillHints.email],
-                  textInputAction: TextInputAction.next,
-                  style: GcType.body,
-                  decoration: _decoration('Email'),
-                  validator: (value) {
-                    final text = value?.trim() ?? '';
-                    // Deliberately loose. The server is the authority on whether an address
-                    // exists; this only catches the obvious slip before a round trip.
-                    if (text.isEmpty) return 'Enter your email';
-                    if (!text.contains('@') || !text.contains('.')) return "That doesn't look like an email";
-                    return null;
-                  },
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  GcSpace.gutter,
+                  GcSpace.sm,
+                  GcSpace.gutter,
+                  GcSpace.xl,
                 ),
-                const SizedBox(height: GcSpace.md),
-                TextFormField(
-                  controller: _password,
-                  enabled: !_busy,
-                  obscureText: !_showPassword,
-                  autofillHints: [_creating ? AutofillHints.newPassword : AutofillHints.password],
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _submit(),
-                  style: GcType.body,
-                  decoration: _decoration('Password').copyWith(
-                    suffixIcon: IconButton(
-                      onPressed: () => setState(() => _showPassword = !_showPassword),
-                      icon: Icon(
-                        _showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        size: 20,
-                        color: GcColors.inkMuted,
-                      ),
+                children: [
+                  Text('GAMECLAW', style: GcType.overline.copyWith(color: GcColors.accent)),
+                  const SizedBox(height: GcSpace.sm),
+                  Text(_creating ? 'Create an account' : 'Welcome back', style: GcType.hero),
+                  const SizedBox(height: GcSpace.md),
+                  Text(
+                    _creating
+                        ? 'An account keeps your slips and your conversation with Claw across devices.'
+                        : 'Live scores and the published record are open to everyone. '
+                              'Signing in is for building slips.',
+                    style: GcType.body.copyWith(color: GcColors.inkMuted),
+                  ),
+                  if (!configured) ...[
+                    const SizedBox(height: GcSpace.lg),
+                    const GcNote(
+                      'This build has no sign-in configured. It was built without the Supabase '
+                      'flags, so the form below cannot work.',
+                      icon: Icons.warning_amber_rounded,
+                    ),
+                  ],
+                  const SizedBox(height: GcSpace.xxl),
+                  Form(
+                    key: _form,
+                    child: Column(
+                      children: [
+                        GcTextField(
+                          controller: _email,
+                          label: 'Email',
+                          icon: Icons.alternate_email_rounded,
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
+                          textInputAction: TextInputAction.next,
+                          validator: (value) {
+                            final text = value?.trim() ?? '';
+                            // Deliberately loose. The server is the authority on whether an
+                            // address exists; this only catches the obvious slip before a round
+                            // trip.
+                            if (text.isEmpty) return 'Enter your email';
+                            if (!text.contains('@') || !text.contains('.')) {
+                              return "That doesn't look like an email";
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: GcSpace.md),
+                        GcTextField(
+                          controller: _password,
+                          label: 'Password',
+                          icon: Icons.lock_outline_rounded,
+                          obscure: true,
+                          autofillHints: [
+                            _creating ? AutofillHints.newPassword : AutofillHints.password,
+                          ],
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _submit(),
+                          validator: (value) {
+                            if ((value ?? '').isEmpty) return 'Enter your password';
+                            // Only on sign-up. Refusing to let someone sign in because an existing
+                            // password is short is both useless and infuriating.
+                            if (_creating && value!.length < 8) return 'Use at least 8 characters';
+                            return null;
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                  validator: (value) {
-                    if ((value ?? '').isEmpty) return 'Enter your password';
-                    // Only on sign-up: an existing account may have been made under an older rule,
-                    // and refusing to let someone sign in because their password is short is both
-                    // useless and infuriating.
-                    if (_creating && value!.length < 8) return 'Use at least 8 characters';
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: GcSpace.md),
-            Text(_error!, style: GcType.caption.copyWith(color: GcColors.loss)),
-          ],
-          if (_notice != null) ...[
-            const SizedBox(height: GcSpace.md),
-            GcNote(_notice!),
-          ],
-          const SizedBox(height: GcSpace.xl),
-          FilledButton(
-            onPressed: _busy ? null : _submit,
-            child: _busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: GcColors.onAccent),
-                  )
-                : Text(_creating ? 'Create account' : 'Sign in'),
-          ),
-          const SizedBox(height: GcSpace.md),
-          TextButton(
-            onPressed: _busy
-                ? null
-                : () => setState(() {
+                  if (_error != null) ...[
+                    const SizedBox(height: GcSpace.md),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.error_outline_rounded, size: 15, color: GcColors.loss),
+                        const SizedBox(width: GcSpace.sm),
+                        Expanded(
+                          child: Text(
+                            _error!,
+                            style: GcType.caption.copyWith(color: GcColors.loss),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (_notice != null) ...[
+                    const SizedBox(height: GcSpace.md),
+                    GcNote(_notice!, icon: Icons.mark_email_unread_outlined),
+                  ],
+                  const SizedBox(height: GcSpace.xl),
+                  GcButton(
+                    label: _creating ? 'Create account' : 'Sign in',
+                    size: GcButtonSize.large,
+                    onPressed: _submit,
+                  ),
+                  const SizedBox(height: GcSpace.sm),
+                  GcButton(
+                    label: _creating ? 'I already have an account' : 'Create an account',
+                    kind: GcButtonKind.ghost,
+                    onPressed: () => setState(() {
                       _creating = !_creating;
                       _error = null;
                       _notice = null;
                     }),
-            child: Text(
-              _creating ? 'I already have an account' : 'Create an account',
-              style: GcType.label.copyWith(color: GcColors.accent),
+                  ),
+                  const SizedBox(height: GcSpace.xl),
+                  Text(
+                    'You must be 18 or older to use GameClaw.',
+                    style: GcType.caption.copyWith(color: GcColors.inkFaint),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: GcSpace.xl),
-          const Text(
-            'You must be 18 or older to use GameClaw.',
-            style: GcType.caption,
-            textAlign: TextAlign.center,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
-
-  InputDecoration _decoration(String label) => InputDecoration(
-        labelText: label,
-        labelStyle: GcType.body.copyWith(color: GcColors.inkMuted),
-        filled: true,
-        fillColor: GcColors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GcRadius.md),
-          borderSide: const BorderSide(color: GcColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(GcRadius.md),
-          borderSide: const BorderSide(color: GcColors.border),
-        ),
-      );
 }

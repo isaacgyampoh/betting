@@ -9,12 +9,10 @@ import 'theme/tokens.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   // The app owns the status bar: transparent, light icons, drawn over by our own canvas colour.
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: GcColors.surface,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(gcSystemBars);
+  // Edge to edge: the app paints its own background behind the system bars rather than leaving
+  // two grey strips at the ends of a near-black screen.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   runApp(const ProviderScope(retry: gcRetry, child: GameClawApp()));
 }
 

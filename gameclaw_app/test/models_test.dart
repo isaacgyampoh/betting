@@ -8,14 +8,14 @@ import 'package:gameclaw_app/domain/models.dart';
 void main() {
   group('Fixture', () {
     Map<String, dynamic> base() => {
-          'id': 1528939,
-          'kickoffAt': '2026-10-04T18:45:00.000Z',
-          'status': 'FINISHED',
-          'statusLabel': 'Match Finished',
-          'league': {'id': 5, 'name': 'UEFA Nations League', 'country': 'World', 'season': 2026},
-          'home': {'id': 1, 'name': 'Greece'},
-          'away': {'id': 2, 'name': 'Germany'},
-        };
+      'id': 1528939,
+      'kickoffAt': '2026-10-04T18:45:00.000Z',
+      'status': 'FINISHED',
+      'statusLabel': 'Match Finished',
+      'league': {'id': 5, 'name': 'UEFA Nations League', 'country': 'World', 'season': 2026},
+      'home': {'id': 1, 'name': 'Greece'},
+      'away': {'id': 2, 'name': 'Germany'},
+    };
 
     test('a match with no score reported has no score, not nil-nil', () {
       final fixture = Fixture.fromJson(base());
@@ -25,7 +25,10 @@ void main() {
     });
 
     test('a genuine nil-nil is a score', () {
-      final fixture = Fixture.fromJson({...base(), 'goals': {'home': 0, 'away': 0}});
+      final fixture = Fixture.fromJson({
+        ...base(),
+        'goals': {'home': 0, 'away': 0},
+      });
       expect(fixture.homeGoals, 0);
       expect(fixture.awayGoals, 0);
       expect(fixture.hasScore, isTrue);
@@ -64,8 +67,18 @@ void main() {
 
   group('MatchEvent', () {
     test('the provider tells a goal from an own goal by its detail, and so do we', () {
-      final goal = MatchEvent.fromJson({'minute': 23, 'side': 'HOME', 'type': 'GOAL', 'detail': 'Normal Goal'});
-      final own = MatchEvent.fromJson({'minute': 40, 'side': 'AWAY', 'type': 'OWN_GOAL', 'detail': 'Own Goal'});
+      final goal = MatchEvent.fromJson({
+        'minute': 23,
+        'side': 'HOME',
+        'type': 'GOAL',
+        'detail': 'Normal Goal',
+      });
+      final own = MatchEvent.fromJson({
+        'minute': 40,
+        'side': 'AWAY',
+        'type': 'OWN_GOAL',
+        'detail': 'Own Goal',
+      });
       expect(goal.type, MatchEventType.goal);
       expect(goal.isHome, isTrue);
       expect(own.type, MatchEventType.ownGoal);
@@ -73,12 +86,23 @@ void main() {
     });
 
     test('added time reads as 45+2, not 45', () {
-      final event = MatchEvent.fromJson({'minute': 45, 'extra': 2, 'side': 'HOME', 'type': 'YELLOW', 'detail': 'Yellow Card'});
+      final event = MatchEvent.fromJson({
+        'minute': 45,
+        'extra': 2,
+        'side': 'HOME',
+        'type': 'YELLOW',
+        'detail': 'Yellow Card',
+      });
       expect(event.minuteLabel, "45+2'");
     });
 
     test('an event type we do not model keeps the provider wording', () {
-      final event = MatchEvent.fromJson({'minute': 90, 'side': 'AWAY', 'type': 'PENALTY_SHOOTOUT', 'detail': 'Shootout goal'});
+      final event = MatchEvent.fromJson({
+        'minute': 90,
+        'side': 'AWAY',
+        'type': 'PENALTY_SHOOTOUT',
+        'detail': 'Shootout goal',
+      });
       expect(event.type, MatchEventType.unknown);
       expect(event.detail, 'Shootout goal');
     });
@@ -97,7 +121,13 @@ void main() {
           'away': {'id': 2, 'name': 'B'},
         },
         'events': <dynamic>[],
-        'coverage': {'events': false, 'lineups': false, 'statistics': false, 'playerStats': false, 'standings': true},
+        'coverage': {
+          'events': false,
+          'lineups': false,
+          'statistics': false,
+          'playerStats': false,
+          'standings': true,
+        },
       });
 
       expect(neverPublishes.events, isEmpty);
@@ -146,19 +176,30 @@ void main() {
       // Lower-coverage competitions report that a goal happened and by which side, and no more.
       // Falling through to the raw detail put "Normal Goal, Normal Goal" down the timeline.
       final anonymous = MatchEvent.fromJson({
-        'minute': 14, 'side': 'HOME', 'type': 'GOAL', 'detail': 'Normal Goal', 'player': null,
+        'minute': 14,
+        'side': 'HOME',
+        'type': 'GOAL',
+        'detail': 'Normal Goal',
+        'player': null,
       });
       expect(anonymous.label, 'Goal');
 
       final named = MatchEvent.fromJson({
-        'minute': 14, 'side': 'HOME', 'type': 'GOAL', 'detail': 'Normal Goal', 'player': 'Ada Hegerberg',
+        'minute': 14,
+        'side': 'HOME',
+        'type': 'GOAL',
+        'detail': 'Normal Goal',
+        'player': 'Ada Hegerberg',
       });
       expect(named.label, 'Ada Hegerberg');
     });
 
     test('an event we do not model still keeps the provider wording', () {
       final odd = MatchEvent.fromJson({
-        'minute': 90, 'side': 'AWAY', 'type': 'PENALTY_SHOOTOUT', 'detail': 'Shootout goal',
+        'minute': 90,
+        'side': 'AWAY',
+        'type': 'PENALTY_SHOOTOUT',
+        'detail': 'Shootout goal',
       });
       expect(odd.label, 'Shootout goal');
     });
@@ -167,13 +208,26 @@ void main() {
       // Exactly what API-Football returned for the Australian Championship: sixteen rows in one
       // array, every row carrying the same group name, the rank running 1-4 four times over.
       StandingRow row(int rank, String name) => StandingRow.fromJson({
-            'rank': rank, 'team': {'id': rank * 100, 'name': name}, 'played': 0, 'won': 0,
-            'drawn': 0, 'lost': 0, 'goalsFor': 0, 'goalsAgainst': 0, 'points': 0,
-          });
+        'rank': rank,
+        'team': {'id': rank * 100, 'name': name},
+        'played': 0,
+        'won': 0,
+        'drawn': 0,
+        'lost': 0,
+        'goalsFor': 0,
+        'goalsAgainst': 0,
+        'points': 0,
+      });
 
       final blocks = StandingsBlock.split([
-        row(1, 'Sutherland Sharks'), row(2, 'Sydney United'), row(3, 'South Melbourne'), row(4, 'Canberra FC'),
-        row(1, 'Adelaide City'), row(2, 'Broadmeadow Magic'), row(3, 'Avondale'), row(4, 'Wests APIA'),
+        row(1, 'Sutherland Sharks'),
+        row(2, 'Sydney United'),
+        row(3, 'South Melbourne'),
+        row(4, 'Canberra FC'),
+        row(1, 'Adelaide City'),
+        row(2, 'Broadmeadow Magic'),
+        row(3, 'Avondale'),
+        row(4, 'Wests APIA'),
       ]);
 
       expect(blocks, hasLength(2));
@@ -186,8 +240,15 @@ void main() {
       final rows = [
         for (var i = 1; i <= 20; i++)
           StandingRow.fromJson({
-            'rank': i, 'team': {'id': i, 'name': 'Team $i'}, 'played': 10, 'won': 5, 'drawn': 2,
-            'lost': 3, 'goalsFor': 15, 'goalsAgainst': 12, 'points': 17,
+            'rank': i,
+            'team': {'id': i, 'name': 'Team $i'},
+            'played': 10,
+            'won': 5,
+            'drawn': 2,
+            'lost': 3,
+            'goalsFor': 15,
+            'goalsAgainst': 12,
+            'points': 17,
           }),
       ];
       expect(StandingsBlock.split(rows), hasLength(1));

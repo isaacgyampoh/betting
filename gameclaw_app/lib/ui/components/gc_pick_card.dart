@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../domain/models.dart';
-import '../theme/tokens.dart';
+import '../../domain/models.dart';
+import '../../theme/tokens.dart';
+import 'gc_chip.dart';
 
 /// A published slip.
 ///
@@ -29,7 +30,9 @@ class GcPickCard extends StatelessWidget {
       child: Theme(
         // The default expansion tile paints its own divider and a tint on open, both of which
         // fight the card's border.
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        data: Theme.of(
+          context,
+        ).copyWith(dividerColor: Colors.transparent, splashColor: Colors.transparent),
         child: ExpansionTile(
           initiallyExpanded: initiallyExpanded,
           tilePadding: const EdgeInsets.symmetric(horizontal: GcSpace.lg, vertical: GcSpace.xs),
@@ -37,10 +40,7 @@ class GcPickCard extends StatelessWidget {
           title: _Header(pick: pick),
           subtitle: Padding(
             padding: const EdgeInsets.only(top: GcSpace.xs),
-            child: Text(
-              '${pick.confidence} · ${pick.chance}',
-              style: GcType.caption,
-            ),
+            child: Text('${pick.confidence} · ${pick.chance}', style: GcType.caption),
           ),
           children: [
             if (!pick.unlocked)
@@ -99,18 +99,7 @@ class _StatusChip extends StatelessWidget {
       PickStatus.voided => ('VOID', GcColors.inkFaint),
       PickStatus.pending => ('RUNNING', GcColors.accent),
     };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: GcSpace.sm, vertical: 2),
-      decoration: BoxDecoration(
-        color: colour.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(GcRadius.sm),
-      ),
-      child: Text(
-        label,
-        style: GcType.caption.copyWith(color: colour, fontWeight: FontWeight.w700, fontSize: 10, letterSpacing: 0.4),
-      ),
-    );
+    return GcStatusChip(label: label, colour: colour);
   }
 }
 
@@ -134,12 +123,24 @@ class _Leg extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(width: 6, height: 6, decoration: BoxDecoration(color: colour, shape: BoxShape.circle)),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
+              ),
               const SizedBox(width: GcSpace.sm),
               Expanded(
-                child: Text('${leg.home} v ${leg.away}', style: GcType.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  '${leg.home} v ${leg.away}',
+                  style: GcType.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              Text(leg.odds.toStringAsFixed(2), style: GcType.figure.copyWith(fontSize: 13, color: GcColors.inkMuted)),
+              Text(
+                leg.odds.toStringAsFixed(2),
+                style: GcType.figure.copyWith(fontSize: 13, color: GcColors.inkMuted),
+              ),
             ],
           ),
           const SizedBox(height: GcSpace.xs),
@@ -148,7 +149,10 @@ class _Leg extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${leg.marketLabel}: ${leg.pickLabel}', style: GcType.body.copyWith(fontSize: 13)),
+                Text(
+                  '${leg.marketLabel}: ${leg.pickLabel}',
+                  style: GcType.body.copyWith(fontSize: 13),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   [

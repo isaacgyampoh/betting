@@ -17,14 +17,14 @@ extension MatchStatusX on MatchStatus {
   bool get isDone => this == MatchStatus.finished;
 
   static MatchStatus parse(String? raw) => switch (raw?.toUpperCase()) {
-        'LIVE' => MatchStatus.live,
-        'HT' || 'HALFTIME' || 'HALF_TIME' => MatchStatus.halfTime,
-        'FINISHED' || 'FT' => MatchStatus.finished,
-        'SCHEDULED' || 'NS' => MatchStatus.scheduled,
-        'POSTPONED' => MatchStatus.postponed,
-        'CANCELLED' || 'CANCELED' => MatchStatus.cancelled,
-        _ => MatchStatus.unknown,
-      };
+    'LIVE' => MatchStatus.live,
+    'HT' || 'HALFTIME' || 'HALF_TIME' => MatchStatus.halfTime,
+    'FINISHED' || 'FT' => MatchStatus.finished,
+    'SCHEDULED' || 'NS' => MatchStatus.scheduled,
+    'POSTPONED' => MatchStatus.postponed,
+    'CANCELLED' || 'CANCELED' => MatchStatus.cancelled,
+    _ => MatchStatus.unknown,
+  };
 }
 
 class Team {
@@ -34,14 +34,20 @@ class Team {
   final String? logoUrl;
 
   factory Team.fromJson(Map<String, dynamic> json) => Team(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        name: json['name'] as String? ?? '',
-        logoUrl: json['logo'] as String?,
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    name: json['name'] as String? ?? '',
+    logoUrl: json['logo'] as String?,
+  );
 }
 
 class Competition {
-  const Competition({required this.id, required this.name, required this.country, this.logoUrl, this.season});
+  const Competition({
+    required this.id,
+    required this.name,
+    required this.country,
+    this.logoUrl,
+    this.season,
+  });
   final int id;
   final String name;
   final String country;
@@ -49,12 +55,12 @@ class Competition {
   final int? season;
 
   factory Competition.fromJson(Map<String, dynamic> json) => Competition(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        name: json['name'] as String? ?? '',
-        country: json['country'] as String? ?? '',
-        logoUrl: json['logo'] as String?,
-        season: (json['season'] as num?)?.toInt(),
-      );
+    id: (json['id'] as num?)?.toInt() ?? 0,
+    name: json['name'] as String? ?? '',
+    country: json['country'] as String? ?? '',
+    logoUrl: json['logo'] as String?,
+    season: (json['season'] as num?)?.toInt(),
+  );
 }
 
 /// What a competition's season actually publishes.
@@ -78,12 +84,12 @@ class Coverage {
   final bool standings;
 
   factory Coverage.fromJson(Map<String, dynamic> json) => Coverage(
-        events: json['events'] == true,
-        lineups: json['lineups'] == true,
-        statistics: json['statistics'] == true,
-        playerStats: json['playerStats'] == true,
-        standings: json['standings'] == true,
-      );
+    events: json['events'] == true,
+    lineups: json['lineups'] == true,
+    statistics: json['statistics'] == true,
+    playerStats: json['playerStats'] == true,
+    standings: json['standings'] == true,
+  );
 }
 
 class Fixture {
@@ -140,7 +146,18 @@ class Fixture {
   }
 }
 
-enum MatchEventType { goal, ownGoal, penalty, penaltyMissed, yellow, secondYellow, red, substitution, varReview, unknown }
+enum MatchEventType {
+  goal,
+  ownGoal,
+  penalty,
+  penaltyMissed,
+  yellow,
+  secondYellow,
+  red,
+  substitution,
+  varReview,
+  unknown,
+}
 
 class MatchEvent {
   const MatchEvent({
@@ -194,41 +211,41 @@ class MatchEvent {
   }
 
   factory MatchEvent.fromJson(Map<String, dynamic> json) => MatchEvent(
-        minute: (json['minute'] as num?)?.toInt() ?? 0,
-        extra: (json['extra'] as num?)?.toInt(),
-        isHome: json['side'] == 'HOME',
-        type: switch (json['type'] as String?) {
-          'GOAL' => MatchEventType.goal,
-          'OWN_GOAL' => MatchEventType.ownGoal,
-          'PENALTY' => MatchEventType.penalty,
-          'PENALTY_MISSED' => MatchEventType.penaltyMissed,
-          'YELLOW' => MatchEventType.yellow,
-          'SECOND_YELLOW' => MatchEventType.secondYellow,
-          'RED' => MatchEventType.red,
-          'SUBSTITUTION' => MatchEventType.substitution,
-          'VAR' => MatchEventType.varReview,
-          _ => MatchEventType.unknown,
-        },
-        player: json['player'] as String?,
-        other: json['other'] as String?,
-        detail: json['detail'] as String? ?? '',
-      );
+    minute: (json['minute'] as num?)?.toInt() ?? 0,
+    extra: (json['extra'] as num?)?.toInt(),
+    isHome: json['side'] == 'HOME',
+    type: switch (json['type'] as String?) {
+      'GOAL' => MatchEventType.goal,
+      'OWN_GOAL' => MatchEventType.ownGoal,
+      'PENALTY' => MatchEventType.penalty,
+      'PENALTY_MISSED' => MatchEventType.penaltyMissed,
+      'YELLOW' => MatchEventType.yellow,
+      'SECOND_YELLOW' => MatchEventType.secondYellow,
+      'RED' => MatchEventType.red,
+      'SUBSTITUTION' => MatchEventType.substitution,
+      'VAR' => MatchEventType.varReview,
+      _ => MatchEventType.unknown,
+    },
+    player: json['player'] as String?,
+    other: json['other'] as String?,
+    detail: json['detail'] as String? ?? '',
+  );
 }
 
 enum FormResult { win, draw, loss }
 
 extension FormResultX on FormResult {
   String get letter => switch (this) {
-        FormResult.win => 'W',
-        FormResult.draw => 'D',
-        FormResult.loss => 'L',
-      };
+    FormResult.win => 'W',
+    FormResult.draw => 'D',
+    FormResult.loss => 'L',
+  };
 
   static FormResult parse(String? raw) => switch (raw?.toUpperCase()) {
-        'W' => FormResult.win,
-        'L' => FormResult.loss,
-        _ => FormResult.draw,
-      };
+    'W' => FormResult.win,
+    'L' => FormResult.loss,
+    _ => FormResult.draw,
+  };
 }
 
 class FormGame {
@@ -247,12 +264,12 @@ class FormGame {
   final bool wasHome;
 
   factory FormGame.fromJson(Map<String, dynamic> json) => FormGame(
-        fixture: Fixture.fromJson(json['match'] as Map<String, dynamic>),
-        result: FormResultX.parse(json['result'] as String?),
-        goalsFor: (json['goalsFor'] as num?)?.toInt() ?? 0,
-        goalsAgainst: (json['goalsAgainst'] as num?)?.toInt() ?? 0,
-        wasHome: json['wasHome'] == true,
-      );
+    fixture: Fixture.fromJson(json['match'] as Map<String, dynamic>),
+    result: FormResultX.parse(json['result'] as String?),
+    goalsFor: (json['goalsFor'] as num?)?.toInt() ?? 0,
+    goalsAgainst: (json['goalsAgainst'] as num?)?.toInt() ?? 0,
+    wasHome: json['wasHome'] == true,
+  );
 }
 
 /// A team's recent record.
@@ -268,12 +285,12 @@ class TeamForm {
   final FormSummary summary;
 
   factory TeamForm.fromJson(Map<String, dynamic> json) => TeamForm(
-        team: Team.fromJson(json['team'] as Map<String, dynamic>? ?? const {}),
-        games: (json['matches'] as List<dynamic>? ?? const [])
-            .map((m) => FormGame.fromJson(m as Map<String, dynamic>))
-            .toList(growable: false),
-        summary: FormSummary.fromJson(json['summary'] as Map<String, dynamic>? ?? const {}),
-      );
+    team: Team.fromJson(json['team'] as Map<String, dynamic>? ?? const {}),
+    games: (json['matches'] as List<dynamic>? ?? const [])
+        .map((m) => FormGame.fromJson(m as Map<String, dynamic>))
+        .toList(growable: false),
+    summary: FormSummary.fromJson(json['summary'] as Map<String, dynamic>? ?? const {}),
+  );
 }
 
 class FormSummary {
@@ -302,15 +319,15 @@ class FormSummary {
   final double over25Rate;
 
   factory FormSummary.fromJson(Map<String, dynamic> json) => FormSummary(
-        played: (json['played'] as num?)?.toInt() ?? 0,
-        won: (json['won'] as num?)?.toInt() ?? 0,
-        drawn: (json['drawn'] as num?)?.toInt() ?? 0,
-        lost: (json['lost'] as num?)?.toInt() ?? 0,
-        goalsFor: (json['goalsFor'] as num?)?.toInt() ?? 0,
-        goalsAgainst: (json['goalsAgainst'] as num?)?.toInt() ?? 0,
-        bttsRate: (json['bttsRate'] as num?)?.toDouble() ?? 0,
-        over25Rate: (json['over25Rate'] as num?)?.toDouble() ?? 0,
-      );
+    played: (json['played'] as num?)?.toInt() ?? 0,
+    won: (json['won'] as num?)?.toInt() ?? 0,
+    drawn: (json['drawn'] as num?)?.toInt() ?? 0,
+    lost: (json['lost'] as num?)?.toInt() ?? 0,
+    goalsFor: (json['goalsFor'] as num?)?.toInt() ?? 0,
+    goalsAgainst: (json['goalsAgainst'] as num?)?.toInt() ?? 0,
+    bttsRate: (json['bttsRate'] as num?)?.toDouble() ?? 0,
+    over25Rate: (json['over25Rate'] as num?)?.toDouble() ?? 0,
+  );
 }
 
 /// A block of a table.
@@ -366,16 +383,16 @@ class StandingRow {
   int get goalDifference => goalsFor - goalsAgainst;
 
   factory StandingRow.fromJson(Map<String, dynamic> json) => StandingRow(
-        rank: (json['rank'] as num?)?.toInt() ?? 0,
-        team: Team.fromJson(json['team'] as Map<String, dynamic>? ?? const {}),
-        played: (json['played'] as num?)?.toInt() ?? 0,
-        won: (json['won'] as num?)?.toInt() ?? 0,
-        drawn: (json['drawn'] as num?)?.toInt() ?? 0,
-        lost: (json['lost'] as num?)?.toInt() ?? 0,
-        goalsFor: (json['goalsFor'] as num?)?.toInt() ?? 0,
-        goalsAgainst: (json['goalsAgainst'] as num?)?.toInt() ?? 0,
-        points: (json['points'] as num?)?.toInt() ?? 0,
-      );
+    rank: (json['rank'] as num?)?.toInt() ?? 0,
+    team: Team.fromJson(json['team'] as Map<String, dynamic>? ?? const {}),
+    played: (json['played'] as num?)?.toInt() ?? 0,
+    won: (json['won'] as num?)?.toInt() ?? 0,
+    drawn: (json['drawn'] as num?)?.toInt() ?? 0,
+    lost: (json['lost'] as num?)?.toInt() ?? 0,
+    goalsFor: (json['goalsFor'] as num?)?.toInt() ?? 0,
+    goalsAgainst: (json['goalsAgainst'] as num?)?.toInt() ?? 0,
+    points: (json['points'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// A fixture with everything the match centre shows, and an explicit record of what is missing.
@@ -427,19 +444,25 @@ class MatchDetail {
       events: (json['events'] as List<dynamic>? ?? const [])
           .map((e) => MatchEvent.fromJson(e as Map<String, dynamic>))
           .toList(growable: false),
-      coverage: json['coverage'] == null ? null : Coverage.fromJson(json['coverage'] as Map<String, dynamic>),
+      coverage: json['coverage'] == null
+          ? null
+          : Coverage.fromJson(json['coverage'] as Map<String, dynamic>),
       unavailable: (json['unavailable'] as List<dynamic>? ?? const []).cast<String>(),
       fetchedAt: fetchedAt ?? DateTime.now().toUtc(),
-      homeForm: form?['home'] == null ? null : TeamForm.fromJson(form!['home'] as Map<String, dynamic>),
-      awayForm: form?['away'] == null ? null : TeamForm.fromJson(form!['away'] as Map<String, dynamic>),
+      homeForm: form?['home'] == null
+          ? null
+          : TeamForm.fromJson(form!['home'] as Map<String, dynamic>),
+      awayForm: form?['away'] == null
+          ? null
+          : TeamForm.fromJson(form!['away'] as Map<String, dynamic>),
       headToHead: (json['h2h'] as List<dynamic>? ?? const [])
           .map((m) => Fixture.fromJson(m as Map<String, dynamic>))
           .toList(growable: false),
       standings: json['standings'] == null
           ? null
           : (json['standings'] as List<dynamic>)
-              .map((r) => StandingRow.fromJson(r as Map<String, dynamic>))
-              .toList(growable: false),
+                .map((r) => StandingRow.fromJson(r as Map<String, dynamic>))
+                .toList(growable: false),
       busy: json['busy'] == true,
     );
   }
@@ -468,13 +491,13 @@ class MatchDay {
   bool get isTrimmed => total > shown;
 
   factory MatchDay.fromJson(Map<String, dynamic> json) => MatchDay(
-        date: json['date'] as String? ?? '',
-        groups: (json['groups'] as List<dynamic>? ?? const [])
-            .map((g) => LeagueGroup.fromJson(g as Map<String, dynamic>))
-            .toList(growable: false),
-        total: (json['total'] as num?)?.toInt() ?? 0,
-        shown: (json['shown'] as num?)?.toInt() ?? 0,
-      );
+    date: json['date'] as String? ?? '',
+    groups: (json['groups'] as List<dynamic>? ?? const [])
+        .map((g) => LeagueGroup.fromJson(g as Map<String, dynamic>))
+        .toList(growable: false),
+    total: (json['total'] as num?)?.toInt() ?? 0,
+    shown: (json['shown'] as num?)?.toInt() ?? 0,
+  );
 }
 
 class LeagueGroup {
@@ -483,11 +506,11 @@ class LeagueGroup {
   final List<Fixture> fixtures;
 
   factory LeagueGroup.fromJson(Map<String, dynamic> json) => LeagueGroup(
-        competition: Competition.fromJson(json['league'] as Map<String, dynamic>? ?? const {}),
-        fixtures: (json['matches'] as List<dynamic>? ?? const [])
-            .map((m) => Fixture.fromJson(m as Map<String, dynamic>))
-            .toList(growable: false),
-      );
+    competition: Competition.fromJson(json['league'] as Map<String, dynamic>? ?? const {}),
+    fixtures: (json['matches'] as List<dynamic>? ?? const [])
+        .map((m) => Fixture.fromJson(m as Map<String, dynamic>))
+        .toList(growable: false),
+  );
 }
 
 enum PickStatus { pending, won, lost, voided }
@@ -496,11 +519,11 @@ extension PickStatusX on PickStatus {
   bool get isSettled => this == PickStatus.won || this == PickStatus.lost;
 
   static PickStatus parse(String? raw) => switch (raw?.toUpperCase()) {
-        'WON' => PickStatus.won,
-        'LOST' => PickStatus.lost,
-        'VOID' => PickStatus.voided,
-        _ => PickStatus.pending,
-      };
+    'WON' => PickStatus.won,
+    'LOST' => PickStatus.lost,
+    'VOID' => PickStatus.voided,
+    _ => PickStatus.pending,
+  };
 }
 
 /// One leg of a published slip.
@@ -537,18 +560,18 @@ class PickLeg {
   final String? resultText;
 
   factory PickLeg.fromJson(Map<String, dynamic> json) => PickLeg(
-        position: (json['position'] as num?)?.toInt() ?? 0,
-        home: json['home'] as String? ?? '',
-        away: json['away'] as String? ?? '',
-        competition: json['competition'] as String?,
-        kickoffUtc: DateTime.parse(json['kickoffAt'] as String).toUtc(),
-        marketLabel: json['marketLabel'] as String? ?? '',
-        pickLabel: json['pickLabel'] as String? ?? '',
-        odds: (json['odds'] as num?)?.toDouble() ?? 0,
-        reason: json['reason'] as String? ?? '',
-        status: PickStatusX.parse(json['status'] as String?),
-        resultText: json['resultText'] as String?,
-      );
+    position: (json['position'] as num?)?.toInt() ?? 0,
+    home: json['home'] as String? ?? '',
+    away: json['away'] as String? ?? '',
+    competition: json['competition'] as String?,
+    kickoffUtc: DateTime.parse(json['kickoffAt'] as String).toUtc(),
+    marketLabel: json['marketLabel'] as String? ?? '',
+    pickLabel: json['pickLabel'] as String? ?? '',
+    odds: (json['odds'] as num?)?.toDouble() ?? 0,
+    reason: json['reason'] as String? ?? '',
+    status: PickStatusX.parse(json['status'] as String?),
+    resultText: json['resultText'] as String?,
+  );
 }
 
 /// A published slip.
@@ -584,18 +607,18 @@ class DailyPick {
   final bool unlocked;
 
   factory DailyPick.fromJson(Map<String, dynamic> json) => DailyPick(
-        id: json['id'] as String? ?? '',
-        forDate: json['forDate'] as String? ?? '',
-        target: (json['target'] as num?)?.toInt() ?? 0,
-        totalOdds: (json['totalOdds'] as num?)?.toDouble() ?? 0,
-        confidence: json['confidence'] as String? ?? '',
-        chance: json['chance'] as String? ?? '',
-        status: PickStatusX.parse(json['status'] as String?),
-        legs: (json['legs'] as List<dynamic>? ?? const [])
-            .map((l) => PickLeg.fromJson(l as Map<String, dynamic>))
-            .toList(growable: false),
-        unlocked: json['unlocked'] == true,
-      );
+    id: json['id'] as String? ?? '',
+    forDate: json['forDate'] as String? ?? '',
+    target: (json['target'] as num?)?.toInt() ?? 0,
+    totalOdds: (json['totalOdds'] as num?)?.toDouble() ?? 0,
+    confidence: json['confidence'] as String? ?? '',
+    chance: json['chance'] as String? ?? '',
+    status: PickStatusX.parse(json['status'] as String?),
+    legs: (json['legs'] as List<dynamic>? ?? const [])
+        .map((l) => PickLeg.fromJson(l as Map<String, dynamic>))
+        .toList(growable: false),
+    unlocked: json['unlocked'] == true,
+  );
 }
 
 /// The published record, losses included.
@@ -624,16 +647,16 @@ class TrackRecord {
   int get settled => won + lost;
 
   factory TrackRecord.fromJson(Map<String, dynamic> json) => TrackRecord(
-        total: (json['total'] as num?)?.toInt() ?? 0,
-        won: (json['won'] as num?)?.toInt() ?? 0,
-        lost: (json['lost'] as num?)?.toInt() ?? 0,
-        pending: (json['pending'] as num?)?.toInt() ?? 0,
-        winRate: (json['winRate'] as num?)?.toDouble(),
-        roi: (json['roi'] as num?)?.toDouble(),
-        picks: (json['picks'] as List<dynamic>? ?? const [])
-            .map((p) => DailyPick.fromJson(p as Map<String, dynamic>))
-            .toList(growable: false),
-      );
+    total: (json['total'] as num?)?.toInt() ?? 0,
+    won: (json['won'] as num?)?.toInt() ?? 0,
+    lost: (json['lost'] as num?)?.toInt() ?? 0,
+    pending: (json['pending'] as num?)?.toInt() ?? 0,
+    winRate: (json['winRate'] as num?)?.toDouble(),
+    roi: (json['roi'] as num?)?.toDouble(),
+    picks: (json['picks'] as List<dynamic>? ?? const [])
+        .map((p) => DailyPick.fromJson(p as Map<String, dynamic>))
+        .toList(growable: false),
+  );
 }
 
 /// A pick on a slip, as the bookmaker's catalogue resolved it.
@@ -649,20 +672,20 @@ extension SelectionStatusX on SelectionStatus {
 
   /// The server sends its own wording for a problem; this is the fallback.
   String get reason => switch (this) {
-        SelectionStatus.ok => '',
-        SelectionStatus.eventNotFound => 'Game not found on this bookmaker',
-        SelectionStatus.marketNotFound => "Game found, but this market isn't offered",
-        SelectionStatus.eventStarted => "Game already started, so it can't be booked",
-        SelectionStatus.unsupportedMarket => 'Market not supported yet',
-      };
+    SelectionStatus.ok => '',
+    SelectionStatus.eventNotFound => 'Game not found on this bookmaker',
+    SelectionStatus.marketNotFound => "Game found, but this market isn't offered",
+    SelectionStatus.eventStarted => "Game already started, so it can't be booked",
+    SelectionStatus.unsupportedMarket => 'Market not supported yet',
+  };
 
   static SelectionStatus parse(String? raw) => switch (raw) {
-        'EVENT_NOT_FOUND' => SelectionStatus.eventNotFound,
-        'MARKET_NOT_FOUND' => SelectionStatus.marketNotFound,
-        'EVENT_STARTED' => SelectionStatus.eventStarted,
-        'UNSUPPORTED_MARKET' => SelectionStatus.unsupportedMarket,
-        _ => SelectionStatus.ok,
-      };
+    'EVENT_NOT_FOUND' => SelectionStatus.eventNotFound,
+    'MARKET_NOT_FOUND' => SelectionStatus.marketNotFound,
+    'EVENT_STARTED' => SelectionStatus.eventStarted,
+    'UNSUPPORTED_MARKET' => SelectionStatus.unsupportedMarket,
+    _ => SelectionStatus.ok,
+  };
 }
 
 class Selection {
@@ -698,18 +721,18 @@ class Selection {
   final String? reason;
 
   factory Selection.fromJson(Map<String, dynamic> json) => Selection(
-        position: (json['position'] as num?)?.toInt() ?? 0,
-        home: json['home'] as String? ?? '',
-        away: json['away'] as String? ?? '',
-        competition: json['competition'] as String?,
-        kickoffUtc: DateTime.parse(json['kickoffAt'] as String).toUtc(),
-        marketLabel: json['marketLabel'] as String? ?? '',
-        pickLabel: json['pickLabel'] as String? ?? '',
-        odds: (json['odds'] as num?)?.toDouble(),
-        status: SelectionStatusX.parse(json['status'] as String?),
-        started: json['started'] == true,
-        reason: json['reason'] as String?,
-      );
+    position: (json['position'] as num?)?.toInt() ?? 0,
+    home: json['home'] as String? ?? '',
+    away: json['away'] as String? ?? '',
+    competition: json['competition'] as String?,
+    kickoffUtc: DateTime.parse(json['kickoffAt'] as String).toUtc(),
+    marketLabel: json['marketLabel'] as String? ?? '',
+    pickLabel: json['pickLabel'] as String? ?? '',
+    odds: (json['odds'] as num?)?.toDouble(),
+    status: SelectionStatusX.parse(json['status'] as String?),
+    started: json['started'] == true,
+    reason: json['reason'] as String?,
+  );
 }
 
 class SlipWarning {
@@ -717,10 +740,8 @@ class SlipWarning {
   final String code;
   final String message;
 
-  factory SlipWarning.fromJson(Map<String, dynamic> json) => SlipWarning(
-        code: json['code'] as String? ?? '',
-        message: json['message'] as String? ?? '',
-      );
+  factory SlipWarning.fromJson(Map<String, dynamic> json) =>
+      SlipWarning(code: json['code'] as String? ?? '', message: json['message'] as String? ?? '');
 }
 
 /// A booking code on a bookmaker, and the picks behind it.
@@ -772,7 +793,9 @@ class Slip {
           .map((w) => SlipWarning.fromJson(w as Map<String, dynamic>))
           .toList(growable: false),
       demo: json['demo'] == true,
-      expiresAtUtc: json['expiresAt'] == null ? null : DateTime.parse(json['expiresAt'] as String).toUtc(),
+      expiresAtUtc: json['expiresAt'] == null
+          ? null
+          : DateTime.parse(json['expiresAt'] as String).toUtc(),
     );
   }
 }
@@ -797,11 +820,11 @@ class AiAllowance {
   final bool allowDailyPicks;
 
   factory AiAllowance.fromJson(Map<String, dynamic> json) => AiAllowance(
-        planName: (json['plan'] as Map<String, dynamic>?)?['name'] as String?,
-        remaining: (json['remaining'] as num?)?.toInt() ?? 0,
-        kind: json['kind'] as String? ?? 'trial',
-        allowDailyPicks: json['allowDailyPicks'] == true,
-      );
+    planName: (json['plan'] as Map<String, dynamic>?)?['name'] as String?,
+    remaining: (json['remaining'] as num?)?.toInt() ?? 0,
+    kind: json['kind'] as String? ?? 'trial',
+    allowDailyPicks: json['allowDailyPicks'] == true,
+  );
 }
 
 class QuickReply {
@@ -809,10 +832,8 @@ class QuickReply {
   final String label;
   final String message;
 
-  factory QuickReply.fromJson(Map<String, dynamic> json) => QuickReply(
-        label: json['label'] as String? ?? '',
-        message: json['message'] as String? ?? '',
-      );
+  factory QuickReply.fromJson(Map<String, dynamic> json) =>
+      QuickReply(label: json['label'] as String? ?? '', message: json['message'] as String? ?? '');
 }
 
 /// One answer from the assistant.
@@ -830,15 +851,15 @@ class ChatResult {
   final List<QuickReply> quickReplies;
 
   factory ChatResult.fromJson(Map<String, dynamic> json) => ChatResult(
-        reply: json['reply'] as String? ?? '',
-        slips: (json['slips'] as List<dynamic>? ?? const [])
-            .map((s) => Slip.fromJson(s as Map<String, dynamic>))
-            .toList(growable: false),
-        allowance: json['allowance'] == null
-            ? null
-            : AiAllowance.fromJson(json['allowance'] as Map<String, dynamic>),
-        quickReplies: (json['quickReplies'] as List<dynamic>? ?? const [])
-            .map((q) => QuickReply.fromJson(q as Map<String, dynamic>))
-            .toList(growable: false),
-      );
+    reply: json['reply'] as String? ?? '',
+    slips: (json['slips'] as List<dynamic>? ?? const [])
+        .map((s) => Slip.fromJson(s as Map<String, dynamic>))
+        .toList(growable: false),
+    allowance: json['allowance'] == null
+        ? null
+        : AiAllowance.fromJson(json['allowance'] as Map<String, dynamic>),
+    quickReplies: (json['quickReplies'] as List<dynamic>? ?? const [])
+        .map((q) => QuickReply.fromJson(q as Map<String, dynamic>))
+        .toList(growable: false),
+  );
 }

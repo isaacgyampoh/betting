@@ -30,10 +30,7 @@ final repositoryProvider = Provider<FootballRepository>((ref) {
   // Signing in or out rebuilds this, and with it every screen reading from it. Watching the token
   // itself would re-fetch everything each time it quietly rotates.
   ref.watch(isSignedInProvider);
-  return FootballRepository(
-    api: ref.watch(apiClientProvider),
-    cache: ref.watch(cacheDbProvider),
-  );
+  return FootballRepository(api: ref.watch(apiClientProvider), cache: ref.watch(cacheDbProvider));
 });
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
@@ -63,6 +60,36 @@ final trackRecordProvider = FutureProvider<Cached<TrackRecord>>(
   (ref) => ref.watch(repositoryProvider).trackRecord(),
 );
 
+/// The teams this phone follows, as a live set of ids.
+///
+/// A stream rather than a future: a star tapped on the live centre has to light up on the scores
+/// tab too, and a set rather than a list because every fixture row asks "is this one followed?"
+/// once per build.
+final favouriteIdsProvider = StreamProvider<Set<int>>((ref) {
+  return ref
+      .watch(cacheDbProvider)
+      .watchFavourites()
+      .map((rows) => {for (final row in rows) row.teamId});
+});
+
+final favouriteTeamsProvider = StreamProvider<List<FavouriteTeam>>(
+  (ref) => ref.watch(cacheDbProvider).watchFavourites(),
+);
+
+/// Follows or unfollows a team, keeping its name and crest so the favourites screen can render
+/// without first fetching a day of fixtures to look them up.
+final toggleFavouriteProvider = Provider<Future<void> Function(Team)>((ref) {
+  return (team) async {
+    final db = ref.read(cacheDbProvider);
+    final current = ref.read(favouriteIdsProvider).value ?? const <int>{};
+    if (current.contains(team.id)) {
+      await db.removeFavourite(team.id);
+    } else {
+      await db.addFavourite(team.id, team.name, team.logoUrl);
+    }
+  };
+});
+
 /// Signs out, and forgets everything read for that account.
 final signOutProvider = Provider<Future<void> Function()>((ref) {
   return () async {
@@ -75,10 +102,12 @@ final signOutProvider = Provider<Future<void> Function()>((ref) {
 /// football. Clears the age gate on success by rebuilding everything that was refused.
 final confirmAgeProvider = Provider<Future<void> Function()>((ref) {
   return () async {
-    await ref.read(apiClientProvider).post<Map<String, dynamic>>(
-      '/me/age-confirmation',
-      body: {'confirmedOver18': true, 'acceptedTerms': true},
-    );
+    await ref
+        .read(apiClientProvider)
+        .post<Map<String, dynamic>>(
+          '/me/age-confirmation',
+          body: {'confirmedOver18': true, 'acceptedTerms': true},
+        );
     ref.invalidate(matchDayProvider);
     ref.invalidate(matchDetailProvider);
     ref.invalidate(todaysPicksProvider);

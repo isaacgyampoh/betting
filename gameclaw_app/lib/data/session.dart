@@ -89,10 +89,13 @@ final secureStoreProvider = Provider<SecureStore>((ref) => SecureStore());
 
 final supabaseConfigProvider = Provider<SupabaseConfig>((ref) => SupabaseConfig.fromEnvironment());
 
-final authClientProvider =
-    Provider<AuthClient>((ref) => AuthClient(config: ref.watch(supabaseConfigProvider)));
+final authClientProvider = Provider<AuthClient>(
+  (ref) => AuthClient(config: ref.watch(supabaseConfigProvider)),
+);
 
-final sessionProvider = AsyncNotifierProvider<SessionController, AuthSession?>(SessionController.new);
+final sessionProvider = AsyncNotifierProvider<SessionController, AuthSession?>(
+  SessionController.new,
+);
 
 /// Whether anyone is signed in - not which token they hold.
 ///

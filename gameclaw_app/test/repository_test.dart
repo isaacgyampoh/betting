@@ -18,50 +18,47 @@ void main() {
   tearDown(() => cache.close());
 
   Map<String, dynamic> matchDayBody({required int total}) => {
-        'data': {
-          'date': '2026-10-15',
-          'total': total,
-          'shown': 2,
-          'groups': [
+    'data': {
+      'date': '2026-10-15',
+      'total': total,
+      'shown': 2,
+      'groups': [
+        {
+          'league': {'id': 39, 'name': 'Premier League', 'country': 'England', 'season': 2026},
+          'matches': [
             {
+              'id': 1,
+              'kickoffAt': '2026-10-15T14:00:00.000Z',
+              'status': 'FINISHED',
+              'statusLabel': 'Match Finished',
               'league': {'id': 39, 'name': 'Premier League', 'country': 'England', 'season': 2026},
-              'matches': [
-                {
-                  'id': 1,
-                  'kickoffAt': '2026-10-15T14:00:00.000Z',
-                  'status': 'FINISHED',
-                  'statusLabel': 'Match Finished',
-                  'league': {'id': 39, 'name': 'Premier League', 'country': 'England', 'season': 2026},
-                  'home': {'id': 1, 'name': 'Arsenal'},
-                  'away': {'id': 2, 'name': 'Chelsea'},
-                  'goals': {'home': 2, 'away': 1},
-                },
-                {
-                  'id': 2,
-                  'kickoffAt': '2026-10-15T16:30:00.000Z',
-                  'status': 'SCHEDULED',
-                  'statusLabel': 'Not Started',
-                  'league': {'id': 39, 'name': 'Premier League', 'country': 'England', 'season': 2026},
-                  'home': {'id': 3, 'name': 'Everton'},
-                  'away': {'id': 4, 'name': 'Fulham'},
-                },
-              ],
+              'home': {'id': 1, 'name': 'Arsenal'},
+              'away': {'id': 2, 'name': 'Chelsea'},
+              'goals': {'home': 2, 'away': 1},
+            },
+            {
+              'id': 2,
+              'kickoffAt': '2026-10-15T16:30:00.000Z',
+              'status': 'SCHEDULED',
+              'statusLabel': 'Not Started',
+              'league': {'id': 39, 'name': 'Premier League', 'country': 'England', 'season': 2026},
+              'home': {'id': 3, 'name': 'Everton'},
+              'away': {'id': 4, 'name': 'Fulham'},
             },
           ],
         },
-      };
+      ],
+    },
+  };
 
   FootballRepository repoThat(_Reply reply) => FootballRepository(
-        api: ApiClient(
-          config: const ApiConfig(baseUrl: 'https://example.invalid/api/v1'),
-          dio: Dio(BaseOptions(
-            baseUrl: 'https://example.invalid/api/v1',
-            validateStatus: (_) => true,
-          ))
-            ..httpClientAdapter = _FakeAdapter(reply),
-        ),
-        cache: cache,
-      );
+    api: ApiClient(
+      config: const ApiConfig(baseUrl: 'https://example.invalid/api/v1'),
+      dio: Dio(BaseOptions(baseUrl: 'https://example.invalid/api/v1', validateStatus: (_) => true))
+        ..httpClientAdapter = _FakeAdapter(reply),
+    ),
+    cache: cache,
+  );
 
   test('a successful read is marked current and stored', () async {
     final result = await repoThat(_Reply.json(matchDayBody(total: 1284))).matchDay('2026-10-15');
@@ -82,7 +79,10 @@ void main() {
     expect(result.fromCache, isTrue);
     expect(result.value.groups.single.fixtures.first.homeGoals, 2);
     // The timestamp is the original read's, not now: that is what the banner shows the user.
-    expect(result.fetchedAt.isBefore(DateTime.now().toUtc().add(const Duration(seconds: 1))), isTrue);
+    expect(
+      result.fetchedAt.isBefore(DateTime.now().toUtc().add(const Duration(seconds: 1))),
+      isTrue,
+    );
   });
 
   test('offline with nothing cached fails rather than inventing a day', () async {
@@ -104,17 +104,22 @@ void main() {
 
   test('the server\'s own wording survives a refusal', () async {
     await expectLater(
-      repoThat(_Reply.json({
-        'error': {'code': 'STATS_UNAVAILABLE', 'message': 'Match stats are busy right now.'}
-      }, status: 503))
-          .matchDay('2026-10-15'),
+      repoThat(
+        _Reply.json({
+          'error': {'code': 'STATS_UNAVAILABLE', 'message': 'Match stats are busy right now.'},
+        }, status: 503),
+      ).matchDay('2026-10-15'),
       throwsA(isA<ServerFailure>().having((e) => e.message, 'message', contains('busy'))),
     );
   });
 
   test('a cached payload the app can no longer read is treated as absent', () async {
     // What an older build left behind after the response shape changed.
-    await cache.write('matches:2026-10-15', jsonEncode({'groups': 'not a list'}), DateTime.now().toUtc());
+    await cache.write(
+      'matches:2026-10-15',
+      jsonEncode({'groups': 'not a list'}),
+      DateTime.now().toUtc(),
+    );
 
     await expectLater(
       repoThat(_Reply.offline()).matchDay('2026-10-15'),
@@ -123,7 +128,11 @@ void main() {
   });
 
   test('a response that cannot be parsed is not cached as if it could', () async {
-    final repo = repoThat(_Reply.json({'data': {'groups': 'not a list'}}));
+    final repo = repoThat(
+      _Reply.json({
+        'data': {'groups': 'not a list'},
+      }),
+    );
 
     await expectLater(repo.matchDay('2026-10-15'), throwsA(isA<Object>()));
     expect(await cache.read('matches:2026-10-15'), isNull);
@@ -134,15 +143,10 @@ void main() {
 /// status handling, envelope unwrapping - without a server.
 class _Reply {
   _Reply.json(Map<String, dynamic> body, {this.status = 200})
-      : body = jsonEncode(body),
-        error = null;
-  _Reply.status(this.status)
-      : body = '{}',
-        error = null;
-  _Reply.offline()
-      : body = '',
-        status = 0,
-        error = DioExceptionType.connectionError;
+    : body = jsonEncode(body),
+      error = null;
+  _Reply.status(this.status) : body = '{}', error = null;
+  _Reply.offline() : body = '', status = 0, error = DioExceptionType.connectionError;
 
   final String body;
   final int status;
@@ -155,7 +159,11 @@ class _FakeAdapter implements HttpClientAdapter {
   final _Reply reply;
 
   @override
-  Future<ResponseBody> fetch(RequestOptions options, Stream<List<int>>? stream, Future<void>? cancelFuture) async {
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<List<int>>? stream,
+    Future<void>? cancelFuture,
+  ) async {
     if (reply.error != null) {
       throw DioException(requestOptions: options, type: reply.error!);
     }

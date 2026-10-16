@@ -29,41 +29,40 @@ class Cached<T> {
 /// because showing yesterday's list to someone whose session expired hides the thing they need to
 /// fix. The cache covers being on a bad connection, not covering up errors.
 class FootballRepository {
-  FootballRepository({required ApiClient api, CacheDb? cache})
-      : _api = api,
-        _cache = cache;
+  FootballRepository({required ApiClient api, CacheDb? cache}) : _api = api, _cache = cache;
 
   final ApiClient _api;
   final CacheDb? _cache;
 
   /// A day's fixtures. [date] is YYYY-MM-DD in UTC, which is how the server groups a matchday.
   Future<Cached<MatchDay>> matchDay(String date) => _read(
-        key: 'matches:$date',
-        fetch: () => _api.get<Map<String, dynamic>>('/matches', query: {'date': date}),
-        parse: MatchDay.fromJson,
-      );
+    key: 'matches:$date',
+    fetch: () => _api.get<Map<String, dynamic>>('/matches', query: {'date': date}),
+    parse: MatchDay.fromJson,
+  );
 
   Future<Cached<MatchDetail>> matchDetail(int id, {String? dateHint}) => _read(
-        key: 'match:$id',
-        fetch: () => _api.get<Map<String, dynamic>>(
-          '/matches/$id',
-          query: dateHint == null ? null : {'date': dateHint},
-        ),
-        // The fetch time is the detail's own, so a cached match centre dates itself.
-        parse: (json) => MatchDetail.fromJson(json),
-      );
+    key: 'match:$id',
+    fetch: () => _api.get<Map<String, dynamic>>(
+      '/matches/$id',
+      query: dateHint == null ? null : {'date': dateHint},
+    ),
+    // The fetch time is the detail's own, so a cached match centre dates itself.
+    parse: (json) => MatchDetail.fromJson(json),
+  );
 
   Future<Cached<List<DailyPick>>> todaysPicks() => _read(
-        key: 'picks:today',
-        fetch: () => _api.get<List<dynamic>>('/picks'),
-        parse: (list) => list.map((p) => DailyPick.fromJson(p as Map<String, dynamic>)).toList(growable: false),
-      );
+    key: 'picks:today',
+    fetch: () => _api.get<List<dynamic>>('/picks'),
+    parse: (list) =>
+        list.map((p) => DailyPick.fromJson(p as Map<String, dynamic>)).toList(growable: false),
+  );
 
   Future<Cached<TrackRecord>> trackRecord() => _read(
-        key: 'picks:record',
-        fetch: () => _api.get<Map<String, dynamic>>('/picks/track-record'),
-        parse: TrackRecord.fromJson,
-      );
+    key: 'picks:record',
+    fetch: () => _api.get<Map<String, dynamic>>('/picks/track-record'),
+    parse: TrackRecord.fromJson,
+  );
 
   /// Network first, disk second, and the disk only for a connection problem.
   Future<Cached<T>> _read<J, T>({
@@ -117,12 +116,17 @@ class ChatRepository {
     int? matchId,
     List<String> seenSlipIds = const [],
   }) async {
-    final json = await _api.post<Map<String, dynamic>>('/ai/chat', body: {
-      // The server keeps its own window; sending the whole conversation each time is what lets it.
-      'messages': [for (final turn in history) {'role': turn.role, 'content': turn.text}],
-      if (matchId != null) 'matchId': matchId,
-      if (seenSlipIds.isNotEmpty) 'seenSlipIds': seenSlipIds,
-    });
+    final json = await _api.post<Map<String, dynamic>>(
+      '/ai/chat',
+      body: {
+        // The server keeps its own window; sending the whole conversation each time is what lets it.
+        'messages': [
+          for (final turn in history) {'role': turn.role, 'content': turn.text},
+        ],
+        if (matchId != null) 'matchId': matchId,
+        if (seenSlipIds.isNotEmpty) 'seenSlipIds': seenSlipIds,
+      },
+    );
     return ChatResult.fromJson(json);
   }
 
@@ -132,7 +136,12 @@ class ChatRepository {
 
 /// One message in a conversation.
 class ChatTurn {
-  const ChatTurn({required this.role, required this.text, this.slips = const [], this.failed = false});
+  const ChatTurn({
+    required this.role,
+    required this.text,
+    this.slips = const [],
+    this.failed = false,
+  });
 
   /// 'user' or 'assistant'. The server rejects anything else, and rightly.
   final String role;

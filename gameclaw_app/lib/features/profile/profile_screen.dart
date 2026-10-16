@@ -3,96 +3,202 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/api_client.dart';
+import '../../data/auth_client.dart';
 import '../../data/providers.dart';
 import '../../theme/tokens.dart';
-import '../../ui/section.dart';
+import '../../ui/components/gc_button.dart';
+import '../../ui/components/gc_states.dart';
 
-/// Account, and the few settings that are genuinely settings.
+/// Account, and the few things that are genuinely settings.
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
+    final favourites = ref.watch(favouriteTeamsProvider).value?.length ?? 0;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: GcSpace.xxl),
-        children: [
-          session.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(GcSpace.xl),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: GcSpace.xxxl),
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.md, GcSpace.gutter, GcSpace.lg),
+              child: Text('Profile', style: GcType.display),
             ),
-            error: (error, _) => GcSection(title: 'Account', child: GcNote('$error')),
-            data: (session) => session == null
-                ? GcSection(
-                    title: 'Account',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const GcNote(
-                          'Not signed in. Scores and the published record are open to everyone; '
-                          'building a slip needs an account.',
-                        ),
-                        const SizedBox(height: GcSpace.md),
-                        FilledButton(
-                          onPressed: () => context.push('/signin'),
-                          child: const Text('Sign in'),
-                        ),
-                      ],
+            session.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.all(GcSpace.xl),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+              error: (error, _) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+                child: GcNote('$error'),
+              ),
+              data: (current) => current == null
+                  ? _SignedOut(onSignIn: () => context.push('/signin'))
+                  : _SignedIn(
+                      session: current,
+                      favourites: favourites,
+                      onSignOut: () => ref.read(signOutProvider)(),
                     ),
-                  )
-                : GcSection(
-                    title: 'Account',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        GcNote(session.email ?? 'Signed in on this device.'),
-                        const SizedBox(height: GcSpace.md),
-                        OutlinedButton(
-                          onPressed: () => ref.read(signOutProvider)(),
-                          child: const Text('Sign out'),
-                        ),
-                      ],
-                    ),
+            ),
+            const GcSectionHeader(title: 'Staying in control'),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Not buried in a settings page. A product that suggests bets carries this on a
+                  // screen people actually open.
+                  Text(
+                    'Betting costs money over time. Decide what you are willing to lose before you '
+                    'stake it, and stop when you reach it.',
+                    style: GcType.body,
                   ),
-          ),
+                  SizedBox(height: GcSpace.md),
+                  Text(
+                    'Every chance shown in this app is an estimate from past results. No slip is '
+                    'certain, and a long price is long for a reason.',
+                    style: GcType.body,
+                  ),
+                ],
+              ),
+            ),
+            const GcSectionHeader(title: 'About'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('GameClaw', style: GcType.label),
+                      const Spacer(),
+                      Text(
+                        // The host this build talks to. A tester needs to know which backend a
+                        // given APK points at, and no screenshot otherwise says.
+                        ApiConfig.fromEnvironment().baseUrl,
+                        style: GcType.caption.copyWith(fontSize: 11, color: GcColors.inkFaint),
+                      ),
+                    ],
+                  ),
+                  if (!ref.watch(supabaseConfigProvider).isConfigured) ...[
+                    const SizedBox(height: GcSpace.md),
+                    const GcNote(
+                      'This build has no sign-in configured.',
+                      icon: Icons.info_outline_rounded,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-          const GcSection(
-            title: 'Staying in control',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+class _SignedOut extends StatelessWidget {
+  const _SignedOut({required this.onSignIn});
+
+  final VoidCallback onSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const GcNote(
+            'Not signed in. Scores and the published record are open to everyone; '
+            'building a slip needs an account.',
+            icon: Icons.lock_outline_rounded,
+          ),
+          const SizedBox(height: GcSpace.md),
+          GcButton(label: 'Sign in', onPressed: onSignIn, icon: Icons.login_rounded),
+        ],
+      ),
+    );
+  }
+}
+
+class _SignedIn extends StatelessWidget {
+  const _SignedIn({required this.session, required this.favourites, required this.onSignOut});
+
+  final AuthSession session;
+  final int favourites;
+  final Future<void> Function() onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final email = session.email ?? 'Signed in on this device';
+    final initial = email.trim().isEmpty ? '?' : email.trim().characters.first.toUpperCase();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(GcSpace.md),
+            decoration: BoxDecoration(
+              color: GcColors.surface,
+              borderRadius: BorderRadius.circular(GcRadius.lg),
+              border: Border.all(color: GcColors.border),
+            ),
+            child: Row(
               children: [
-                // Not buried in a settings page. A product that suggests bets carries this on the
-                // screen people actually open.
-                Text(
-                  'Betting costs money over time. Decide what you are willing to lose before you '
-                  'stake it, and stop when you reach it.\n\n'
-                  'Every chance shown in this app is an estimate from past results. '
-                  'No slip is certain, and a long price is long for a reason.',
-                  style: GcType.body,
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: GcColors.accent,
+                    borderRadius: BorderRadius.circular(GcRadius.md),
+                  ),
+                  child: Text(initial, style: GcType.heading.copyWith(color: GcColors.onAccent)),
+                ),
+                const SizedBox(width: GcSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        email,
+                        style: GcType.bodyStrong,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: GcSpace.xxs),
+                      Text(
+                        favourites == 0
+                            ? 'No teams followed'
+                            : '$favourites ${favourites == 1 ? 'team' : 'teams'} followed',
+                        style: GcType.caption,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-
-          GcSection(
-            title: 'About',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('GameClaw', style: GcType.label),
-                const SizedBox(height: GcSpace.xs),
-                Text(
-                  // The host this build talks to, shown because a tester needs to know which
-                  // backend a given APK is pointed at and no screenshot otherwise says.
-                  ApiConfig.fromEnvironment().baseUrl,
-                  style: GcType.caption.copyWith(color: GcColors.inkFaint),
-                ),
-              ],
-            ),
+          const SizedBox(height: GcSpace.md),
+          GcButton(
+            label: 'Sign out',
+            onPressed: onSignOut,
+            kind: GcButtonKind.secondary,
+            icon: Icons.logout_rounded,
+          ),
+          const SizedBox(height: GcSpace.sm),
+          Text(
+            // Said because it is a real consequence and a surprise otherwise.
+            'Signing out clears everything saved on this device. Followed teams are kept.',
+            style: GcType.caption.copyWith(fontSize: 11.5, color: GcColors.inkFaint),
           ),
         ],
       ),

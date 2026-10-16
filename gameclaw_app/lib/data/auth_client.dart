@@ -49,14 +49,15 @@ class AuthSession {
 
   /// A minute of margin: a token that expires while a request is in flight is a token that was
   /// already too old to send.
-  bool get isExpired => DateTime.now().toUtc().isAfter(expiresAtUtc.subtract(const Duration(minutes: 1)));
+  bool get isExpired =>
+      DateTime.now().toUtc().isAfter(expiresAtUtc.subtract(const Duration(minutes: 1)));
 
   Map<String, dynamic> toJson() => {
-        'accessToken': accessToken,
-        'refreshToken': refreshToken,
-        'expiresAt': expiresAtUtc.toIso8601String(),
-        'email': email,
-      };
+    'accessToken': accessToken,
+    'refreshToken': refreshToken,
+    'expiresAt': expiresAtUtc.toIso8601String(),
+    'email': email,
+  };
 
   static AuthSession? fromJson(Map<String, dynamic> json) {
     final access = json['accessToken'] as String?;
@@ -99,9 +100,11 @@ class SignUpResult {
 
 class AuthClient {
   AuthClient({required SupabaseConfig config, Dio? dio})
-      : _config = config,
-        _dio = dio ??
-            Dio(BaseOptions(
+    : _config = config,
+      _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: '${config.url}/auth/v1',
               connectTimeout: const Duration(seconds: 10),
               receiveTimeout: const Duration(seconds: 20),
@@ -111,7 +114,8 @@ class AuthClient {
                 'authorization': 'Bearer ${config.anonKey}',
                 'content-type': 'application/json',
               },
-            ));
+            ),
+          );
 
   final SupabaseConfig _config;
   final Dio _dio;
@@ -161,8 +165,7 @@ class AuthClient {
       throw switch (error.type) {
         DioExceptionType.connectionTimeout ||
         DioExceptionType.receiveTimeout ||
-        DioExceptionType.sendTimeout =>
-          const TimeoutFailure(),
+        DioExceptionType.sendTimeout => const TimeoutFailure(),
         DioExceptionType.connectionError => const OfflineFailure(),
         _ => const UnknownFailure(),
       };
@@ -177,7 +180,8 @@ class AuthClient {
     // Supabase words its own refusals well - "Invalid login credentials", "User already
     // registered" - and they are better than anything generic. Its newer shape is
     // { error_code, msg }; the older one is { error, error_description }.
-    final message = json['msg'] as String? ??
+    final message =
+        json['msg'] as String? ??
         json['error_description'] as String? ??
         json['message'] as String? ??
         (json['error'] is String ? json['error'] as String : null);
