@@ -201,6 +201,20 @@ class PushService {
     }
   }
 
+  /// Asks the server to send this account a notification, and reports what it says.
+  ///
+  /// Returns null on success, or the server's own explanation - it knows whether no device is
+  /// registered, whether the registration is dead, or whether sending is configured at all, and
+  /// any of those is more useful than "something went wrong".
+  Future<String?> sendTest() async {
+    try {
+      await ref.read(apiClientProvider).post<Map<String, dynamic>>('/devices/test');
+      return null;
+    } on ApiFailure catch (error) {
+      return error.message;
+    }
+  }
+
   Future<void> _send(String id) async {
     if (id == _sent || id == _sending) return;
     if (ref.read(sessionProvider).value == null) return;

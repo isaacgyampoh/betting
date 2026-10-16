@@ -302,6 +302,31 @@ class _NotificationsState extends ConsumerState<_Notifications> {
             Switch(value: _on ?? false, onChanged: _busy || _on == null ? null : _toggle),
           ],
         ),
+        if (_on == true) ...[
+          const SizedBox(height: GcSpace.md),
+          GcButton(
+            label: 'Send a test notification',
+            kind: GcButtonKind.secondary,
+            size: GcButtonSize.small,
+            icon: Icons.notifications_active_outlined,
+            onPressed: () async {
+              final problem = await ref.read(pushServiceProvider).sendTest();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context)
+                ..clearSnackBars()
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      problem ?? 'Sent. It should arrive in a moment.',
+                      style: GcType.label.copyWith(
+                        color: problem == null ? GcColors.ink : GcColors.loss,
+                      ),
+                    ),
+                  ),
+                );
+            },
+          ),
+        ],
         if (_on == false) ...[
           const SizedBox(height: GcSpace.sm),
           Text(
