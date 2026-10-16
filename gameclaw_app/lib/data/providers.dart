@@ -4,8 +4,10 @@ import '../domain/models.dart';
 import 'api_client.dart';
 import 'local/cache.dart';
 import 'repository.dart';
+import 'push.dart';
 import 'session.dart';
 
+export 'push.dart';
 export 'session.dart';
 
 final cacheDbProvider = Provider<CacheDb>((ref) {
@@ -120,6 +122,10 @@ final toggleFavouriteProvider = Provider<Future<void> Function(Team)>((ref) {
 /// Signs out, and forgets everything read for that account.
 final signOutProvider = Provider<Future<void> Function()>((ref) {
   return () async {
+    // Before the session goes, not after: unregistering needs the token that is about to be
+    // thrown away, and a device left registered keeps receiving alerts for an account that is no
+    // longer signed in on it.
+    await ref.read(pushServiceProvider).unregister();
     await ref.read(sessionProvider.notifier).signOut();
     await ref.read(cacheDbProvider).clearAll();
   };

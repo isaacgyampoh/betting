@@ -1,0 +1,8 @@
+# Copy to android/key.properties and fill in. That file is gitignored and must stay that way.
+#
+# storeFile is an ABSOLUTE path to a keystore kept OUTSIDE this repository - for example
+# ~/keys/gameclaw-upload.jks. See docs/release-signing.md.
+storeFile=/Users/you/keys/gameclaw-upload.jks
+storePassword=
+keyAlias=upload
+keyPassword=

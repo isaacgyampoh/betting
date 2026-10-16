@@ -121,6 +121,11 @@ class ApiClient {
   Future<T> post<T>(String path, {Object? body, CancelToken? cancel}) =>
       _send<T>(() => _dio.post<dynamic>(path, data: body, cancelToken: cancel));
 
+  /// DELETE with a body, which is unusual but is what unregistering a device takes: the token
+  /// identifies the row and does not belong in a URL, where it would end up in access logs.
+  Future<T> delete<T>(String path, {Object? body, CancelToken? cancel}) =>
+      _send<T>(() => _dio.delete<dynamic>(path, data: body, cancelToken: cancel));
+
   Future<T> _send<T>(Future<Response<dynamic>> Function() run) async {
     final Response<dynamic> response;
     try {

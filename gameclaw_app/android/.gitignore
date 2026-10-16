@@ -12,3 +12,7 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Firebase configuration. Carries the project's identifiers and API key; kept out of the
+# repository and supplied per environment. See docs/notifications.md.
+app/google-services.json

@@ -45,6 +45,11 @@ class ProfileScreen extends ConsumerWidget {
                       onSignOut: () => ref.read(signOutProvider)(),
                     ),
             ),
+            const GcSectionHeader(title: 'Notifications'),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+              child: _Notifications(),
+            ),
             const GcSectionHeader(title: 'Our record'),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
@@ -212,6 +217,102 @@ class _SignedIn extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Whether this device receives alerts.
+///
+/// The permission is asked for here, at the moment the user turns alerts on, rather than at
+/// launch: a prompt on first open - before anything has been explained - is the one most people
+/// refuse for ever, and Android gives no second chance without a trip to Settings.
+class _Notifications extends ConsumerStatefulWidget {
+  const _Notifications();
+
+  @override
+  ConsumerState<_Notifications> createState() => _NotificationsState();
+}
+
+class _NotificationsState extends ConsumerState<_Notifications> {
+  bool? _on;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final on = await ref.read(pushServiceProvider).hasPermission();
+    if (mounted) setState(() => _on = on);
+  }
+
+  Future<void> _toggle(bool want) async {
+    setState(() => _busy = true);
+    final push = ref.read(pushServiceProvider);
+    if (want) {
+      final granted = await push.requestPermission();
+      if (granted) await push.register();
+      if (mounted) setState(() => _on = granted);
+    } else {
+      await push.unregister();
+      if (mounted) setState(() => _on = false);
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final push = ref.watch(pushServiceProvider);
+    final signedIn = ref.watch(isSignedInProvider);
+
+    if (!push.available) {
+      return const GcNote(
+        'This build has no notification support configured.',
+        icon: Icons.notifications_off_outlined,
+      );
+    }
+    if (!signedIn) {
+      return const GcNote(
+        'Sign in to get alerts about the teams you follow.',
+        icon: Icons.notifications_none_rounded,
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Match alerts', style: GcType.bodyStrong),
+                  const SizedBox(height: GcSpace.xxs),
+                  Text(
+                    'Kick-off, goals and full time for the teams you follow.',
+                    style: GcType.caption,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: GcSpace.md),
+            Switch(value: _on ?? false, onChanged: _busy || _on == null ? null : _toggle),
+          ],
+        ),
+        if (_on == false) ...[
+          const SizedBox(height: GcSpace.sm),
+          Text(
+            // Android will not prompt twice. Saying so is the difference between a user who fixes
+            // it and one who taps a dead switch.
+            'If the switch does nothing, Android has already been told no. '
+            'Turn notifications on for GameClaw in Android Settings.',
+            style: GcType.caption.copyWith(fontSize: 11.5, color: GcColors.inkFaint),
+          ),
+        ],
+      ],
     );
   }
 }

@@ -49,6 +49,7 @@ model Profile {
   slips           Slip[]
   usageLogs       UsageLog[]
   pushSubs        PushSubscription[]
+  deviceTokens    DeviceToken[]
   referredBy      Profile?           @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
   referred        Profile[]          @relation("Referrals")
   referralRewards ReferralReward[]   @relation("RewardEarner")
@@ -527,6 +528,33 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+/// A native Android device registered for push, via Firebase Cloud Messaging.
+///
+/// Separate from PushSubscription rather than replacing it: that one is Web Push for the browser,
+/// keyed on an endpoint URL with its own crypto, and the marketing site still uses it. A phone
+/// cannot produce a Web Push subscription and FCM cannot deliver to one, so the two coexist.
+///
+/// The token is the identity, so it is unique: FCM re-issues the same token to the same install,
+/// and on re-registration the row is reassigned to whoever is signed in now. That is what stops a
+/// second user on a shared phone inheriting the first one's alerts.
+model DeviceToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// The FCM registration token. Unique: one row per install, never one per sign-in.
+  token     String   @unique
+  platform  String   @default("android")
+  /// Set when a send is rejected as unregistered, so a dead token stops being retried.
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([revokedAt])
+  @@map("device_tokens")
 }
 
 /// Free days granted for a referral, to both sides. One row per referred user, so it can't repeat.
