@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../data/providers.dart';
 import '../features/auth/age_gate_screen.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/claw/claw_screen.dart';
@@ -46,7 +47,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     GoRoute(path: 'competitions', builder: (_, __) => const CompetitionsScreen()),
   ];
 
-  return GoRouter(
+  final router = GoRouter(
     navigatorKey: _rootKey,
     initialLocation: '/home',
     routes: [
@@ -105,6 +106,24 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
     errorBuilder: (context, state) => const _BadRoute(),
   );
+
+  // A notification tap can arrive before the first frame - the app may have been launched by it -
+  // so the route is held until there is somewhere to send it. Cleared after use, or a hot restart
+  // would navigate again on its own.
+  final push = ref.read(pushServiceProvider);
+  void follow() {
+    final route = push.pendingRoute.value;
+    if (route == null) return;
+    push.pendingRoute.value = null;
+    router.go(route);
+  }
+
+  push.pendingRoute.addListener(follow);
+  ref.onDispose(() => push.pendingRoute.removeListener(follow));
+  // One that arrived during startup, before this listener existed.
+  WidgetsBinding.instance.addPostFrameCallback((_) => follow());
+
+  return router;
 });
 
 class _BadRoute extends StatelessWidget {

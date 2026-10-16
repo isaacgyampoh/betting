@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api_client.dart';
@@ -15,11 +16,19 @@ import 'providers.dart';
 /// phone inheriting the first one's alerts, and it is why this registers on sign-in and
 /// unregisters on sign-out rather than trying to hold one id per account.
 ///
-/// Registration is event-driven because Firebase is: [FirebaseMessaging.register] asks, and the
-/// id arrives later on [FirebaseMessaging.onRegistered] - which also fires on its own when the id
-/// rotates after a reinstall or a restore. A rotation the server never hears about is a device
-/// that silently stops receiving anything, so the stream is the source of truth, not a one-off
-/// read at startup.
+/// What is stored is the **FCM registration token**, from `getToken()`.
+///
+/// That call is deprecated in firebase_messaging 17 in favour of `register()`/`onRegistered`,
+/// which hand back a Firebase Installation ID instead - and the deprecation is not followed here
+/// on purpose. FCM's HTTP v1 `messages:send` documents its `token` field as the registration
+/// token; whether it also accepts an installation id is not something to find out at send time,
+/// when the failure looks like "notifications do not work" and nothing says why. The device did
+/// register with an installation id first, and the server rejected it as too short - which is how
+/// the mismatch surfaced at all.
+///
+/// `onTokenRefresh` is still the source of truth for changes: Firebase rotates a token on
+/// reinstall and restore, and a rotation the server never hears about is a device that silently
+/// stops receiving anything.
 ///
 /// Nothing here assumes Firebase is configured. A build without google-services.json has no push
 /// at all: every method returns quietly instead of throwing, because a missing optional feature
@@ -31,26 +40,96 @@ class PushService {
 
   FirebaseMessaging? _messaging;
   StreamSubscription<String>? _registered;
-  StreamSubscription<String>? _unregistered;
+  StreamSubscription<RemoteMessage>? _foreground;
+  StreamSubscription<RemoteMessage>? _opened;
+
+  final _local = FlutterLocalNotificationsPlugin();
+
+  /// Where a tapped notification wants to go. Read by the router once it exists - a tap can
+  /// arrive before the first frame, and the route would otherwise be lost.
+  final pendingRoute = ValueNotifier<String?>(null);
+
+  /// The channel Android groups these under. Must exist before the first notification, or Android
+  /// silently drops it on 8.0 and later.
+  static const _channel = AndroidNotificationChannel(
+    'gameclaw_matches',
+    'Match alerts',
+    description: 'Kick-off, goals and full time for teams you follow.',
+    importance: Importance.high,
+  );
 
   /// The id currently known to the server, so the same one is not sent twice.
   String? _sent;
+
+  /// The id being sent right now, so two callers cannot send it at once.
+  String? _sending;
 
   /// True once Firebase has initialised. False in a build with no Firebase configuration.
   bool get available => _messaging != null;
 
   /// Call once, after Firebase.initializeApp has succeeded.
-  void attach(FirebaseMessaging messaging) {
+  Future<void> attach(FirebaseMessaging messaging) async {
     _messaging = messaging;
-    _registered = messaging.onRegistered.listen(_send);
-    _unregistered = messaging.onUnregistered.listen((_) => _sent = null);
+    // ignore: deprecated_member_use
+    _registered = messaging.onTokenRefresh.listen(_send);
+
+    await _local.initialize(
+      settings: const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      ),
+      onDidReceiveNotificationResponse: (response) => _open(response.payload),
+    );
+    await _local
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(_channel);
+
+    // Android shows a notification itself only when the app is backgrounded. In the foreground
+    // the message arrives silently, so it is drawn here or the user sees nothing at all.
+    _foreground = FirebaseMessaging.onMessage.listen(_showForeground);
+
+    // Tapped while the app was running in the background.
+    _opened = FirebaseMessaging.onMessageOpenedApp.listen((m) => _open(m.data['route'] as String?));
+
+    // Tapped while the app was not running at all: the message that launched it is waiting here,
+    // and is only delivered once.
+    final initial = await messaging.getInitialMessage();
+    if (initial != null) _open(initial.data['route'] as String?);
+  }
+
+  void _open(String? route) {
+    if (route == null || route.isEmpty) return;
+    pendingRoute.value = route;
+  }
+
+  Future<void> _showForeground(RemoteMessage message) async {
+    final notification = message.notification;
+    if (notification == null) return;
+    await _local.show(
+      // Collapsing on the key means a goal confirmed twice replaces itself rather than stacking.
+      id: message.collapseKey?.hashCode ?? notification.hashCode,
+      title: notification.title,
+      body: notification.body,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channel.id,
+          _channel.name,
+          channelDescription: _channel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+      payload: message.data['route'] as String?,
+    );
   }
 
   Future<void> dispose() async {
     await _registered?.cancel();
-    await _unregistered?.cancel();
+    await _foreground?.cancel();
+    await _opened?.cancel();
     _registered = null;
-    _unregistered = null;
+    _foreground = null;
+    _opened = null;
+    pendingRoute.dispose();
   }
 
   /// Asks for the notification permission Android 13+ requires.
@@ -78,7 +157,16 @@ class PushService {
     final messaging = _messaging;
     if (messaging == null) return;
     if (ref.read(sessionProvider).value == null) return;
-    await messaging.register();
+    try {
+      // ignore: deprecated_member_use
+      final token = await messaging.getToken();
+      if (token != null) await _send(token);
+    } on Exception catch (error) {
+      // Push is optional and this runs from a toggle. A platform error here must not reach the
+      // framework as an unhandled exception - the user gets a switch that does not stick, which
+      // is bad, rather than a red screen, which is worse.
+      debugPrint('push: register failed ($error)');
+    }
   }
 
   /// Removes this device's registration, server side and at Firebase.
@@ -87,7 +175,8 @@ class PushService {
   /// means the next person to sign in on this phone gets a fresh id rather than inheriting one.
   Future<void> unregister() async {
     final messaging = _messaging;
-    final id = _sent;
+    // ignore: deprecated_member_use
+    final id = _sent ?? await messaging?.getToken();
     _sent = null;
 
     if (id != null) {
@@ -101,15 +190,25 @@ class PushService {
     }
 
     try {
-      await messaging?.unregister();
-    } on Exception {
-      // Nothing useful to do. Removing it server side above is what actually stops delivery.
+      // Deleting the token forces Firebase to issue a fresh one, so the next person to sign in on
+      // this phone cannot inherit this subscription even briefly.
+      // ignore: deprecated_member_use
+      await messaging?.deleteToken();
+    } on Exception catch (error) {
+      // Nothing useful to do here: removing the row server side, above, is what actually stops
+      // delivery. This only releases the token at Firebase.
+      debugPrint('push: deleting the token at Firebase failed ($error)');
     }
   }
 
   Future<void> _send(String id) async {
-    if (id == _sent) return;
+    if (id == _sent || id == _sending) return;
     if (ref.read(sessionProvider).value == null) return;
+    // Claimed before the request rather than after it. On the device both the launch listener and
+    // onTokenRefresh fired with the same token and neither had finished when the other started,
+    // so the server saw it twice. Harmless - the upsert is idempotent - but it is still two round
+    // trips to say the same thing.
+    _sending = id;
     try {
       await ref
           .read(apiClientProvider)
@@ -119,6 +218,8 @@ class PushService {
       // Best effort. Failing this must never block sign-in or break a screen; the next launch,
       // or the next rotation, tries again.
       debugPrint('push: could not register device (${error.message})');
+    } finally {
+      _sending = null;
     }
   }
 }

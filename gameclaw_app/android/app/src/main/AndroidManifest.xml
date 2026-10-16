@@ -31,6 +31,23 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Deliberately absent: firebase_messaging_installation_id_enabled.
+
+             The two addressing APIs are mutually exclusive, which the SDK only says once you hit
+             it. With that flag set, register()/onRegistered work and getToken() throws "API
+             disabled"; without it, the reverse. So one has to be chosen.
+
+             getToken() wins because FCM's HTTP v1 messages:send documents its `token` field as
+             the registration token. Whether it also accepts an installation id is not a thing to
+             discover at send time, where the failure reads as "notifications do not work" and
+             nothing says why. -->
+
+        <!-- The channel a notification lands in when the app is not running. It is created in
+             Dart too, but Android needs it before the first message arrives or it is dropped. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="gameclaw_matches" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

@@ -28,7 +28,7 @@ Future<void> main() async {
 
   final container = ProviderContainer(retry: gcRetry);
   if (messaging != null) {
-    container.read(pushServiceProvider).attach(messaging);
+    await container.read(pushServiceProvider).attach(messaging);
     // Registering needs a session, so it waits for one rather than firing at launch.
     container.listen(isSignedInProvider, (_, signedIn) {
       if (signedIn) container.read(pushServiceProvider).register();

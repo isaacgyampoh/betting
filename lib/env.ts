@@ -14,6 +14,8 @@ const serverSchema = z.object({
   SPORTYBET_MODE: z.enum(["mock", "live"]).default("mock"),
   BETWAY_MODE: z.enum(["mock", "live"]).default("mock"),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  /** Firebase service-account JSON, for sending push. Optional: without it the app simply cannot send. */
+  FCM_SERVICE_ACCOUNT: z.string().optional(),
   API_FOOTBALL_KEY: z.string().min(1).optional(),
   /** auto = live when API_FOOTBALL_KEY is set, otherwise labelled sample data. */
   STATS_MODE: z.enum(["auto", "live", "sample"]).default("auto"),

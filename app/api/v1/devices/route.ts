@@ -3,8 +3,10 @@ import { ok, parseBody, route } from "@/lib/api";
 import { requireUser } from "@/lib/auth";
 import { registerDevice, unregisterDevice } from "@/lib/services/devices";
 
-// An FCM registration token. Long and opaque; bounded so a bad client cannot post a novel.
-const tokenSchema = z.string().trim().min(32).max(4096);
+// An FCM registration token: long and opaque, around 160 characters today. Bounded so a bad
+// client cannot post a novel, with a floor low enough not to reject a shorter form Firebase may
+// hand out - a floor of 32 already rejected a 22-character installation id once.
+const tokenSchema = z.string().trim().min(16).max(4096);
 
 const registerSchema = z.object({
   token: tokenSchema,
