@@ -63,7 +63,7 @@ export function sampleDataAllowed(): boolean {
  *
  * Removing a slug from this map is all it takes to switch one back on.
  */
-const REFUSED_BY_BOOKMAKER: Partial<Record<BookmakerSlug, string>> = {
+export const REFUSED_BY_BOOKMAKER: Partial<Record<BookmakerSlug, string>> = {
   msport: "MSport is not accepting requests from our servers at the moment.",
 };
 

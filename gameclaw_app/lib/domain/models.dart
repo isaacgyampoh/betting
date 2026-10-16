@@ -1159,6 +1159,7 @@ class Bookmaker {
     required this.name,
     required this.canLoad,
     required this.canBook,
+    this.refusedReason,
   });
 
   final String slug;
@@ -1170,10 +1171,16 @@ class Bookmaker {
   /// Can issue a new booking code - which is what makes it a possible destination.
   final bool canBook;
 
+  /// Set when the integration is finished and the bookmaker is turning our servers away, rather
+  /// than there being no integration at all. The two need telling apart: in this case the user's
+  /// code is perfectly good and the problem is not at their end.
+  final String? refusedReason;
+
   factory Bookmaker.fromJson(Map<String, dynamic> json) => Bookmaker(
     slug: json['slug'] as String? ?? '',
     name: json['name'] as String? ?? '',
     canLoad: json['canLoad'] == true,
+    refusedReason: json['refusedReason'] as String?,
     canBook: json['canBook'] == true,
   );
 }

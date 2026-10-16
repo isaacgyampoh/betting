@@ -268,7 +268,11 @@ class _Support extends StatelessWidget {
   Widget build(BuildContext context) {
     final readable = all.where((b) => b.canLoad).toList();
     final bookable = all.where((b) => b.canBook).toList();
-    final neither = all.where((b) => !b.canLoad && !b.canBook).toList();
+    final unusable = all.where((b) => !b.canLoad && !b.canBook).toList();
+    // Two different reasons, listed apart. One has no integration; the other has a finished one
+    // and is refusing our servers, which is not the user's problem to solve or be blamed for.
+    final refused = unusable.where((b) => b.refusedReason != null).toList();
+    final unbuilt = unusable.where((b) => b.refusedReason == null).toList();
 
     Widget line(String label, List<Bookmaker> list, String whenEmpty) => Padding(
       padding: const EdgeInsets.only(bottom: GcSpace.sm),
@@ -296,13 +300,23 @@ class _Support extends StatelessWidget {
         const SizedBox(height: GcSpace.md),
         line('Can read', readable, 'none right now'),
         line('Can issue', bookable, 'none right now'),
-        if (neither.isNotEmpty) line('Not yet', neither, ''),
+        if (unbuilt.isNotEmpty) line('Not yet', unbuilt, ''),
+        if (refused.isNotEmpty) line('Unavailable', refused, ''),
         const SizedBox(height: GcSpace.sm),
         Text(
           'A bookmaker under "Not yet" has no authorised booking-code integration, so a code from '
           'it cannot be read here.',
           style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
         ),
+        // The two reasons are not the same, and the difference matters to somebody holding a
+        // code that works perfectly well at the bookmaker that issued it.
+        for (final b in refused) ...[
+          const SizedBox(height: GcSpace.xs),
+          Text(
+            b.refusedReason!,
+            style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
+          ),
+        ],
       ],
     );
   }

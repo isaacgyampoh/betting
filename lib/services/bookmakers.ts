@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { getAdapter, isBookmakerSlug } from "@/lib/bookmakers/registry";
+import { getAdapter, isBookmakerSlug, REFUSED_BY_BOOKMAKER } from "@/lib/bookmakers/registry";
 import type { BookmakerSlug } from "@/lib/bookmakers/types";
 import { AppError } from "@/lib/errors";
 
@@ -11,6 +11,14 @@ export type BookmakerListing = {
   canLoad: boolean;
   /** We can book a new code here, which is what converting *to* this bookmaker needs. */
   canBook: boolean;
+  /**
+   * Why this bookmaker is unavailable, when the reason is not that we never built it.
+   *
+   * Null means either it works, or it has no authorised integration. A string means the
+   * integration is finished and the bookmaker is refusing our servers - which the user needs
+   * told differently, because their code is fine.
+   */
+  refusedReason?: string | null;
 };
 
 /**
@@ -24,7 +32,16 @@ export async function listEnabledBookmakers(): Promise<BookmakerListing[]> {
     .filter((b): b is typeof b & { slug: BookmakerSlug } => isBookmakerSlug(b.slug))
     .map((b) => {
       const { capabilities } = getAdapter(b.slug);
-      return { slug: b.slug, name: b.name, canLoad: capabilities.loadCode, canBook: capabilities.createCode };
+      return {
+        slug: b.slug,
+        name: b.name,
+        canLoad: capabilities.loadCode,
+        canBook: capabilities.createCode,
+        // Why it is unavailable, when the reason is not "we have not built it". A bookmaker whose
+        // own servers are turning us away is a different thing from one with no integration, and
+        // the screen should not tell somebody holding a perfectly good code that it is unsupported.
+        refusedReason: REFUSED_BY_BOOKMAKER[b.slug] ?? null,
+      };
     });
 }
 
