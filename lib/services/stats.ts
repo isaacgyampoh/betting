@@ -149,10 +149,41 @@ export async function listMatches(
 
 
 /**
+ * Which sections a fixture could possibly have yet, as opposed to which we would like it to have.
+ *
+ * A match that has not kicked off has no timeline and no statistics - not "none that we could
+ * fetch", none that exist. Asking anyway costs two upstream calls that come back empty, on
+ * two-minute cache entries, for every browse of every scheduled fixture. Measured against
+ * production: one match centre costs nine upstream calls and the provider allows three hundred a
+ * minute, so those two are the difference between roughly thirty-three and roughly fifty match
+ * opens a minute before the product starts refusing itself.
+ *
+ * Lineups are published about an hour out, so they are worth asking for shortly before kick-off
+ * and not before. The window is deliberately generous: an early team sheet should still appear.
+ *
+ * None of this changes what a screen shows. These sections were already empty; they are now empty
+ * without spending the budget the live sections need.
+ */
+export function sectionsPossibleFor(
+  match: Pick<MatchSummary, "status" | "kickoffAt">,
+  now = Date.now(),
+): { timeline: boolean; lineups: boolean } {
+  // Anything that is not still waiting to start can have a timeline: live, finished, and also
+  // abandoned or postponed matches, which may carry the events that happened before they stopped.
+  const timeline = match.status !== "SCHEDULED";
+  const kickoff = Date.parse(match.kickoffAt);
+  const minutesAway = Number.isFinite(kickoff) ? (kickoff - now) / 60_000 : 0;
+  return { timeline, lineups: timeline || minutesAway <= LINEUP_LEAD_MINUTES };
+}
+
+/**
  * @param dateHint kickoff date (YYYY-MM-DD) when known (from a match list or search): the fixture is
  *   then read from that day's cached list instead of costing another API request.
  */
 /** How much history we pull per team, and per head-to-head. */
+/** How long before kick-off a team sheet is worth asking for. Lineups land about an hour out. */
+export const LINEUP_LEAD_MINUTES = 75;
+
 export const FORM_GAMES = 10;
 export const H2H_GAMES = 6;
 
@@ -225,24 +256,53 @@ export async function getMatchDetail(
   };
 
   const skip = async <T,>(empty: T) => empty;
-  const [homeLast, awayLast, h2h, standings, events, coverage, statistics, lineups] = await Promise.all([
+
+  const { timeline: timelinePossible, lineups: lineupsPossible } = sectionsPossibleFor(match);
+
+  /**
+   * Ask the competition what it carries before asking it for anything.
+   *
+   * API-Football publishes per-season coverage flags, and they are honest: the CAF Champions
+   * League reports statistics_fixtures false and standings false, and sure enough every one of
+   * those calls comes back 200 with results=0. Three upstream calls, every time anyone opened one
+   * of those matches, to be told nothing - on a budget of three hundred a minute shared by the
+   * whole product.
+   *
+   * This call is the cheapest in the set: one league, cached for a day, so after the first open of
+   * any fixture in a competition it costs nothing. Fetching it first and letting it decide the
+   * rest turns the fan-out from a fixed eight into only what exists.
+   *
+   * It also changes what the screen can say. A competition that does not carry a timeline is a
+   * fact we now know before rendering, so the match centre can say so rather than showing an empty
+   * panel that looks like a fault - which is the difference between an app that feels broken
+   * outside the big five leagues and one that is simply honest about them.
+   */
+  const coverage = want.has("events")
+    ? await provider.coverage(match.league.id, match.league.season).catch(() => null)
+    : null;
+
+  // Absent coverage means unknown, not absent: ask, rather than hide a section on a guess.
+  const covers = (flag: keyof NonNullable<typeof coverage>) => coverage?.[flag] ?? true;
+  const noteUncovered = (name: MatchDetail["unavailable"][number], covered: boolean) => {
+    if (!covered) unavailable.add(name);
+    return covered;
+  };
+
+  const wantEvents = want.has("events") && noteUncovered("events", covers("events")) && timelinePossible;
+  const wantStats = want.has("statistics") && noteUncovered("statistics", covers("statistics")) && timelinePossible;
+  const wantLineups = want.has("lineups") && noteUncovered("lineups", covers("lineups")) && lineupsPossible;
+  const wantStandings = want.has("standings") && noteUncovered("standings", covers("standings"));
+
+  const [homeLast, awayLast, h2h, standings, events, statistics, lineups] = await Promise.all([
     // Ten games, not five: "9 of 10" is far stronger evidence than "4 of 5", and a home/away split
     // of five leaves only two or three games a side, which says almost nothing.
     want.has("form") ? section("form", () => provider.lastFixtures(match.home.id, FORM_GAMES), []) : skip([] as MatchSummary[]),
     want.has("form") ? section("form", () => provider.lastFixtures(match.away.id, FORM_GAMES), []) : skip([] as MatchSummary[]),
     want.has("h2h") ? section("h2h", () => provider.headToHead(match.home.id, match.away.id, H2H_GAMES), []) : skip([] as MatchSummary[]),
-    want.has("standings") ? section("standings", () => provider.standings(match.league.id, match.league.season), null) : skip(null),
-    // The timeline is the match centre's spine, so a competition that does not carry events says so
-    // rather than showing an empty panel.
-    want.has("events") ? section("events", () => provider.events(match.id, match.home.id), []) : skip([] as MatchEvent[]),
-    want.has("events") ? provider.coverage(match.league.id, match.league.season).catch(() => null) : skip(null),
-    // Both are empty on most competitions outside the big ones, which is a fact about the
-    // competition rather than a failure. The coverage flag above is what lets a screen tell that
-    // apart from a match where nothing has happened yet.
-    want.has("statistics")
-      ? section("statistics", () => provider.statistics(match.id, match.home.id), [])
-      : skip([] as TeamStatistics[]),
-    want.has("lineups") ? section("lineups", () => provider.lineups(match.id, match.home.id), []) : skip([] as Lineup[]),
+    wantStandings ? section("standings", () => provider.standings(match.league.id, match.league.season), null) : skip(null),
+    wantEvents ? section("events", () => provider.events(match.id, match.home.id), []) : skip([] as MatchEvent[]),
+    wantStats ? section("statistics", () => provider.statistics(match.id, match.home.id), []) : skip([] as TeamStatistics[]),
+    wantLineups ? section("lineups", () => provider.lineups(match.id, match.home.id), []) : skip([] as Lineup[]),
   ]);
 
   if (user && meter) {

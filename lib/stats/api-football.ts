@@ -33,8 +33,18 @@ export class StatsPlanLimitError extends Error {
 
 /** The per-minute request limit was hit and nothing is cached: try again shortly. */
 export class StatsRateLimitError extends Error {
-  constructor(readonly endpoint: string) {
-    super("API-Football per-minute rate limit reached");
+  /**
+   * @param providerMessage API-Football's own wording, which names the limit that was hit - "...
+   *   allows until 10 requests per minute" on a free key, "...per day" when a daily quota is spent.
+   *   Worth keeping: the same `rateLimit` field covers a burst and an exhausted plan, and the two
+   *   need completely different responses from us. Throwing the text away meant a Worker that was
+   *   out of daily quota looked exactly like one that was briefly busy.
+   */
+  constructor(
+    readonly endpoint: string,
+    readonly providerMessage?: string,
+  ) {
+    super(providerMessage ?? "API-Football rate limit reached");
     this.name = "StatsRateLimitError";
   }
 }
@@ -361,7 +371,44 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
     return hit.payload as T[];
   }
 
-  async function fetchOnce<T>(endpoint: string, params: Params, ttlMs: number, capability?: string): Promise<T[]> {
+  /**
+   * How many upstream calls may be in flight at once.
+   *
+   * API-Football refuses bursts well below its advertised per-minute rate. Measured against the
+   * live Pro key: 10 and 14 simultaneous calls all succeeded, 18 started coming back refused, and
+   * 30 lost 8 of them - every refusal carrying "You have exceeded the limit of requests per
+   * minute of your subscription" while the x-ratelimit-remaining header still showed about 290 of
+   * 300 left. The per-minute counter is not the binding constraint; simultaneity is.
+   *
+   * That is exactly the shape of a match centre: one fixture fans out to nine calls in a single
+   * Promise.all, so two users opening a match at the same moment were enough to start losing
+   * sections. It is why the deployed Worker answered with busy=true and empty form, events,
+   * statistics and lineups on fixtures whose data the provider was perfectly willing to serve.
+   *
+   * Six leaves room for several concurrent requests per isolate before the measured floor of
+   * fourteen. It is a ceiling on parallelism, not on throughput: the calls still all go, just not
+   * all at once.
+   */
+  const MAX_IN_FLIGHT = 6;
+
+  /** Two extra tries, 300ms then 600ms apart - long enough for a colliding burst to drain. */
+  const MAX_RATE_LIMIT_RETRIES = 2;
+  const RATE_LIMIT_BACKOFF_MS = 300;
+  let active = 0;
+  const waiting: (() => void)[] = [];
+
+  async function withSlot<T>(run: () => Promise<T>): Promise<T> {
+    if (active >= MAX_IN_FLIGHT) await new Promise<void>((resolve) => waiting.push(resolve));
+    active++;
+    try {
+      return await run();
+    } finally {
+      active--;
+      waiting.shift()?.();
+    }
+  }
+
+  async function fetchOnce<T>(endpoint: string, params: Params, ttlMs: number, capability?: string, attempt = 0): Promise<T[]> {
     if (capability) await capabilityBlocked(capability);
     const key = cacheKey(endpoint, params);
     const hit = await db.statsCache.findUnique({ where: { key } });
@@ -380,8 +427,20 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
 
     const url = `${BASE_URL}${endpoint}?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`;
     let body: { response?: T[]; errors?: unknown };
+    // What the provider says about this key's budget, as numbers rather than as a key we must
+    // never log. The daily limit alone identifies the plan - 100 on the free tier, 7500 on Pro -
+    // which is how a misconfigured deployment can be told apart from a genuinely busy minute.
+    let quota: Record<string, string | null> = {};
     try {
-      const res = await fetch(url, { headers: { "x-apisports-key": apiKey }, signal: AbortSignal.timeout(10_000), cache: "no-store" });
+      const res = await withSlot(() =>
+        fetch(url, { headers: { "x-apisports-key": apiKey }, signal: AbortSignal.timeout(10_000), cache: "no-store" }),
+      );
+      quota = {
+        perMinuteLimit: res.headers.get("x-ratelimit-limit"),
+        perMinuteLeft: res.headers.get("x-ratelimit-remaining"),
+        dailyLimit: res.headers.get("x-ratelimit-requests-limit"),
+        dailyLeft: res.headers.get("x-ratelimit-requests-remaining"),
+      };
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       body = await res.json();
     } catch (err) {
@@ -401,11 +460,27 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
       if (capability) await rememberPlanLimit(`capability:${capability}`, endpoint, params, planError);
       throw new StatsPlanLimitError(endpoint, planError);
     }
-    if ((body.errors as Record<string, unknown> | undefined)?.rateLimit) {
-      logger.warn("stats.rate_limited", { endpoint, params });
+    const rateLimited = (body.errors as Record<string, unknown> | undefined)?.rateLimit;
+    if (rateLimited) {
+      const providerMessage = typeof rateLimited === "string" ? rateLimited : undefined;
+      // A burst refusal is not an exhausted plan: the quota header alongside it still reported
+      // most of the minute's allowance unspent. The slot gate above makes this rare, but isolates
+      // do not share a gate, so two of them can still collide. Waiting out the collision is worth
+      // one short pause - the alternative is an empty panel on data the provider would have given.
+      if (attempt < MAX_RATE_LIMIT_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_BACKOFF_MS * (attempt + 1)));
+        return fetchOnce<T>(endpoint, params, ttlMs, capability, attempt + 1);
+      }
+      logger.warn("stats.rate_limited", {
+        endpoint,
+        params,
+        attempts: attempt + 1,
+        message: providerMessage ?? JSON.stringify(body.errors),
+        quota,
+      });
       const stale = servableStale<T>(hit);
       if (stale) return stale; // recently expired beats nothing
-      throw new StatsRateLimitError(endpoint);
+      throw new StatsRateLimitError(endpoint, providerMessage);
     }
     if (errors.length) {
       logger.error("stats.api_error", { endpoint, params, errors: body.errors });

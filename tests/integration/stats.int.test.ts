@@ -32,9 +32,18 @@ describe("API-Football client caching", () => {
     expect(fetchMock.mock.calls[0]).toEqual([expect.stringContaining("/fixtures?id=999"), expect.objectContaining({ headers: { "x-apisports-key": "test-key" } })]);
 
     // Expire the cache, then make the API fail: stale data is returned instead of an error.
-    await db.statsCache.updateMany({ data: { expiresAt: new Date(0) } });
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ errors: { requests: "limit reached" }, response: [] }))));
+    // Ten minutes expired, not epoch. Staleness is only servable inside an hour - a score that is
+    // three days old is not "slightly out of date", it is a scoreboard showing finished matches
+    // still in play, which is the exact failure this grace window exists to prevent.
+    const failing = () => new Response(JSON.stringify({ errors: { requests: "limit reached" }, response: [] }));
+    await db.statsCache.updateMany({ data: { expiresAt: new Date(Date.now() - 10 * 60_000) } });
+    vi.stubGlobal("fetch", vi.fn(async () => failing()));
     expect((await provider.fixture(999))?.home.name).toBe("Arsenal");
+
+    // Past the window, the same cached row is no longer an acceptable answer.
+    await db.statsCache.updateMany({ data: { expiresAt: new Date(Date.now() - 3 * 60 * 60_000) } });
+    vi.stubGlobal("fetch", vi.fn(async () => failing()));
+    await expect(provider.fixture(999)).rejects.toMatchObject({ code: "STATS_UNAVAILABLE" });
   });
 
   // Building a slip researches a shortlist at once, and fixtures in the same league want the same
@@ -232,7 +241,8 @@ describe("API-Football plan limits", () => {
     }] };
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(day))));
     await createApiFootballProvider("k").fixturesByDate("2026-10-01");
-    await db.statsCache.updateMany({ data: { expiresAt: new Date(0) } });
+    // Freshly expired, so still inside the hour that makes stale data better than nothing.
+    await db.statsCache.updateMany({ data: { expiresAt: new Date(Date.now() - 60_000) } });
     vi.stubGlobal("fetch", vi.fn(async () => limited()));
     expect((await createApiFootballProvider("k").fixturesByDate("2026-10-01"))[0].id).toBe(7);
   });
@@ -297,5 +307,135 @@ describe("stats service (sample provider)", () => {
     expect(source).toBe("sample");
     expect(groups[0].league).toMatchObject({ country: "England", name: "Premier League" });
     expect(await sampleStatsProvider.fixture(123)).toBeNull();
+  });
+});
+
+describe("upstream bursts are held below the provider's concurrency floor", () => {
+  // Measured against the live Pro key: 10 and 14 simultaneous calls all succeeded, 18 started
+  // coming back refused, and 30 lost 8 - each refusal saying "You have exceeded the limit of
+  // requests per minute of your subscription" while the quota header still showed ~290 of 300
+  // unspent. One match centre fans out to nine calls, so this was reachable with two users.
+  it("never lets more than six requests be in flight at once", async () => {
+    await db.statsCache.deleteMany();
+    let active = 0;
+    let peak = 0;
+    const fetchMock = vi.fn(async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((r) => setTimeout(r, 15));
+      active--;
+      return new Response(JSON.stringify({ errors: [], response: [] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = createApiFootballProvider("k");
+
+    // Twenty distinct fixtures, so the in-flight dedupe cannot collapse them into one call.
+    await Promise.all(Array.from({ length: 20 }, (_, i) => provider.events(9000 + i, 1).catch(() => [])));
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(20);
+    expect(peak).toBeLessThanOrEqual(6);
+  });
+
+  it("retries a burst refusal instead of emptying the panel", async () => {
+    await db.statsCache.deleteMany();
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        call++;
+        // Refused once, exactly as a colliding burst does, then served.
+        if (call === 1) {
+          return new Response(
+            JSON.stringify({
+              errors: { rateLimit: "Too many requests. You have exceeded the limit of requests per minute of your subscription." },
+              response: [],
+            }),
+          );
+        }
+        return new Response(JSON.stringify({ errors: [], response: [] }), { status: 200 });
+      }),
+    );
+
+    await expect(createApiFootballProvider("k").events(4242, 1)).resolves.toEqual([]);
+    expect(call).toBe(2);
+  });
+
+  it("still gives up, rather than retrying for ever, when the refusal does not clear", async () => {
+    await db.statsCache.deleteMany();
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ errors: { rateLimit: "Too many requests." }, response: [] })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createApiFootballProvider("k").fixturesByDate("2026-10-02")).rejects.toBeInstanceOf(StatsRateLimitError);
+    // The first attempt plus two retries, and no more.
+    expect(fetchMock.mock.calls.length).toBe(3);
+  });
+
+  it("carries the provider's own wording, which names the limit that was hit", async () => {
+    await db.statsCache.deleteMany();
+    const message = "Too many requests. You have exceeded the limit of requests per minute of your subscription.";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ errors: { rateLimit: message }, response: [] }))));
+
+    await createApiFootballProvider("k")
+      .fixturesByDate("2026-10-03")
+      .then(
+        () => expect.unreachable("should have been refused"),
+        (err: unknown) => {
+          expect(err).toBeInstanceOf(StatsRateLimitError);
+          expect((err as StatsRateLimitError).providerMessage).toBe(message);
+        },
+      );
+  });
+});
+
+describe("a competition is asked only for what it carries", () => {
+  // API-Football publishes per-season coverage flags and they are honest: the CAF Champions
+  // League reports statistics_fixtures false and standings false, and every one of those calls
+  // does come back 200 with results=0. Three wasted upstream calls per match open, on a budget of
+  // 300 a minute shared by the whole product.
+  const league = (id: number, cover: Record<string, unknown>, standings: boolean) => ({
+    league: { id, name: "Some Cup", type: "Cup", logo: null },
+    country: { name: "World", code: null, flag: null },
+    seasons: [{ year: 2026, current: true, coverage: { fixtures: cover, standings } }],
+  });
+
+  const seenFor = async (cover: Record<string, unknown>, standings: boolean, status = "FT") => {
+    await db.statsCache.deleteMany();
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url);
+      seen.push(new URL(u).pathname);
+      if (u.includes("/leagues?id=")) {
+        return new Response(JSON.stringify({ errors: [], response: [league(12, cover, standings)] }));
+      }
+      return new Response(JSON.stringify({ errors: [], response: [] }));
+    }));
+    const provider = createApiFootballProvider("k");
+    const cov = await provider.coverage(12, 2026);
+    return { seen, cov, status };
+  };
+
+  it("reads the flags a competition publishes", async () => {
+    const { cov } = await seenFor({ events: true, lineups: true, statistics_fixtures: false, statistics_players: false }, false);
+    expect(cov).toEqual({ events: true, lineups: true, statistics: false, playerStats: false, standings: false });
+  });
+
+  it("reads a fully covered competition too", async () => {
+    const { cov } = await seenFor({ events: true, lineups: true, statistics_fixtures: true, statistics_players: true }, true);
+    expect(cov).toEqual({ events: true, lineups: true, statistics: true, playerStats: true, standings: true });
+  });
+
+  it("costs one request, then nothing for a day", async () => {
+    await db.statsCache.deleteMany();
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ errors: [], response: [league(12, { events: true, lineups: true, statistics_fixtures: false }, false)] })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = createApiFootballProvider("k");
+    await provider.coverage(12, 2026);
+    await provider.coverage(12, 2026);
+    await provider.coverage(12, 2026);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 });
