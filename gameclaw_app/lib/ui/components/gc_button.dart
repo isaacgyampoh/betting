@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 
 /// The button hierarchy, in the order a screen should reach for them.
@@ -79,14 +80,14 @@ class _GcButtonState extends State<GcButton> {
       // Disabled is its own appearance rather than a faded accent: lime at 40% is an olive that
       // still reads as a button someone should be able to press.
       GcButtonKind.primary when !enabled && !_busy => (
-        GcColors.surface,
-        GcColors.inkFaint,
-        GcColors.border,
+        gc(context).surface,
+        gc(context).inkFaint,
+        gc(context).border,
       ),
-      GcButtonKind.primary => (GcColors.accent, GcColors.onAccent, null),
-      GcButtonKind.secondary => (GcColors.surfaceRaised, GcColors.ink, GcColors.border),
-      GcButtonKind.ghost => (Colors.transparent, GcColors.inkMuted, null),
-      GcButtonKind.destructive => (Colors.transparent, GcColors.loss, GcColors.loss),
+      GcButtonKind.primary => (gc(context).accent, gc(context).onAccent, null),
+      GcButtonKind.secondary => (gc(context).surfaceRaised, gc(context).ink, gc(context).border),
+      GcButtonKind.ghost => (Colors.transparent, gc(context).inkMuted, null),
+      GcButtonKind.destructive => (Colors.transparent, gc(context).loss, gc(context).loss),
     };
 
     final content = _busy
@@ -180,7 +181,7 @@ class GcIconButton extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Icon(icon, size: 21, color: colour ?? GcColors.inkMuted),
+            Icon(icon, size: 21, color: colour ?? gc(context).inkMuted),
             if (badge)
               Positioned(
                 top: 12,
@@ -188,7 +189,7 @@ class GcIconButton extends StatelessWidget {
                 child: Container(
                   width: 6,
                   height: 6,
-                  decoration: const BoxDecoration(color: GcColors.accent, shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: gc(context).accent, shape: BoxShape.circle),
                 ),
               ),
           ],

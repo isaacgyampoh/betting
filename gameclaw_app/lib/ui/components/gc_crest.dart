@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 
 /// A club crest, or the space where one would be.
@@ -24,12 +25,12 @@ class GcCrest extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: GcColors.surfaceRaised,
+        color: gc(context).surfaceRaised,
         borderRadius: BorderRadius.circular(size / 4),
       ),
       child: Text(
         initial,
-        style: GcType.figureSm.copyWith(fontSize: size * 0.46, color: GcColors.inkFaint),
+        style: GcType.figureSm.copyWith(fontSize: size * 0.46, color: gc(context).inkFaint),
       ),
     );
 

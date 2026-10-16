@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/providers.dart';
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_input.dart';
@@ -86,7 +87,7 @@ class _ConvertScreenState extends ConsumerState<ConvertScreen> {
                 child: Row(
                   children: [
                     Expanded(child: Text(b.name, style: GcType.bodyStrong)),
-                    const Icon(Icons.arrow_forward_rounded, size: 17, color: GcColors.inkFaint),
+                    Icon(Icons.arrow_forward_rounded, size: 17, color: gc(context).inkFaint),
                   ],
                 ),
               ),
@@ -191,10 +192,10 @@ class _Entry extends StatelessWidget {
             height: 48,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: GcColors.accent.withValues(alpha: 0.14),
+              color: gc(context).accent.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(GcRadius.lg),
             ),
-            child: const Icon(Icons.swap_horiz_rounded, size: 22, color: GcColors.accent),
+            child: Icon(Icons.swap_horiz_rounded, size: 22, color: gc(context).accentInk),
           ),
         ),
         const SizedBox(height: GcSpace.lg),
@@ -203,7 +204,7 @@ class _Entry extends StatelessWidget {
         Text(
           'Paste a booking code. We read the original slip, then try to find the same games and '
           'markets on another bookmaker.',
-          style: GcType.body.copyWith(color: GcColors.inkMuted),
+          style: GcType.body.copyWith(color: gc(context).inkMuted),
         ),
         const SizedBox(height: GcSpace.xl),
         GcTextField(
@@ -236,10 +237,10 @@ class _Entry extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.error_outline_rounded, size: 15, color: GcColors.loss),
+              Icon(Icons.error_outline_rounded, size: 15, color: gc(context).loss),
               const SizedBox(width: GcSpace.sm),
               Expanded(
-                child: Text('$error', style: GcType.caption.copyWith(color: GcColors.loss)),
+                child: Text('$error', style: GcType.caption.copyWith(color: gc(context).loss)),
               ),
             ],
           ),
@@ -276,7 +277,7 @@ class _Support extends StatelessWidget {
         children: [
           SizedBox(
             width: 96,
-            child: Text(label, style: GcType.caption.copyWith(color: GcColors.inkFaint)),
+            child: Text(label, style: GcType.caption.copyWith(color: gc(context).inkFaint)),
           ),
           Expanded(
             child: Text(
@@ -291,7 +292,7 @@ class _Support extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('WHAT IS CONNECTED', style: GcType.overline.copyWith(color: GcColors.inkFaint)),
+        Text('WHAT IS CONNECTED', style: GcType.overline.copyWith(color: gc(context).inkFaint)),
         const SizedBox(height: GcSpace.md),
         line('Can read', readable, 'none right now'),
         line('Can issue', bookable, 'none right now'),
@@ -300,7 +301,7 @@ class _Support extends StatelessWidget {
         Text(
           'A bookmaker under "Not yet" has no authorised booking-code integration, so a code from '
           'it cannot be read here.',
-          style: GcType.caption.copyWith(fontSize: 11.5, color: GcColors.inkFaint),
+          style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
         ),
       ],
     );
@@ -328,12 +329,12 @@ class _Loaded extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(GcSpace.gutter, 0, GcSpace.gutter, GcSpace.lg),
             children: [
-              Text('SOURCE SLIP', style: GcType.overline.copyWith(color: GcColors.inkFaint)),
+              Text('SOURCE SLIP', style: GcType.overline.copyWith(color: gc(context).inkFaint)),
               const SizedBox(height: GcSpace.md),
               GcSlipCard(slip: slip),
               if (error != null) ...[
                 const SizedBox(height: GcSpace.md),
-                Text('$error', style: GcType.caption.copyWith(color: GcColors.loss)),
+                Text('$error', style: GcType.caption.copyWith(color: gc(context).loss)),
               ],
             ],
           ),
@@ -380,7 +381,7 @@ class _Result extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(GcSpace.md),
                 decoration: BoxDecoration(
-                  color: (booked ? GcColors.win : GcColors.warn).withValues(alpha: 0.12),
+                  color: (booked ? gc(context).win : gc(context).warn).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(GcRadius.md),
                 ),
                 child: Row(
@@ -389,7 +390,7 @@ class _Result extends StatelessWidget {
                     Icon(
                       booked ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
                       size: 17,
-                      color: booked ? GcColors.win : GcColors.warn,
+                      color: booked ? gc(context).win : gc(context).warn,
                     ),
                     const SizedBox(width: GcSpace.sm),
                     Expanded(
@@ -401,7 +402,7 @@ class _Result extends StatelessWidget {
                                 ? 'Booked on ${result.bookmakerName}'
                                 : 'Not booked on ${result.bookmakerName}',
                             style: GcType.label.copyWith(
-                              color: booked ? GcColors.win : GcColors.warn,
+                              color: booked ? gc(context).win : gc(context).warn,
                             ),
                           ),
                           const SizedBox(height: GcSpace.xxs),
@@ -431,7 +432,7 @@ class _Result extends StatelessWidget {
               Text(
                 'FROM ${source.bookmakerName.toUpperCase()}'
                 '${source.code == null ? '' : ' · ${source.code}'}',
-                style: GcType.overline.copyWith(color: GcColors.inkFaint),
+                style: GcType.overline.copyWith(color: gc(context).inkFaint),
               ),
               const SizedBox(height: GcSpace.md),
               GcSlipCard(slip: result),

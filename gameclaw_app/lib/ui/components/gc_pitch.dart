@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 
 /// A starting eleven, laid out on a pitch.
@@ -34,14 +35,14 @@ class GcPitch extends StatelessWidget {
       aspectRatio: 0.78,
       child: Container(
         decoration: BoxDecoration(
-          color: GcColors.surface,
+          color: gc(context).surface,
           borderRadius: BorderRadius.circular(GcRadius.md),
-          border: Border.all(color: GcColors.border),
+          border: Border.all(color: gc(context).border),
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
-            Positioned.fill(child: CustomPaint(painter: _PitchLines())),
+            Positioned.fill(child: CustomPaint(painter: _PitchLines(gc(context).border))),
             Positioned.fill(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: GcSpace.md),
@@ -71,12 +72,18 @@ class GcPitch extends StatelessWidget {
 /// The markings. Drawn rather than imaged: one painter at any size, no asset to ship, and it tints
 /// with the theme.
 class _PitchLines extends CustomPainter {
+  const _PitchLines(this.line);
+
+  /// Passed in rather than read from a context, which a painter does not have. Comparing it in
+  /// shouldRepaint is what makes the markings follow a theme change.
+  final Color line;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
-      ..color = GcColors.border;
+      ..color = line;
 
     final rect = Offset.zero & size;
     canvas.drawRect(rect.deflate(8), paint);
@@ -94,7 +101,7 @@ class _PitchLines extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_PitchLines oldDelegate) => false;
+  bool shouldRepaint(_PitchLines oldDelegate) => oldDelegate.line != line;
 }
 
 class _Player extends StatelessWidget {
@@ -116,13 +123,13 @@ class _Player extends StatelessWidget {
             height: 26,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: GcColors.surfaceRaised,
+              color: gc(context).surfaceRaised,
               shape: BoxShape.circle,
-              border: Border.all(color: GcColors.borderStrong),
+              border: Border.all(color: gc(context).borderStrong),
             ),
             child: Text(
               player.number?.toString() ?? '–',
-              style: GcType.figureSm.copyWith(fontSize: 11, color: GcColors.ink),
+              style: GcType.figureSm.copyWith(fontSize: 11, color: gc(context).ink),
             ),
           ),
           const SizedBox(height: GcSpace.xs),
@@ -132,7 +139,7 @@ class _Player extends StatelessWidget {
               // The surname is what fits and what people read. The full name stays on the
               // semantics label, so a screen reader still gets all of it.
               _short(player.name),
-              style: GcType.caption.copyWith(fontSize: 9.5, color: GcColors.inkMuted),
+              style: GcType.caption.copyWith(fontSize: 9.5, color: gc(context).inkMuted),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

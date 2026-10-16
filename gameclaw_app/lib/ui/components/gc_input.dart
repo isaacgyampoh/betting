@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 
 /// A text field.
@@ -51,15 +52,15 @@ class _GcTextFieldState extends State<GcTextField> {
       textInputAction: widget.textInputAction,
       onFieldSubmitted: widget.onSubmitted,
       validator: widget.validator,
-      style: GcType.body.copyWith(color: GcColors.ink),
-      cursorColor: GcColors.accent,
+      style: GcType.body.copyWith(color: gc(context).ink),
+      cursorColor: gc(context).accent,
       decoration: InputDecoration(
         labelText: widget.label,
-        labelStyle: GcType.body.copyWith(color: GcColors.inkMuted),
-        floatingLabelStyle: GcType.label.copyWith(color: GcColors.accent),
+        labelStyle: GcType.body.copyWith(color: gc(context).inkMuted),
+        floatingLabelStyle: GcType.label.copyWith(color: gc(context).accentInk),
         prefixIcon: widget.icon == null
             ? null
-            : Icon(widget.icon, size: 18, color: GcColors.inkFaint),
+            : Icon(widget.icon, size: 18, color: gc(context).inkFaint),
         suffixIcon: widget.obscure
             ? IconButton(
                 onPressed: () => setState(() => _hidden = !_hidden),
@@ -67,19 +68,19 @@ class _GcTextFieldState extends State<GcTextField> {
                 icon: Icon(
                   _hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
                   size: 19,
-                  color: GcColors.inkMuted,
+                  color: gc(context).inkMuted,
                 ),
               )
             : null,
         filled: true,
-        fillColor: GcColors.surface,
+        fillColor: gc(context).surface,
         contentPadding: const EdgeInsets.symmetric(horizontal: GcSpace.md, vertical: GcSpace.lg),
-        border: _border(GcColors.border),
-        enabledBorder: _border(GcColors.border),
-        focusedBorder: _border(GcColors.accent, width: 1.5),
-        errorBorder: _border(GcColors.loss),
-        focusedErrorBorder: _border(GcColors.loss, width: 1.5),
-        errorStyle: GcType.caption.copyWith(color: GcColors.loss, fontSize: 11.5),
+        border: _border(gc(context).border),
+        enabledBorder: _border(gc(context).border),
+        focusedBorder: _border(gc(context).accent, width: 1.5),
+        errorBorder: _border(gc(context).loss),
+        focusedErrorBorder: _border(gc(context).loss, width: 1.5),
+        errorStyle: GcType.caption.copyWith(color: gc(context).loss, fontSize: 11.5),
       ),
     );
   }

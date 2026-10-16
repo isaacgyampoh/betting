@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/providers.dart';
 import '../../data/repository.dart';
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_crest.dart';
@@ -34,7 +35,7 @@ class CompetitionScreen extends ConsumerWidget {
               children: [
                 GcIconButton(
                   icon: Icons.arrow_back_rounded,
-                  colour: GcColors.ink,
+                  colour: gc(context).ink,
                   tooltip: 'Back',
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
@@ -49,8 +50,8 @@ class CompetitionScreen extends ConsumerWidget {
                   onRetry: () => ref.invalidate(competitionProvider(competitionId)),
                 ),
                 data: (cached) => RefreshIndicator(
-                  color: GcColors.accent,
-                  backgroundColor: GcColors.surfaceRaised,
+                  color: gc(context).accent,
+                  backgroundColor: gc(context).surfaceRaised,
                   onRefresh: () => ref.refresh(competitionProvider(competitionId).future),
                   child: _Body(cached: cached),
                 ),
@@ -153,9 +154,9 @@ class _Flag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: GcSpace.md, vertical: GcSpace.sm),
       decoration: BoxDecoration(
-        color: GcColors.surface,
+        color: gc(context).surface,
         borderRadius: BorderRadius.circular(GcRadius.pill),
-        border: Border.all(color: on ? GcColors.accentDim : GcColors.border),
+        border: Border.all(color: on ? gc(context).accentDim : gc(context).border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -163,10 +164,13 @@ class _Flag extends StatelessWidget {
           Icon(
             on ? Icons.check_rounded : Icons.remove_rounded,
             size: 13,
-            color: on ? GcColors.accent : GcColors.inkFaint,
+            color: on ? gc(context).accent : gc(context).inkFaint,
           ),
           const SizedBox(width: GcSpace.xs + 2),
-          Text(label, style: GcType.caption.copyWith(color: on ? GcColors.ink : GcColors.inkFaint)),
+          Text(
+            label,
+            style: GcType.caption.copyWith(color: on ? gc(context).ink : gc(context).inkFaint),
+          ),
         ],
       ),
     );
@@ -207,7 +211,7 @@ class _Table extends StatelessWidget {
               Expanded(
                 child: Text(
                   'TEAM',
-                  style: GcType.overline.copyWith(fontSize: 9.5, color: GcColors.inkFaint),
+                  style: GcType.overline.copyWith(fontSize: 9.5, color: gc(context).inkFaint),
                 ),
               ),
               for (final h in ['P', 'GD', 'PTS'])
@@ -216,7 +220,7 @@ class _Table extends StatelessWidget {
                   child: Text(
                     h,
                     textAlign: TextAlign.right,
-                    style: GcType.overline.copyWith(fontSize: 9.5, color: GcColors.inkFaint),
+                    style: GcType.overline.copyWith(fontSize: 9.5, color: gc(context).inkFaint),
                   ),
                 ),
             ],
@@ -224,9 +228,9 @@ class _Table extends StatelessWidget {
         ),
         for (final (i, block) in blocks.indexed) ...[
           if (i > 0)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: GcSpace.gutter, vertical: GcSpace.sm),
-              child: Divider(height: 1, color: GcColors.borderStrong),
+              child: Divider(height: 1, color: gc(context).borderStrong),
             ),
           for (final row in block.rows)
             InkWell(
@@ -243,7 +247,7 @@ class _Table extends StatelessWidget {
                       width: 24,
                       child: Text(
                         '${row.rank}',
-                        style: GcType.figureSm.copyWith(color: GcColors.inkFaint),
+                        style: GcType.figureSm.copyWith(color: gc(context).inkFaint),
                       ),
                     ),
                     GcCrest(url: row.team.logoUrl, name: row.team.name, size: 16),
@@ -265,7 +269,10 @@ class _Table extends StatelessWidget {
                         child: Text(
                           v,
                           textAlign: TextAlign.right,
-                          style: GcType.figure.copyWith(fontSize: 12.5, color: GcColors.inkMuted),
+                          style: GcType.figure.copyWith(
+                            fontSize: 12.5,
+                            color: gc(context).inkMuted,
+                          ),
                         ),
                       ),
                     SizedBox(

@@ -6,6 +6,7 @@ import '../../data/local/cache.dart';
 import '../../data/providers.dart';
 import '../../data/repository.dart';
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_crest.dart';
@@ -140,7 +141,7 @@ class _TeamRow extends StatelessWidget {
           ),
           GcIconButton(
             icon: Icons.star_rounded,
-            colour: GcColors.accent,
+            colour: gc(context).accent,
             tooltip: 'Unfollow ${team.name}',
             onPressed: onRemove,
           ),

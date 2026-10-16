@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 
 /// A filter. Selected is a lime fill; unselected is a hairline, not a grey fill - a row of grey
@@ -29,7 +30,7 @@ class GcFilterChip extends StatelessWidget {
       button: true,
       selected: selected,
       child: Material(
-        color: selected ? GcColors.accent : Colors.transparent,
+        color: selected ? gc(context).accent : Colors.transparent,
         borderRadius: BorderRadius.circular(GcRadius.pill),
         child: InkWell(
           onTap: () {
@@ -44,20 +45,24 @@ class GcFilterChip extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: GcSpace.md),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(GcRadius.pill),
-              border: Border.all(color: selected ? GcColors.accent : GcColors.border),
+              border: Border.all(color: selected ? gc(context).accent : gc(context).border),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[
-                  Icon(icon, size: 14, color: selected ? GcColors.onAccent : GcColors.inkMuted),
+                  Icon(
+                    icon,
+                    size: 14,
+                    color: selected ? gc(context).onAccent : gc(context).inkMuted,
+                  ),
                   const SizedBox(width: GcSpace.xs + 2),
                 ],
                 Text(
                   label,
                   style: GcType.label.copyWith(
                     fontSize: 13,
-                    color: selected ? GcColors.onAccent : GcColors.inkMuted,
+                    color: selected ? gc(context).onAccent : gc(context).inkMuted,
                   ),
                 ),
                 if (count != null) ...[
@@ -66,8 +71,8 @@ class GcFilterChip extends StatelessWidget {
                     '$count',
                     style: GcType.figureSm.copyWith(
                       color: selected
-                          ? GcColors.onAccent.withValues(alpha: 0.7)
-                          : GcColors.inkFaint,
+                          ? gc(context).onAccent.withValues(alpha: 0.7)
+                          : gc(context).inkFaint,
                     ),
                   ),
                 ],
@@ -100,7 +105,10 @@ class GcStatusChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: GcType.overline.copyWith(fontSize: 10, color: filled ? GcColors.onAccent : colour),
+        style: GcType.overline.copyWith(
+          fontSize: 10,
+          color: filled ? gc(context).onAccent : colour,
+        ),
       ),
     );
   }

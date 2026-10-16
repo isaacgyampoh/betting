@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/providers.dart';
 import '../../data/repository.dart';
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_pick_card.dart';
@@ -40,7 +41,7 @@ class RecordScreen extends ConsumerWidget {
                 children: [
                   GcIconButton(
                     icon: Icons.arrow_back_rounded,
-                    colour: GcColors.ink,
+                    colour: gc(context).ink,
                     tooltip: 'Back',
                     onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
                   ),
@@ -51,8 +52,8 @@ class RecordScreen extends ConsumerWidget {
             ),
             Expanded(
               child: RefreshIndicator(
-                color: GcColors.accent,
-                backgroundColor: GcColors.surfaceRaised,
+                color: gc(context).accentInk,
+                backgroundColor: gc(context).surfaceRaised,
                 onRefresh: () => ref.refresh(trackRecordProvider.future),
                 child: record.when(
                   skipLoadingOnRefresh: true,
@@ -134,7 +135,7 @@ class _Summary extends StatelessWidget {
                 record.winRate == null ? '–' : '${record.winRate!.toStringAsFixed(0)}%',
                 style: GcType.hero.copyWith(
                   fontFeatures: const [FontFeature.tabularFigures()],
-                  color: GcColors.ink,
+                  color: gc(context).ink,
                 ),
               ),
               const SizedBox(width: GcSpace.sm),
@@ -149,8 +150,8 @@ class _Summary extends StatelessWidget {
             children: [
               // Settled, not published: a still-running slip is not evidence of anything yet.
               _Stat(label: 'Settled', value: '${record.settled}'),
-              _Stat(label: 'Won', value: '${record.won}', colour: GcColors.win),
-              _Stat(label: 'Lost', value: '${record.lost}', colour: GcColors.loss),
+              _Stat(label: 'Won', value: '${record.won}', colour: gc(context).win),
+              _Stat(label: 'Lost', value: '${record.lost}', colour: gc(context).loss),
               if (record.pending > 0) _Stat(label: 'Running', value: '${record.pending}'),
             ],
           ),
@@ -159,16 +160,16 @@ class _Summary extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(GcSpace.md),
               decoration: BoxDecoration(
-                color: GcColors.surface,
+                color: gc(context).surface,
                 borderRadius: BorderRadius.circular(GcRadius.md),
-                border: Border.all(color: GcColors.border),
+                border: Border.all(color: gc(context).border),
               ),
               child: Row(
                 children: [
                   Icon(
                     roi >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
                     size: 16,
-                    color: roi >= 0 ? GcColors.win : GcColors.loss,
+                    color: roi >= 0 ? gc(context).win : gc(context).loss,
                   ),
                   const SizedBox(width: GcSpace.sm),
                   Expanded(
@@ -204,7 +205,7 @@ class _Stat extends StatelessWidget {
           Text(
             value,
             style: GcType.title.copyWith(
-              color: colour ?? GcColors.ink,
+              color: colour ?? gc(context).ink,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),

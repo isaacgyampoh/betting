@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import 'gc_crest.dart';
 import 'gc_live.dart';
@@ -108,7 +109,7 @@ class _Status extends StatelessWidget {
               // The provider's own clock. Re-deriving a minute on the device gets it wrong the
               // moment a half is added to, and wrong by a minute is worse than not shown.
               fixture.statusLabel,
-              style: GcType.figureSm.copyWith(color: GcColors.live, fontSize: 11.5),
+              style: GcType.figureSm.copyWith(color: gc(context).live, fontSize: 11.5),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -118,10 +119,10 @@ class _Status extends StatelessWidget {
     }
 
     final (text, colour) = switch (fixture.status) {
-      MatchStatus.finished => ('FT', GcColors.inkFaint),
-      MatchStatus.postponed => ('PP', GcColors.warn),
-      MatchStatus.cancelled => ('CA', GcColors.warn),
-      _ => (DateFormat.Hm().format(fixture.kickoffUtc.toLocal()), GcColors.inkMuted),
+      MatchStatus.finished => ('FT', gc(context).inkFaint),
+      MatchStatus.postponed => ('PP', gc(context).warn),
+      MatchStatus.cancelled => ('CA', gc(context).warn),
+      _ => (DateFormat.Hm().format(fixture.kickoffUtc.toLocal()), gc(context).inkMuted),
     };
 
     return Text(
@@ -153,7 +154,7 @@ class _TeamLine extends StatelessWidget {
             team.name,
             style: GcType.bodyStrong.copyWith(
               fontSize: 14.5,
-              color: dimmed ? GcColors.inkMuted : GcColors.ink,
+              color: dimmed ? gc(context).inkMuted : gc(context).ink,
               fontWeight: dimmed ? FontWeight.w500 : FontWeight.w600,
             ),
             maxLines: 1,
@@ -186,7 +187,7 @@ class _Score extends StatelessWidget {
       return Text(
         '–',
         textAlign: TextAlign.right,
-        style: GcType.score.copyWith(color: GcColors.inkFaint),
+        style: GcType.score.copyWith(color: gc(context).inkFaint),
       );
     }
 
@@ -195,7 +196,7 @@ class _Score extends StatelessWidget {
       textAlign: TextAlign.right,
       style: GcType.score.copyWith(
         fontSize: 15,
-        color: live ? GcColors.live : (lost ? GcColors.inkMuted : GcColors.ink),
+        color: live ? gc(context).live : (lost ? gc(context).inkMuted : gc(context).ink),
       ),
     );
 
@@ -231,7 +232,7 @@ class _Star extends StatelessWidget {
           child: Icon(
             on ? Icons.star_rounded : Icons.star_outline_rounded,
             size: 18,
-            color: on ? GcColors.accent : GcColors.inkFaint,
+            color: on ? gc(context).accent : gc(context).inkFaint,
           ),
         ),
       ),
@@ -252,7 +253,7 @@ class GcCompetitionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: height,
-      color: GcColors.canvas,
+      color: gc(context).canvas,
       padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
       child: Row(
         children: [
@@ -263,7 +264,7 @@ class GcCompetitionHeader extends StatelessWidget {
               competition.country.isEmpty
                   ? competition.name
                   : '${competition.country} · ${competition.name}',
-              style: GcType.overline.copyWith(color: GcColors.inkMuted, fontSize: 10.5),
+              style: GcType.overline.copyWith(color: gc(context).inkMuted, fontSize: 10.5),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

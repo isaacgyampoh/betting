@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/api_client.dart';
 import '../../data/providers.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_input.dart';
@@ -85,7 +86,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               alignment: Alignment.centerLeft,
               child: GcIconButton(
                 icon: Icons.close_rounded,
-                colour: GcColors.ink,
+                colour: gc(context).ink,
                 tooltip: 'Close',
                 onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
               ),
@@ -99,7 +100,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   GcSpace.xl,
                 ),
                 children: [
-                  Text('GAMECLAW', style: GcType.overline.copyWith(color: GcColors.accent)),
+                  Text('GAMECLAW', style: GcType.overline.copyWith(color: gc(context).accentInk)),
                   const SizedBox(height: GcSpace.sm),
                   Text(_creating ? 'Create an account' : 'Welcome back', style: GcType.hero),
                   const SizedBox(height: GcSpace.md),
@@ -108,7 +109,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         ? 'An account keeps your slips and your conversation with Claw across devices.'
                         : 'Live scores and the published record are open to everyone. '
                               'Signing in is for building slips.',
-                    style: GcType.body.copyWith(color: GcColors.inkMuted),
+                    style: GcType.body.copyWith(color: gc(context).inkMuted),
                   ),
                   if (!configured) ...[
                     const SizedBox(height: GcSpace.lg),
@@ -169,12 +170,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.error_outline_rounded, size: 15, color: GcColors.loss),
+                        Icon(Icons.error_outline_rounded, size: 15, color: gc(context).loss),
                         const SizedBox(width: GcSpace.sm),
                         Expanded(
                           child: Text(
                             _error!,
-                            style: GcType.caption.copyWith(color: GcColors.loss),
+                            style: GcType.caption.copyWith(color: gc(context).loss),
                           ),
                         ),
                       ],
@@ -203,7 +204,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   const SizedBox(height: GcSpace.xl),
                   Text(
                     'You must be 18 or older to use GameClaw.',
-                    style: GcType.caption.copyWith(color: GcColors.inkFaint),
+                    style: GcType.caption.copyWith(color: gc(context).inkFaint),
                     textAlign: TextAlign.center,
                   ),
                 ],

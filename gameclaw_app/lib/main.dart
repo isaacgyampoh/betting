@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/router.dart';
+import 'data/appearance.dart';
 import 'data/providers.dart';
 import 'data/retry.dart';
 import 'theme/tokens.dart';
@@ -12,7 +13,6 @@ import 'theme/tokens.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // The app owns the status bar: transparent, light icons, drawn over by our own canvas colour.
-  SystemChrome.setSystemUIOverlayStyle(gcSystemBars);
   // Edge to edge: the app paints its own background behind the system bars rather than leaving
   // two grey strips at the ends of a near-black screen.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -46,7 +46,12 @@ class GameClawApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'GameClaw',
       debugShowCheckedModeBanner: false,
-      theme: gcTheme(),
+      // Three themes, one chosen by the user. With ThemeMode.system, Flutter rebuilds on a
+      // platform brightness change by itself, so switching the phone's appearance while the app
+      // is open takes effect immediately - and the palette lerps, so it fades rather than snaps.
+      theme: gcTheme(brightness: Brightness.light),
+      darkTheme: gcTheme(brightness: Brightness.dark),
+      themeMode: ref.watch(appearanceProvider).value ?? ThemeMode.system,
       routerConfig: ref.watch(routerProvider),
     );
   }

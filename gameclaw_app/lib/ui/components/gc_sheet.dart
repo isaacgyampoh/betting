@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import 'gc_button.dart';
 
@@ -18,7 +19,7 @@ Future<T?> showGcSheet<T>({
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: GcColors.surface,
+    backgroundColor: gc(context).surface,
     constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
     builder: (context) => GcSheet(title: title, subtitle: subtitle, child: child),
   );
@@ -86,7 +87,7 @@ Future<bool> showGcConfirm({
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title, style: GcType.heading),
-      content: Text(message, style: GcType.body.copyWith(color: GcColors.inkMuted)),
+      content: Text(message, style: GcType.body.copyWith(color: gc(context).inkMuted)),
       actionsPadding: const EdgeInsets.fromLTRB(GcSpace.md, 0, GcSpace.md, GcSpace.md),
       actions: [
         GcButton(

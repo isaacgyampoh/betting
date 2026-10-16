@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import 'gc_chip.dart';
 
@@ -22,9 +23,9 @@ class GcPickCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: GcSpace.md),
       decoration: BoxDecoration(
-        color: GcColors.surface,
+        color: gc(context).surface,
         borderRadius: BorderRadius.circular(GcRadius.lg),
-        border: Border.all(color: GcColors.border),
+        border: Border.all(color: gc(context).border),
       ),
       clipBehavior: Clip.antiAlias,
       child: Theme(
@@ -94,10 +95,10 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, colour) = switch (status) {
-      PickStatus.won => ('WON', GcColors.win),
-      PickStatus.lost => ('LOST', GcColors.loss),
-      PickStatus.voided => ('VOID', GcColors.inkFaint),
-      PickStatus.pending => ('RUNNING', GcColors.accent),
+      PickStatus.won => ('WON', gc(context).win),
+      PickStatus.lost => ('LOST', gc(context).loss),
+      PickStatus.voided => ('VOID', gc(context).inkFaint),
+      PickStatus.pending => ('RUNNING', gc(context).accent),
     };
     return GcStatusChip(label: label, colour: colour);
   }
@@ -111,9 +112,9 @@ class _Leg extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colour = switch (leg.status) {
-      PickStatus.won => GcColors.win,
-      PickStatus.lost => GcColors.loss,
-      _ => GcColors.inkFaint,
+      PickStatus.won => gc(context).win,
+      PickStatus.lost => gc(context).loss,
+      _ => gc(context).inkFaint,
     };
 
     return Padding(
@@ -139,7 +140,7 @@ class _Leg extends StatelessWidget {
               ),
               Text(
                 leg.odds.toStringAsFixed(2),
-                style: GcType.figure.copyWith(fontSize: 13, color: GcColors.inkMuted),
+                style: GcType.figure.copyWith(fontSize: 13, color: gc(context).inkMuted),
               ),
             ],
           ),
@@ -159,7 +160,7 @@ class _Leg extends StatelessWidget {
                     if (leg.competition != null) leg.competition!,
                     DateFormat('E HH:mm').format(leg.kickoffUtc.toLocal()),
                   ].join(' · '),
-                  style: GcType.caption.copyWith(color: GcColors.inkFaint),
+                  style: GcType.caption.copyWith(color: gc(context).inkFaint),
                 ),
                 if (leg.reason.isNotEmpty) ...[
                   const SizedBox(height: GcSpace.xs),

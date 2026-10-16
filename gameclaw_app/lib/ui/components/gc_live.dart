@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/tokens.dart';
+import '../../theme/palette.dart';
 
 /// The live indicator: a lime dot that breathes, beside the provider's own clock.
 ///
@@ -39,7 +39,7 @@ class _GcLiveDotState extends State<GcLiveDot> with SingleTickerProviderStateMix
         child: Container(
           width: widget.size,
           height: widget.size,
-          decoration: const BoxDecoration(color: GcColors.live, shape: BoxShape.circle),
+          decoration: BoxDecoration(color: gc(context).live, shape: BoxShape.circle),
         ),
       ),
     );

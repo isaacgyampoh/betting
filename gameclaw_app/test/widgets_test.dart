@@ -346,4 +346,86 @@ void _pitchTests() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  _scrollTests();
+}
+
+/// The scrolling defect, reproduced on the device before it was fixed.
+///
+/// Every competition header was a `pinned: true` sliver in one CustomScrollView. Pinned slivers
+/// all pin at the top of the viewport, so with seventy competitions they stacked: scrolling
+/// produced a screen of nothing but headers, with every match hidden behind them.
+///
+/// SliverMainAxisGroup scopes a pinned header to its own section, so it sticks only while that
+/// competition's fixtures are on screen and the next one pushes it out.
+void _scrollTests() {
+  // Finished, not live: a live row carries GcLiveDot, whose pulse repeats for ever, and
+  // pumpAndSettle waits for animations to stop. Scrolling behaves identically either way.
+  Fixture fixture(int id, String home, String away) => Fixture.fromJson({
+    'id': id,
+    'kickoffAt': '2026-10-16T18:45:00.000Z',
+    'status': 'FINISHED',
+    'statusLabel': 'Match Finished',
+    'league': {'id': 1, 'name': 'League', 'country': 'Country'},
+    'home': {'id': id * 10, 'name': home},
+    'away': {'id': id * 10 + 1, 'name': away},
+    'goals': {'home': 1, 'away': 0},
+  });
+
+  Widget grouped({required bool scoped, required int competitions}) {
+    final header = Container(height: 34, color: const Color(0xFF121216));
+    List<Widget> section(int i) => [
+      SliverPersistentHeader(pinned: true, delegate: GcPinnedHeader(child: header)),
+      SliverList.list(
+        children: [
+          for (var j = 0; j < 3; j++)
+            GcFixtureRow(fixture: fixture(i * 10 + j, 'Home $i-$j', 'Away $i-$j')),
+        ],
+      ),
+    ];
+
+    return MaterialApp(
+      theme: gcTheme(),
+      home: Scaffold(
+        body: CustomScrollView(
+          slivers: [
+            for (var i = 0; i < competitions; i++)
+              if (scoped) SliverMainAxisGroup(slivers: section(i)) else ...section(i),
+          ],
+        ),
+      ),
+    );
+  }
+
+  testWidgets('pinned headers scoped to their section do not stack', (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(grouped(scoped: true, competitions: 12));
+    await tester.pumpAndSettle();
+
+    // Scroll well past several sections.
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+
+    // Match rows must still be on screen. The bug showed headers only.
+    expect(find.byType(GcFixtureRow), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a long list reaches its end without losing rows', (tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(grouped(scoped: true, competitions: 20));
+    await tester.pumpAndSettle();
+
+    for (var i = 0; i < 6; i++) {
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+      await tester.pumpAndSettle();
+      expect(find.byType(GcFixtureRow), findsWidgets, reason: 'rows vanished after ${i + 1} drags');
+    }
+  });
 }

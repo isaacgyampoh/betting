@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/api_client.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import 'gc_button.dart';
 
@@ -36,11 +37,11 @@ class GcEmpty extends StatelessWidget {
                 height: 56,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: GcColors.surface,
+                  color: gc(context).surface,
                   borderRadius: BorderRadius.circular(GcRadius.lg),
-                  border: Border.all(color: GcColors.border),
+                  border: Border.all(color: gc(context).border),
                 ),
-                child: Icon(icon, size: 24, color: GcColors.inkFaint),
+                child: Icon(icon, size: 24, color: gc(context).inkFaint),
               ),
               const SizedBox(height: GcSpace.lg),
             ],
@@ -133,16 +134,16 @@ class GcStaleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: GcColors.warn.withValues(alpha: 0.12),
+      color: gc(context).warn.withValues(alpha: 0.12),
       padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter, vertical: GcSpace.sm),
       child: Row(
         children: [
-          const Icon(Icons.cloud_off_rounded, size: 14, color: GcColors.warn),
+          Icon(Icons.cloud_off_rounded, size: 14, color: gc(context).warn),
           const SizedBox(width: GcSpace.sm),
           Expanded(
             child: Text(
               'Offline — saved ${ago(fetchedAt)}. Scores may have moved on.',
-              style: GcType.caption.copyWith(color: GcColors.warn, fontSize: 12),
+              style: GcType.caption.copyWith(color: gc(context).warn, fontSize: 12),
             ),
           ),
         ],
@@ -173,7 +174,7 @@ class GcSectionHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title.toUpperCase(),
-              style: GcType.overline.copyWith(color: GcColors.inkFaint),
+              style: GcType.overline.copyWith(color: gc(context).inkFaint),
             ),
           ),
           if (trailing != null) trailing!,
@@ -197,15 +198,15 @@ class GcNote extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(GcSpace.md),
       decoration: BoxDecoration(
-        color: GcColors.surface,
+        color: gc(context).surface,
         borderRadius: BorderRadius.circular(GcRadius.md),
-        border: Border.all(color: GcColors.border),
+        border: Border.all(color: gc(context).border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 15, color: GcColors.inkFaint),
+            Icon(icon, size: 15, color: gc(context).inkFaint),
             const SizedBox(width: GcSpace.sm),
           ],
           Expanded(child: Text(text, style: GcType.caption)),

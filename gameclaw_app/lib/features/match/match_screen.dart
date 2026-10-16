@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../data/providers.dart';
 import '../../data/repository.dart';
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_crest.dart';
@@ -85,7 +86,7 @@ class _BackBar extends StatelessWidget {
       children: [
         GcIconButton(
           icon: Icons.arrow_back_rounded,
-          colour: GcColors.ink,
+          colour: gc(context).ink,
           tooltip: 'Back',
           onPressed: () => Navigator.of(context).maybePop(),
         ),
@@ -172,7 +173,7 @@ class _Detail extends StatelessWidget {
                 icon: favourites.contains(detail.fixture.home.id)
                     ? Icons.star_rounded
                     : Icons.star_outline_rounded,
-                colour: favourites.contains(detail.fixture.home.id) ? GcColors.accent : null,
+                colour: favourites.contains(detail.fixture.home.id) ? gc(context).accent : null,
                 tooltip: 'Follow ${detail.fixture.home.name}',
                 onPressed: () => onToggleFavourite(detail.fixture.home),
               ),
@@ -197,8 +198,8 @@ class _Detail extends StatelessWidget {
         ],
         Expanded(
           child: RefreshIndicator(
-            color: GcColors.accent,
-            backgroundColor: GcColors.surfaceRaised,
+            color: gc(context).accent,
+            backgroundColor: gc(context).surfaceRaised,
             onRefresh: onRefresh,
             child: AnimatedSwitcher(
               duration: GcMotion.quick,
@@ -255,8 +256,10 @@ class _ScoreHero extends StatelessWidget {
                     Text(
                       fixture.hasScore ? '${fixture.homeGoals}–${fixture.awayGoals}' : 'vs',
                       style: fixture.hasScore
-                          ? GcType.scoreHero.copyWith(color: live ? GcColors.live : GcColors.ink)
-                          : GcType.display.copyWith(color: GcColors.inkFaint),
+                          ? GcType.scoreHero.copyWith(
+                              color: live ? gc(context).live : gc(context).ink,
+                            )
+                          : GcType.display.copyWith(color: gc(context).inkFaint),
                     ),
                     const SizedBox(height: GcSpace.sm),
                     if (live)
@@ -267,7 +270,7 @@ class _ScoreHero extends StatelessWidget {
                           const SizedBox(width: GcSpace.xs + 2),
                           Text(
                             fixture.statusLabel,
-                            style: GcType.figure.copyWith(color: GcColors.live),
+                            style: GcType.figure.copyWith(color: gc(context).live),
                           ),
                         ],
                       )
@@ -285,7 +288,7 @@ class _ScoreHero extends StatelessWidget {
                       const SizedBox(height: GcSpace.xs),
                       Text(
                         'HT ${fixture.halfTimeHome}–${fixture.halfTimeAway}',
-                        style: GcType.figureSm.copyWith(color: GcColors.inkFaint),
+                        style: GcType.figureSm.copyWith(color: gc(context).inkFaint),
                       ),
                     ],
                   ],
@@ -394,7 +397,7 @@ class _Overview extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.xl, GcSpace.gutter, 0),
           child: Text(
             'Updated ${DateFormat.Hm().format(detail.fetchedAt.toLocal())}',
-            style: GcType.caption.copyWith(color: GcColors.inkFaint),
+            style: GcType.caption.copyWith(color: gc(context).inkFaint),
           ),
         ),
       ],
@@ -440,7 +443,10 @@ class _Compare extends StatelessWidget {
         alignment: fromRight ? Alignment.centerLeft : Alignment.centerRight,
         child: FractionallySizedBox(
           widthFactor: value.clamp(0.0, 1.0),
-          child: Container(height: 6, color: leading ? GcColors.accent : GcColors.borderStrong),
+          child: Container(
+            height: 6,
+            color: leading ? gc(context).accent : gc(context).borderStrong,
+          ),
         ),
       ),
     );
@@ -459,7 +465,7 @@ class _Compare extends StatelessWidget {
                   child: Text(
                     '$homePct%',
                     style: GcType.figure.copyWith(
-                      color: homeLeads ? GcColors.ink : GcColors.inkMuted,
+                      color: homeLeads ? gc(context).ink : gc(context).inkMuted,
                     ),
                   ),
                 ),
@@ -472,7 +478,7 @@ class _Compare extends StatelessWidget {
                     '$awayPct%',
                     textAlign: TextAlign.right,
                     style: GcType.figure.copyWith(
-                      color: homeLeads ? GcColors.inkMuted : GcColors.ink,
+                      color: homeLeads ? gc(context).inkMuted : gc(context).ink,
                     ),
                   ),
                 ),
@@ -489,7 +495,7 @@ class _Compare extends StatelessWidget {
             const SizedBox(height: GcSpace.xs + 2),
             Text(
               'over the last $homeSample and $awaySample matches',
-              style: GcType.caption.copyWith(fontSize: 11, color: GcColors.inkFaint),
+              style: GcType.caption.copyWith(fontSize: 11, color: gc(context).inkFaint),
             ),
           ],
         ),
@@ -548,9 +554,9 @@ class _Pip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colour = switch (result) {
-      FormResult.win => GcColors.win,
-      FormResult.draw => GcColors.inkFaint,
-      FormResult.loss => GcColors.loss,
+      FormResult.win => gc(context).win,
+      FormResult.draw => gc(context).inkFaint,
+      FormResult.loss => gc(context).loss,
     };
     return Container(
       margin: const EdgeInsets.only(left: GcSpace.xs + 1),
@@ -604,7 +610,7 @@ class _Timeline extends StatelessWidget {
     return Stack(
       children: [
         Positioned.fill(
-          child: Center(child: Container(width: 1, color: GcColors.border)),
+          child: Center(child: Container(width: 1, color: gc(context).border)),
         ),
         ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: GcSpace.md).copyWith(bottom: GcSpace.xxxl),
@@ -621,15 +627,16 @@ class _EventRow extends StatelessWidget {
 
   final MatchEvent event;
 
-  (IconData, Color) get _mark => switch (event.type) {
-    MatchEventType.goal || MatchEventType.penalty => (Icons.sports_soccer_rounded, GcColors.accent),
-    MatchEventType.ownGoal => (Icons.sports_soccer_rounded, GcColors.loss),
-    MatchEventType.penaltyMissed => (Icons.block_rounded, GcColors.inkFaint),
-    MatchEventType.yellow => (Icons.square_rounded, GcColors.warn),
-    MatchEventType.secondYellow || MatchEventType.red => (Icons.square_rounded, GcColors.loss),
-    MatchEventType.substitution => (Icons.swap_horiz_rounded, GcColors.inkMuted),
-    MatchEventType.varReview => (Icons.videocam_outlined, GcColors.inkMuted),
-    MatchEventType.unknown => (Icons.circle, GcColors.inkFaint),
+  (IconData, Color) _mark(BuildContext context) => switch (event.type) {
+    MatchEventType.goal ||
+    MatchEventType.penalty => (Icons.sports_soccer_rounded, gc(context).accent),
+    MatchEventType.ownGoal => (Icons.sports_soccer_rounded, gc(context).loss),
+    MatchEventType.penaltyMissed => (Icons.block_rounded, gc(context).inkFaint),
+    MatchEventType.yellow => (Icons.square_rounded, gc(context).warn),
+    MatchEventType.secondYellow || MatchEventType.red => (Icons.square_rounded, gc(context).loss),
+    MatchEventType.substitution => (Icons.swap_horiz_rounded, gc(context).inkMuted),
+    MatchEventType.varReview => (Icons.videocam_outlined, gc(context).inkMuted),
+    MatchEventType.unknown => (Icons.circle, gc(context).inkFaint),
   };
 
   bool get _isGoal =>
@@ -639,7 +646,7 @@ class _EventRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (icon, colour) = _mark;
+    final (icon, colour) = _mark(context);
 
     // The home side's events sit left of the spine and the away side's right, so the run of play
     // is readable without reading a single name.
@@ -687,11 +694,11 @@ class _EventRow extends StatelessWidget {
             Container(
               width: 46,
               alignment: Alignment.center,
-              color: GcColors.canvas,
+              color: gc(context).canvas,
               padding: const EdgeInsets.symmetric(vertical: GcSpace.xs),
               child: Text(
                 event.minuteLabel,
-                style: GcType.figureSm.copyWith(color: GcColors.inkFaint),
+                style: GcType.figureSm.copyWith(color: gc(context).inkFaint),
               ),
             ),
             Expanded(
@@ -745,9 +752,9 @@ class _Table extends StatelessWidget {
         const _TableHeader(),
         for (final (i, block) in blocks.indexed) ...[
           if (i > 0)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: GcSpace.gutter, vertical: GcSpace.sm),
-              child: Divider(height: 1, color: GcColors.borderStrong),
+              child: Divider(height: 1, color: gc(context).borderStrong),
             ),
           for (final row in block.rows)
             _TableRow(row: row, highlighted: highlight.contains(row.team.id)),
@@ -767,7 +774,7 @@ class _TableHeader extends StatelessWidget {
       child: Text(
         text,
         textAlign: TextAlign.right,
-        style: GcType.overline.copyWith(fontSize: 9.5, color: GcColors.inkFaint),
+        style: GcType.overline.copyWith(fontSize: 9.5, color: gc(context).inkFaint),
       ),
     );
 
@@ -779,7 +786,7 @@ class _TableHeader extends StatelessWidget {
           Expanded(
             child: Text(
               'TEAM',
-              style: GcType.overline.copyWith(fontSize: 9.5, color: GcColors.inkFaint),
+              style: GcType.overline.copyWith(fontSize: 9.5, color: gc(context).inkFaint),
             ),
           ),
           cell('P'),
@@ -806,19 +813,22 @@ class _TableRow extends StatelessWidget {
         textAlign: TextAlign.right,
         style: GcType.figure.copyWith(
           fontSize: 12.5,
-          color: strong ? GcColors.ink : GcColors.inkMuted,
+          color: strong ? gc(context).ink : gc(context).inkMuted,
         ),
       ),
     );
 
     return Container(
-      color: highlighted ? GcColors.accent.withValues(alpha: 0.07) : null,
+      color: highlighted ? gc(context).accent.withValues(alpha: 0.07) : null,
       padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter, vertical: GcSpace.sm + 2),
       child: Row(
         children: [
           SizedBox(
             width: 24,
-            child: Text('${row.rank}', style: GcType.figureSm.copyWith(color: GcColors.inkFaint)),
+            child: Text(
+              '${row.rank}',
+              style: GcType.figureSm.copyWith(color: gc(context).inkFaint),
+            ),
           ),
           GcCrest(url: row.team.logoUrl, name: row.team.name, size: 16),
           const SizedBox(width: GcSpace.sm),
@@ -977,7 +987,10 @@ class _StatRow extends StatelessWidget {
         alignment: fromCentreRight ? Alignment.centerLeft : Alignment.centerRight,
         child: FractionallySizedBox(
           widthFactor: share.clamp(0.0, 1.0),
-          child: Container(height: 6, color: leading ? GcColors.accent : GcColors.borderStrong),
+          child: Container(
+            height: 6,
+            color: leading ? gc(context).accent : gc(context).borderStrong,
+          ),
         ),
       ),
     );
@@ -996,7 +1009,7 @@ class _StatRow extends StatelessWidget {
                   child: Text(
                     _format(home),
                     style: GcType.figure.copyWith(
-                      color: homeLeads ? GcColors.ink : GcColors.inkMuted,
+                      color: homeLeads ? gc(context).ink : gc(context).inkMuted,
                     ),
                   ),
                 ),
@@ -1009,7 +1022,7 @@ class _StatRow extends StatelessWidget {
                     _format(away),
                     textAlign: TextAlign.right,
                     style: GcType.figure.copyWith(
-                      color: homeLeads ? GcColors.inkMuted : GcColors.ink,
+                      color: homeLeads ? gc(context).inkMuted : gc(context).ink,
                     ),
                   ),
                 ),
@@ -1064,7 +1077,10 @@ class _LineupsState extends State<_Lineups> {
             child: Row(
               children: [
                 if (lineup.formation != null)
-                  Text(lineup.formation!, style: GcType.figure.copyWith(color: GcColors.accent)),
+                  Text(
+                    lineup.formation!,
+                    style: GcType.figure.copyWith(color: gc(context).accentInk),
+                  ),
                 const Spacer(),
                 if (lineup.coach != null) Text(lineup.coach!, style: GcType.caption),
               ],
@@ -1126,7 +1142,7 @@ class _PlayerList extends StatelessWidget {
                   width: 26,
                   child: Text(
                     player.number?.toString() ?? '–',
-                    style: GcType.figureSm.copyWith(color: GcColors.inkFaint),
+                    style: GcType.figureSm.copyWith(color: gc(context).inkFaint),
                   ),
                 ),
                 Expanded(
@@ -1140,7 +1156,7 @@ class _PlayerList extends StatelessWidget {
                 if (player.position != null)
                   Text(
                     player.position!,
-                    style: GcType.caption.copyWith(fontSize: 11, color: GcColors.inkFaint),
+                    style: GcType.caption.copyWith(fontSize: 11, color: gc(context).inkFaint),
                   ),
               ],
             ),

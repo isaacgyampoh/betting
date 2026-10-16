@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../data/api_client.dart';
 import '../../data/auth_client.dart';
 import '../../data/providers.dart';
+import '../../ui/components/gc_tabs.dart';
+import '../../data/appearance.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_states.dart';
@@ -44,6 +47,11 @@ class ProfileScreen extends ConsumerWidget {
                       favourites: favourites,
                       onSignOut: () => ref.read(signOutProvider)(),
                     ),
+            ),
+            const GcSectionHeader(title: 'Appearance'),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+              child: _Appearance(),
             ),
             const GcSectionHeader(title: 'Notifications'),
             const Padding(
@@ -96,7 +104,7 @@ class ProfileScreen extends ConsumerWidget {
                         // The host this build talks to. A tester needs to know which backend a
                         // given APK points at, and no screenshot otherwise says.
                         ApiConfig.fromEnvironment().baseUrl,
-                        style: GcType.caption.copyWith(fontSize: 11, color: GcColors.inkFaint),
+                        style: GcType.caption.copyWith(fontSize: 11, color: gc(context).inkFaint),
                       ),
                     ],
                   ),
@@ -162,9 +170,9 @@ class _SignedIn extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(GcSpace.md),
             decoration: BoxDecoration(
-              color: GcColors.surface,
+              color: gc(context).surface,
               borderRadius: BorderRadius.circular(GcRadius.lg),
-              border: Border.all(color: GcColors.border),
+              border: Border.all(color: gc(context).border),
             ),
             child: Row(
               children: [
@@ -173,10 +181,10 @@ class _SignedIn extends StatelessWidget {
                   height: 42,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: GcColors.accent,
+                    color: gc(context).accent,
                     borderRadius: BorderRadius.circular(GcRadius.md),
                   ),
-                  child: Text(initial, style: GcType.heading.copyWith(color: GcColors.onAccent)),
+                  child: Text(initial, style: GcType.heading.copyWith(color: gc(context).onAccent)),
                 ),
                 const SizedBox(width: GcSpace.md),
                 Expanded(
@@ -213,7 +221,7 @@ class _SignedIn extends StatelessWidget {
           Text(
             // Said because it is a real consequence and a surprise otherwise.
             'Signing out clears everything saved on this device. Followed teams are kept.',
-            style: GcType.caption.copyWith(fontSize: 11.5, color: GcColors.inkFaint),
+            style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
           ),
         ],
       ),
@@ -319,7 +327,7 @@ class _NotificationsState extends ConsumerState<_Notifications> {
                     content: Text(
                       problem ?? 'Sent. It should arrive in a moment.',
                       style: GcType.label.copyWith(
-                        color: problem == null ? GcColors.ink : GcColors.loss,
+                        color: problem == null ? gc(context).ink : gc(context).loss,
                       ),
                     ),
                   ),
@@ -334,9 +342,40 @@ class _NotificationsState extends ConsumerState<_Notifications> {
             // it and one who taps a dead switch.
             'If the switch does nothing, Android has already been told no. '
             'Turn notifications on for GameClaw in Android Settings.',
-            style: GcType.caption.copyWith(fontSize: 11.5, color: GcColors.inkFaint),
+            style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// System, Light or Dark.
+///
+/// System is the default and resumes following the phone whenever it is chosen again - Flutter
+/// rebuilds on a platform brightness change on its own, so nothing here has to listen.
+class _Appearance extends ConsumerWidget {
+  const _Appearance();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(appearanceProvider).value ?? ThemeMode.system;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GcSegmented(
+          segments: [for (final m in ThemeMode.values) m.label],
+          index: ThemeMode.values.indexOf(mode),
+          onChanged: (i) => ref.read(appearanceProvider.notifier).set(ThemeMode.values[i]),
+        ),
+        const SizedBox(height: GcSpace.sm),
+        Text(
+          mode == ThemeMode.system
+              ? 'Following your phone. Changing it there changes this straight away.'
+              : 'Fixed to ${mode.label.toLowerCase()}, whatever your phone is set to.',
+          style: GcType.caption.copyWith(color: gc(context).inkFaint),
+        ),
       ],
     );
   }

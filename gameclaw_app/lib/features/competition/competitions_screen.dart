@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/providers.dart';
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_chip.dart';
@@ -67,7 +68,7 @@ class _CompetitionsScreenState extends ConsumerState<CompetitionsScreen> {
                   Expanded(child: Text(country.name, style: GcType.body.copyWith(fontSize: 14.5))),
                   Text(
                     '${country.competitions}',
-                    style: GcType.figureSm.copyWith(color: GcColors.inkFaint),
+                    style: GcType.figureSm.copyWith(color: gc(context).inkFaint),
                   ),
                 ],
               ),
@@ -96,7 +97,7 @@ class _CompetitionsScreenState extends ConsumerState<CompetitionsScreen> {
               children: [
                 GcIconButton(
                   icon: Icons.arrow_back_rounded,
-                  colour: GcColors.ink,
+                  colour: gc(context).ink,
                   tooltip: 'Back',
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
@@ -175,7 +176,7 @@ class _CompetitionsScreenState extends ConsumerState<CompetitionsScreen> {
                                 ? 'Showing ${list.length} of ${cached.value.total} matching. '
                                       'Search to narrow it.'
                                 : '${list.length} competitions.',
-                            style: GcType.caption.copyWith(color: GcColors.inkFaint),
+                            style: GcType.caption.copyWith(color: gc(context).inkFaint),
                             textAlign: TextAlign.center,
                           ),
                         );
@@ -209,10 +210,10 @@ class _CompetitionsScreenState extends ConsumerState<CompetitionsScreen> {
                                   ],
                                 ),
                               ),
-                              const Icon(
+                              Icon(
                                 Icons.chevron_right_rounded,
                                 size: 18,
-                                color: GcColors.inkFaint,
+                                color: gc(context).inkFaint,
                               ),
                             ],
                           ),

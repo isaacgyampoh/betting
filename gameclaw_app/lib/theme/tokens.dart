@@ -12,6 +12,12 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'palette.dart';
+
+/// The dark palette's values, kept as constants.
+///
+/// Only for the few places that genuinely cannot read a BuildContext - a CustomPainter's default,
+/// a test fixture. Everything that can should use `gc(context)`, which follows the appearance.
 class GcColors {
   const GcColors._();
 
@@ -205,25 +211,48 @@ const gcSystemBars = SystemUiOverlayStyle(
   systemNavigationBarDividerColor: Colors.transparent,
 );
 
-ThemeData gcTheme() {
-  const scheme = ColorScheme.dark(
-    primary: GcColors.accent,
-    onPrimary: GcColors.onAccent,
-    secondary: GcColors.accent,
-    onSecondary: GcColors.onAccent,
-    surface: GcColors.surface,
-    onSurface: GcColors.ink,
-    surfaceContainerHighest: GcColors.surfaceRaised,
-    outline: GcColors.border,
-    error: GcColors.loss,
-    onError: GcColors.ink,
+/// The system bars, matched to the appearance.
+///
+/// Icons have to contrast with the canvas behind them: light icons on the dark theme, dark icons
+/// on the light one. Getting this wrong leaves an invisible clock.
+SystemUiOverlayStyle gcSystemBarsFor(Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  final palette = dark ? GcPalette.dark : GcPalette.light;
+  return SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+    statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+    systemNavigationBarColor: palette.canvas,
+    systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+    systemNavigationBarDividerColor: Colors.transparent,
+  );
+}
+
+ThemeData gcTheme({Brightness brightness = Brightness.dark}) {
+  final dark = brightness == Brightness.dark;
+  final p = dark ? GcPalette.dark : GcPalette.light;
+
+  final scheme = ColorScheme(
+    brightness: brightness,
+    primary: p.accent,
+    onPrimary: p.onAccent,
+    secondary: p.accent,
+    onSecondary: p.onAccent,
+    surface: p.surface,
+    onSurface: p.ink,
+    surfaceContainerHighest: p.surfaceRaised,
+    outline: p.border,
+    error: p.loss,
+    onError: dark ? p.ink : Colors.white,
   );
 
   return ThemeData(
     useMaterial3: true,
+    brightness: brightness,
+    extensions: [p],
     colorScheme: scheme,
-    scaffoldBackgroundColor: GcColors.canvas,
-    canvasColor: GcColors.canvas,
+    scaffoldBackgroundColor: p.canvas,
+    canvasColor: p.canvas,
     // The default ink sparkle is a Material flourish that reads as someone else's product.
     splashFactory: InkRipple.splashFactory,
     highlightColor: Colors.transparent,
@@ -236,71 +265,68 @@ ThemeData gcTheme() {
       bodyMedium: GcType.body,
       labelLarge: GcType.label,
       bodySmall: GcType.caption,
-    ).apply(bodyColor: GcColors.ink, displayColor: GcColors.ink),
-    dividerTheme: const DividerThemeData(color: GcColors.border, thickness: 1, space: 1),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: GcColors.canvas,
+    ).apply(bodyColor: p.ink, displayColor: p.ink),
+    dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),
+    appBarTheme: AppBarTheme(
+      backgroundColor: p.canvas,
       surfaceTintColor: Colors.transparent,
       scrolledUnderElevation: 0,
       elevation: 0,
       centerTitle: false,
-      systemOverlayStyle: gcSystemBars,
-      titleTextStyle: GcType.title,
-      iconTheme: IconThemeData(color: GcColors.ink, size: 22),
+      systemOverlayStyle: gcSystemBarsFor(brightness),
+      titleTextStyle: GcType.title.copyWith(color: p.ink),
+      iconTheme: IconThemeData(color: p.ink, size: 22),
     ),
-    bottomSheetTheme: const BottomSheetThemeData(
-      backgroundColor: GcColors.surface,
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: p.surface,
       surfaceTintColor: Colors.transparent,
-      modalBackgroundColor: GcColors.surface,
+      modalBackgroundColor: p.surface,
       showDragHandle: true,
-      dragHandleColor: GcColors.borderStrong,
-      shape: RoundedRectangleBorder(
+      dragHandleColor: p.borderStrong,
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(GcRadius.xl)),
       ),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: GcColors.surfaceRaised,
+      backgroundColor: p.surfaceRaised,
       surfaceTintColor: Colors.transparent,
-      titleTextStyle: GcType.heading.copyWith(color: GcColors.ink),
-      contentTextStyle: GcType.body.copyWith(color: GcColors.inkMuted),
+      titleTextStyle: GcType.heading.copyWith(color: p.ink),
+      contentTextStyle: GcType.body.copyWith(color: p.inkMuted),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GcRadius.lg)),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: GcColors.surfaceOverlay,
-      contentTextStyle: GcType.label.copyWith(color: GcColors.ink),
+      backgroundColor: p.surfaceOverlay,
+      contentTextStyle: GcType.label.copyWith(color: p.ink),
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GcRadius.md)),
     ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: GcColors.accent,
-      linearTrackColor: GcColors.border,
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: p.accentInk,
+      linearTrackColor: p.border,
       circularTrackColor: Colors.transparent,
     ),
-    sliderTheme: const SliderThemeData(
-      activeTrackColor: GcColors.accent,
-      thumbColor: GcColors.accent,
-    ),
+    sliderTheme: SliderThemeData(activeTrackColor: GcColors.accent, thumbColor: GcColors.accent),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? GcColors.onAccent : GcColors.inkMuted,
+        (s) => s.contains(WidgetState.selected) ? p.onAccent : p.inkMuted,
       ),
       trackColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? GcColors.accent : GcColors.surfaceRaised,
+        (s) => s.contains(WidgetState.selected) ? p.accent : p.surfaceRaised,
       ),
-      trackOutlineColor: const WidgetStatePropertyAll(GcColors.border),
+      trackOutlineColor: WidgetStatePropertyAll(p.border),
     ),
     checkboxTheme: CheckboxThemeData(
       fillColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? GcColors.accent : Colors.transparent,
+        (s) => s.contains(WidgetState.selected) ? p.accent : Colors.transparent,
       ),
-      checkColor: const WidgetStatePropertyAll(GcColors.onAccent),
-      side: const BorderSide(color: GcColors.borderStrong, width: 1.5),
+      checkColor: WidgetStatePropertyAll(p.onAccent),
+      side: BorderSide(color: p.borderStrong, width: 1.5),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(GcRadius.xs)),
     ),
-    textSelectionTheme: const TextSelectionThemeData(
-      cursorColor: GcColors.accent,
-      selectionColor: Color(0x33CCFF2E),
-      selectionHandleColor: GcColors.accent,
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: p.accentInk,
+      selectionColor: p.accent.withValues(alpha: 0.33),
+      selectionHandleColor: p.accentInk,
     ),
   );
 }

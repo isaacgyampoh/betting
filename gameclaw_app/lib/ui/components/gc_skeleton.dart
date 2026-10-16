@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 
 /// A placeholder in the shape of the thing that is loading.
@@ -49,7 +50,7 @@ class _GcSkeletonState extends State<GcSkeleton> with SingleTickerProviderStateM
         width: widget.width,
         height: widget.height,
         decoration: BoxDecoration(
-          color: GcColors.surfaceRaised,
+          color: gc(context).surfaceRaised,
           borderRadius: BorderRadius.circular(widget.radius),
         ),
       ),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/api_client.dart';
 import '../../data/providers.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 
@@ -63,10 +64,10 @@ class _AgeGateScreenState extends ConsumerState<AgeGateScreen> {
                       height: 52,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: GcColors.accent.withValues(alpha: 0.14),
+                        color: gc(context).accent.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(GcRadius.lg),
                       ),
-                      child: const Icon(Icons.shield_outlined, size: 24, color: GcColors.accent),
+                      child: Icon(Icons.shield_outlined, size: 24, color: gc(context).accentInk),
                     ),
                   ),
                   const SizedBox(height: GcSpace.xl),
@@ -75,14 +76,14 @@ class _AgeGateScreenState extends ConsumerState<AgeGateScreen> {
                   Text(
                     'GameClaw suggests bets. That makes two things true, and we would rather say '
                     'them here than bury them.',
-                    style: GcType.body.copyWith(color: GcColors.inkMuted),
+                    style: GcType.body.copyWith(color: gc(context).inkMuted),
                   ),
                   const SizedBox(height: GcSpace.md),
                   Text(
                     'Every chance this app shows is an estimate from past results. No slip is '
                     'certain, and betting costs money over time. Decide what you are willing to '
                     'lose before you stake it.',
-                    style: GcType.body.copyWith(color: GcColors.inkMuted),
+                    style: GcType.body.copyWith(color: gc(context).inkMuted),
                   ),
                   const SizedBox(height: GcSpace.xxl),
                   _Check(
@@ -98,7 +99,7 @@ class _AgeGateScreenState extends ConsumerState<AgeGateScreen> {
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: GcSpace.lg),
-                    Text(_error!, style: GcType.caption.copyWith(color: GcColors.loss)),
+                    Text(_error!, style: GcType.caption.copyWith(color: gc(context).loss)),
                   ],
                 ],
               ),
@@ -154,9 +155,9 @@ class _Check extends StatelessWidget {
           duration: GcMotion.quick,
           padding: const EdgeInsets.all(GcSpace.md),
           decoration: BoxDecoration(
-            color: value ? GcColors.accent.withValues(alpha: 0.07) : GcColors.surface,
+            color: value ? gc(context).accent.withValues(alpha: 0.07) : gc(context).surface,
             borderRadius: BorderRadius.circular(GcRadius.md),
-            border: Border.all(color: value ? GcColors.accentDim : GcColors.border),
+            border: Border.all(color: value ? gc(context).accentDim : gc(context).border),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

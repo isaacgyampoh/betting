@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import 'gc_chip.dart';
 import 'gc_states.dart';
@@ -30,9 +31,9 @@ class GcSlipCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: GcColors.surface,
+        color: gc(context).surface,
         borderRadius: BorderRadius.circular(GcRadius.lg),
-        border: Border.all(color: GcColors.border),
+        border: Border.all(color: gc(context).border),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -48,7 +49,7 @@ class GcSlipCard extends StatelessWidget {
                     children: [
                       Text(
                         'DESTINATION',
-                        style: GcType.overline.copyWith(fontSize: 9, color: GcColors.inkFaint),
+                        style: GcType.overline.copyWith(fontSize: 9, color: gc(context).inkFaint),
                       ),
                       const SizedBox(height: GcSpace.xxs),
                       Text(
@@ -66,13 +67,13 @@ class GcSlipCard extends StatelessWidget {
                     children: [
                       Text(
                         'TOTAL ODDS',
-                        style: GcType.overline.copyWith(fontSize: 9, color: GcColors.inkFaint),
+                        style: GcType.overline.copyWith(fontSize: 9, color: gc(context).inkFaint),
                       ),
                       const SizedBox(height: GcSpace.xxs),
                       Text(
                         slip.totalOdds!.toStringAsFixed(2),
                         style: GcType.title.copyWith(
-                          color: GcColors.accent,
+                          color: gc(context).accentInk,
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
@@ -88,17 +89,17 @@ class GcSlipCard extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(GcSpace.sm + 2),
                 decoration: BoxDecoration(
-                  color: GcColors.warn.withValues(alpha: 0.12),
+                  color: gc(context).warn.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(GcRadius.sm),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.science_outlined, size: 14, color: GcColors.warn),
+                    Icon(Icons.science_outlined, size: 14, color: gc(context).warn),
                     const SizedBox(width: GcSpace.sm),
                     Expanded(
                       child: Text(
                         'Sample data — this code will not work on the bookmaker’s site.',
-                        style: GcType.caption.copyWith(color: GcColors.warn, fontSize: 11.5),
+                        style: GcType.caption.copyWith(color: gc(context).warn, fontSize: 11.5),
                       ),
                     ),
                   ],
@@ -126,7 +127,7 @@ class GcSlipCard extends StatelessWidget {
 
           if (unsupported > 0 || slip.warnings.isNotEmpty)
             Container(
-              color: GcColors.surfaceRaised,
+              color: gc(context).surfaceRaised,
               padding: const EdgeInsets.all(GcSpace.md),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -134,14 +135,14 @@ class GcSlipCard extends StatelessWidget {
                   if (unsupported > 0)
                     Text(
                       '$unsupported of ${slip.selections.length} could not be carried across.',
-                      style: GcType.caption.copyWith(color: GcColors.warn),
+                      style: GcType.caption.copyWith(color: gc(context).warn),
                     ),
                   for (final warning in slip.warnings)
                     Padding(
                       padding: const EdgeInsets.only(top: GcSpace.xs),
                       child: Text(
                         warning.message,
-                        style: GcType.caption.copyWith(color: GcColors.warn),
+                        style: GcType.caption.copyWith(color: gc(context).warn),
                       ),
                     ),
                 ],
@@ -175,9 +176,12 @@ class _Code extends StatelessWidget {
               SnackBar(
                 content: Row(
                   children: [
-                    const Icon(Icons.check_rounded, size: 16, color: GcColors.accent),
+                    Icon(Icons.check_rounded, size: 16, color: gc(context).accentInk),
                     const SizedBox(width: GcSpace.sm),
-                    Text('Booking code copied', style: GcType.label.copyWith(color: GcColors.ink)),
+                    Text(
+                      'Booking code copied',
+                      style: GcType.label.copyWith(color: gc(context).ink),
+                    ),
                   ],
                 ),
                 duration: const Duration(seconds: 2),
@@ -188,9 +192,9 @@ class _Code extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: GcSpace.md, vertical: GcSpace.md),
           decoration: BoxDecoration(
-            color: GcColors.surfaceRaised,
+            color: gc(context).surfaceRaised,
             borderRadius: BorderRadius.circular(GcRadius.md),
-            border: Border.all(color: GcColors.borderStrong),
+            border: Border.all(color: gc(context).borderStrong),
           ),
           child: Row(
             children: [
@@ -209,13 +213,13 @@ class _Code extends StatelessWidget {
                       const SizedBox(height: GcSpace.xxs),
                       Text(
                         'Expires ${DateFormat('d MMM, HH:mm').format(expiresAt!.toLocal())}',
-                        style: GcType.caption.copyWith(fontSize: 11, color: GcColors.inkFaint),
+                        style: GcType.caption.copyWith(fontSize: 11, color: gc(context).inkFaint),
                       ),
                     ],
                   ],
                 ),
               ),
-              const Icon(Icons.copy_rounded, size: 17, color: GcColors.inkMuted),
+              Icon(Icons.copy_rounded, size: 17, color: gc(context).inkMuted),
             ],
           ),
         ),
@@ -244,7 +248,7 @@ class _SelectionRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   '${selection.home} v ${selection.away}',
-                  style: GcType.label.copyWith(color: ok ? GcColors.ink : GcColors.inkMuted),
+                  style: GcType.label.copyWith(color: ok ? gc(context).ink : gc(context).inkMuted),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -254,7 +258,7 @@ class _SelectionRow extends StatelessWidget {
                 // An unpriced pick has no price. Never a zero, which would read as odds and would
                 // multiply a slip's total to nothing.
                 selection.odds?.toStringAsFixed(2) ?? '–',
-                style: GcType.figure.copyWith(color: ok ? GcColors.ink : GcColors.inkFaint),
+                style: GcType.figure.copyWith(color: ok ? gc(context).ink : gc(context).inkFaint),
               ),
             ],
           ),
@@ -264,14 +268,16 @@ class _SelectionRow extends StatelessWidget {
               Flexible(
                 child: Text(
                   '${selection.marketLabel} · ${selection.pickLabel}',
-                  style: GcType.caption.copyWith(color: ok ? GcColors.inkMuted : GcColors.inkFaint),
+                  style: GcType.caption.copyWith(
+                    color: ok ? gc(context).inkMuted : gc(context).inkFaint,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               if (!ok) ...[
                 const SizedBox(width: GcSpace.sm),
-                GcStatusChip(label: 'NOT BOOKED', colour: GcColors.warn),
+                GcStatusChip(label: 'NOT BOOKED', colour: gc(context).warn),
               ],
             ],
           ),
@@ -279,7 +285,7 @@ class _SelectionRow extends StatelessWidget {
             const SizedBox(height: GcSpace.xs),
             Text(
               selection.status.reason,
-              style: GcType.caption.copyWith(color: GcColors.warn, fontSize: 11.5),
+              style: GcType.caption.copyWith(color: gc(context).warn, fontSize: 11.5),
             ),
           ],
           if (selection.reason != null && selection.reason!.isNotEmpty) ...[
@@ -292,7 +298,7 @@ class _SelectionRow extends StatelessWidget {
               if (selection.competition != null) selection.competition!,
               DateFormat('E HH:mm').format(selection.kickoffUtc.toLocal()),
             ].join(' · '),
-            style: GcType.caption.copyWith(fontSize: 11, color: GcColors.inkFaint),
+            style: GcType.caption.copyWith(fontSize: 11, color: gc(context).inkFaint),
           ),
         ],
       ),

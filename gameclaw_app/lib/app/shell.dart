@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../theme/palette.dart';
 import '../theme/tokens.dart';
 
 /// The bottom navigation, and the Android back button.
@@ -66,9 +67,9 @@ class _NavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: GcColors.canvas,
-        border: Border(top: BorderSide(color: GcColors.border)),
+      decoration: BoxDecoration(
+        color: gc(context).canvas,
+        border: Border(top: BorderSide(color: gc(context).border)),
       ),
       child: SafeArea(
         top: false,
@@ -95,7 +96,7 @@ class _NavBar extends StatelessWidget {
                             child: Icon(
                               i == index ? destination.$2 : destination.$1,
                               size: 22,
-                              color: i == index ? GcColors.accent : GcColors.inkFaint,
+                              color: i == index ? gc(context).accent : gc(context).inkFaint,
                             ),
                           ),
                           const SizedBox(height: GcSpace.xs),
@@ -104,7 +105,7 @@ class _NavBar extends StatelessWidget {
                             style: GcType.overline.copyWith(
                               fontSize: 9.5,
                               letterSpacing: 0.3,
-                              color: i == index ? GcColors.accent : GcColors.inkFaint,
+                              color: i == index ? gc(context).accent : gc(context).inkFaint,
                             ),
                           ),
                         ],

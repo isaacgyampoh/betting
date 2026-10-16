@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../data/providers.dart';
 import '../../data/repository.dart';
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_crest.dart';
@@ -101,8 +102,8 @@ class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> {
             ),
             Expanded(
               child: RefreshIndicator(
-                color: GcColors.accent,
-                backgroundColor: GcColors.surfaceRaised,
+                color: gc(context).accent,
+                backgroundColor: gc(context).surfaceRaised,
                 onRefresh: () => ref.refresh(matchDayProvider(_day).future),
                 child: request.when(
                   skipLoadingOnRefresh: true,
@@ -211,7 +212,7 @@ class _Header extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('GAMECLAW', style: GcType.overline.copyWith(color: GcColors.accent)),
+                    Text('GAMECLAW', style: GcType.overline.copyWith(color: gc(context).accentInk)),
                     const SizedBox(height: GcSpace.xs),
                     Text(_dayTitle(), style: GcType.display),
                   ],
@@ -377,35 +378,46 @@ class _Body extends StatelessWidget {
     return CustomScrollView(
       slivers: [
         if (cached.fromCache) SliverToBoxAdapter(child: GcStaleBar(fetchedAt: cached.fetchedAt)),
-        for (final group in groups) ...[
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: GcPinnedHeader(
-              child: GcCompetitionHeader(
-                competition: group.competition,
-                trailing: Text(
-                  '${group.fixtures.length}',
-                  style: GcType.figureSm.copyWith(color: GcColors.inkFaint),
+        // Each competition is its own group: the header pins only while that competition's own
+        // fixtures are on screen, then the next one pushes it out.
+        //
+        // This is why it is a SliverMainAxisGroup rather than a bare pinned header per section.
+        // Pinned slivers in one CustomScrollView all pin at the top of the viewport, so with
+        // seventy competitions they stack - scrolling produced a screen of nothing but headers
+        // with every match hidden behind them. Reproduced on the device before it was changed.
+        for (final group in groups)
+          SliverMainAxisGroup(
+            slivers: [
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: GcPinnedHeader(
+                  child: GcCompetitionHeader(
+                    competition: group.competition,
+                    trailing: Text(
+                      '${group.fixtures.length}',
+                      style: GcType.figureSm.copyWith(color: gc(context).inkFaint),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              SliverList.separated(
+                itemCount: group.fixtures.length,
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, indent: GcSpace.gutter, endIndent: GcSpace.gutter),
+                itemBuilder: (context, i) {
+                  final fixture = group.fixtures[i];
+                  return GcFixtureRow(
+                    fixture: fixture,
+                    onTap: () => onTapFixture(fixture),
+                    isFavourite:
+                        favourites.contains(fixture.home.id) ||
+                        favourites.contains(fixture.away.id),
+                    onToggleFavourite: () => onToggleFavourite(fixture.home),
+                  );
+                },
+              ),
+            ],
           ),
-          SliverList.separated(
-            itemCount: group.fixtures.length,
-            separatorBuilder: (_, __) =>
-                const Divider(height: 1, indent: GcSpace.gutter, endIndent: GcSpace.gutter),
-            itemBuilder: (context, i) {
-              final fixture = group.fixtures[i];
-              return GcFixtureRow(
-                fixture: fixture,
-                onTap: () => onTapFixture(fixture),
-                isFavourite:
-                    favourites.contains(fixture.home.id) || favourites.contains(fixture.away.id),
-                onToggleFavourite: () => onToggleFavourite(fixture.home),
-              );
-            },
-          ),
-        ],
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -416,7 +428,7 @@ class _Body extends StatelessWidget {
             ),
             child: Text(
               _footer(count, cached.value),
-              style: GcType.caption.copyWith(color: GcColors.inkFaint),
+              style: GcType.caption.copyWith(color: gc(context).inkFaint),
               textAlign: TextAlign.center,
             ),
           ),
@@ -494,7 +506,7 @@ class _CompetitionPickerState extends State<_CompetitionPicker> {
                       Icon(
                         on ? Icons.check_circle_rounded : Icons.circle_outlined,
                         size: 20,
-                        color: on ? GcColors.accent : GcColors.inkFaint,
+                        color: on ? gc(context).accent : gc(context).inkFaint,
                       ),
                     ],
                   ),

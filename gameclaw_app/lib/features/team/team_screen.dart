@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/providers.dart';
 import '../../data/repository.dart';
 import '../../domain/models.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_crest.dart';
@@ -84,7 +85,7 @@ class _BackBar extends StatelessWidget {
     children: [
       GcIconButton(
         icon: Icons.arrow_back_rounded,
-        colour: GcColors.ink,
+        colour: gc(context).ink,
         tooltip: 'Back',
         onPressed: () => Navigator.of(context).maybePop(),
       ),
@@ -129,7 +130,7 @@ class _Body extends StatelessWidget {
         _BackBar(
           trailing: GcIconButton(
             icon: isFavourite ? Icons.star_rounded : Icons.star_outline_rounded,
-            colour: isFavourite ? GcColors.accent : null,
+            colour: isFavourite ? gc(context).accent : null,
             tooltip: isFavourite ? 'Unfollow' : 'Follow',
             onPressed: onToggleFavourite,
           ),
@@ -141,8 +142,8 @@ class _Body extends StatelessWidget {
         const Divider(height: 1),
         Expanded(
           child: RefreshIndicator(
-            color: GcColors.accent,
-            backgroundColor: GcColors.surfaceRaised,
+            color: gc(context).accent,
+            backgroundColor: gc(context).surfaceRaised,
             onRefresh: onRefresh,
             child: tabs[index].$2,
           ),
@@ -245,9 +246,9 @@ class _Pip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colour = switch (result) {
-      FormResult.win => GcColors.win,
-      FormResult.draw => GcColors.inkFaint,
-      FormResult.loss => GcColors.loss,
+      FormResult.win => gc(context).win,
+      FormResult.draw => gc(context).inkFaint,
+      FormResult.loss => gc(context).loss,
     };
     return Container(
       margin: const EdgeInsets.only(left: GcSpace.xs + 1),
@@ -332,7 +333,7 @@ class _Squad extends StatelessWidget {
                     width: 28,
                     child: Text(
                       player.number?.toString() ?? '–',
-                      style: GcType.figureSm.copyWith(color: GcColors.inkFaint),
+                      style: GcType.figureSm.copyWith(color: gc(context).inkFaint),
                     ),
                   ),
                   Expanded(
@@ -346,7 +347,7 @@ class _Squad extends StatelessWidget {
                   if (player.age != null)
                     Text(
                       '${player.age}',
-                      style: GcType.caption.copyWith(fontSize: 11.5, color: GcColors.inkFaint),
+                      style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
                     ),
                 ],
               ),

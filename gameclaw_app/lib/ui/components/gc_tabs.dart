@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 
 /// A segmented control: two to four mutually exclusive views of the same thing.
@@ -26,9 +27,9 @@ class GcSegmented extends StatelessWidget {
       height: 38,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: GcColors.surface,
+        color: gc(context).surface,
         borderRadius: BorderRadius.circular(GcRadius.pill),
-        border: Border.all(color: GcColors.border),
+        border: Border.all(color: gc(context).border),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -44,7 +45,7 @@ class GcSegmented extends StatelessWidget {
                 width: width,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: GcColors.accent,
+                    color: gc(context).accent,
                     borderRadius: BorderRadius.circular(GcRadius.pill),
                   ),
                 ),
@@ -68,7 +69,7 @@ class GcSegmented extends StatelessWidget {
                               duration: GcMotion.quick,
                               style: GcType.label.copyWith(
                                 fontSize: 13,
-                                color: i == index ? GcColors.onAccent : GcColors.inkMuted,
+                                color: i == index ? gc(context).onAccent : gc(context).inkMuted,
                               ),
                               child: Text(segment),
                             ),
@@ -125,7 +126,7 @@ class GcTabBar extends StatelessWidget {
                     Text(
                       tabs[i],
                       style: GcType.label.copyWith(
-                        color: selected ? GcColors.ink : GcColors.inkFaint,
+                        color: selected ? gc(context).ink : gc(context).inkFaint,
                       ),
                     ),
                     const SizedBox(height: GcSpace.sm),
@@ -135,7 +136,7 @@ class GcTabBar extends StatelessWidget {
                       height: 2,
                       width: selected ? 20 : 0,
                       decoration: BoxDecoration(
-                        color: GcColors.accent,
+                        color: gc(context).accent,
                         borderRadius: BorderRadius.circular(GcRadius.pill),
                       ),
                     ),

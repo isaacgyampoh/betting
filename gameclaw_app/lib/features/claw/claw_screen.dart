@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repository.dart';
+import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_chip.dart';
@@ -74,7 +75,7 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
                         chat.allowance!.kind == 'trial'
                             ? '${chat.allowance!.remaining} free left'
                             : '${chat.allowance!.remaining} left today',
-                        style: GcType.caption.copyWith(fontSize: 11.5, color: GcColors.inkFaint),
+                        style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
                       ),
                     ),
                   if (chat.turns.isNotEmpty)
@@ -105,12 +106,12 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
                 padding: const EdgeInsets.fromLTRB(GcSpace.gutter, 0, GcSpace.gutter, GcSpace.sm),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline_rounded, size: 14, color: GcColors.loss),
+                    Icon(Icons.error_outline_rounded, size: 14, color: gc(context).loss),
                     const SizedBox(width: GcSpace.sm),
                     Expanded(
                       child: Text(
                         chat.error!.message,
-                        style: GcType.caption.copyWith(color: GcColors.loss),
+                        style: GcType.caption.copyWith(color: gc(context).loss),
                       ),
                     ),
                   ],
@@ -162,10 +163,10 @@ class _Intro extends StatelessWidget {
             height: 48,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: GcColors.accent.withValues(alpha: 0.14),
+              color: gc(context).accent.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(GcRadius.lg),
             ),
-            child: const Icon(Icons.auto_awesome, size: 22, color: GcColors.accent),
+            child: Icon(Icons.auto_awesome, size: 22, color: gc(context).accentInk),
           ),
         ),
         const SizedBox(height: GcSpace.lg),
@@ -174,7 +175,7 @@ class _Intro extends StatelessWidget {
         Text(
           'Describe what you want and Claw builds it from real fixtures and real prices, with the '
           'reason for every pick. It will tell you when it cannot find one.',
-          style: GcType.body.copyWith(color: GcColors.inkMuted),
+          style: GcType.body.copyWith(color: gc(context).inkMuted),
         ),
         const SizedBox(height: GcSpace.xl),
         for (final example in _examples)
@@ -207,15 +208,15 @@ class _Example extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: GcSpace.md, vertical: GcSpace.md),
         decoration: BoxDecoration(
-          color: GcColors.surface,
+          color: gc(context).surface,
           borderRadius: BorderRadius.circular(GcRadius.md),
-          border: Border.all(color: GcColors.border),
+          border: Border.all(color: gc(context).border),
         ),
         child: Row(
           children: [
             Expanded(child: Text(text, style: GcType.body.copyWith(fontSize: 14))),
             const SizedBox(width: GcSpace.sm),
-            const Icon(Icons.arrow_outward_rounded, size: 15, color: GcColors.inkFaint),
+            Icon(Icons.arrow_outward_rounded, size: 15, color: gc(context).inkFaint),
           ],
         ),
       ),
@@ -238,14 +239,14 @@ class _Turn extends StatelessWidget {
           margin: const EdgeInsets.fromLTRB(52, GcSpace.sm, GcSpace.gutter, GcSpace.sm),
           padding: const EdgeInsets.symmetric(horizontal: GcSpace.md, vertical: GcSpace.sm + 2),
           decoration: BoxDecoration(
-            color: turn.failed ? GcColors.surface : GcColors.accent,
+            color: turn.failed ? gc(context).surface : gc(context).accent,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(GcRadius.lg),
               topRight: Radius.circular(GcRadius.lg),
               bottomLeft: Radius.circular(GcRadius.lg),
               bottomRight: Radius.circular(GcRadius.xs),
             ),
-            border: turn.failed ? Border.all(color: GcColors.loss) : null,
+            border: turn.failed ? Border.all(color: gc(context).loss) : null,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -254,7 +255,7 @@ class _Turn extends StatelessWidget {
                 turn.text,
                 style: GcType.body.copyWith(
                   fontSize: 14.5,
-                  color: turn.failed ? GcColors.ink : GcColors.onAccent,
+                  color: turn.failed ? gc(context).ink : gc(context).onAccent,
                 ),
               ),
               if (turn.failed) ...[
@@ -263,7 +264,7 @@ class _Turn extends StatelessWidget {
                   onTap: onRetry,
                   child: Text(
                     'Not sent · tap to retry',
-                    style: GcType.caption.copyWith(color: GcColors.loss, fontSize: 11.5),
+                    style: GcType.caption.copyWith(color: gc(context).loss, fontSize: 11.5),
                   ),
                 ),
               ],
@@ -305,10 +306,10 @@ class _Thinking extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(GcSpace.gutter, 0, GcSpace.gutter, GcSpace.sm),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 13,
             height: 13,
-            child: CircularProgressIndicator(strokeWidth: 1.6, color: GcColors.accent),
+            child: CircularProgressIndicator(strokeWidth: 1.6, color: gc(context).accent),
           ),
           const SizedBox(width: GcSpace.sm),
           Text('Researching…', style: GcType.caption),
@@ -331,8 +332,8 @@ class _Composer extends StatelessWidget {
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.sm, GcSpace.gutter, GcSpace.sm),
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: GcColors.border)),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: gc(context).border)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -346,20 +347,20 @@ class _Composer extends StatelessWidget {
                 textInputAction: TextInputAction.send,
                 onSubmitted: onSubmit,
                 style: GcType.body.copyWith(fontSize: 14.5),
-                cursorColor: GcColors.accent,
+                cursorColor: gc(context).accent,
                 decoration: InputDecoration(
                   isDense: true,
                   hintText: 'Ask for a slip…',
-                  hintStyle: GcType.body.copyWith(fontSize: 14.5, color: GcColors.inkFaint),
+                  hintStyle: GcType.body.copyWith(fontSize: 14.5, color: gc(context).inkFaint),
                   filled: true,
-                  fillColor: GcColors.surface,
+                  fillColor: gc(context).surface,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: GcSpace.md,
                     vertical: GcSpace.md,
                   ),
-                  border: _border(GcColors.border),
-                  enabledBorder: _border(GcColors.border),
-                  focusedBorder: _border(GcColors.borderStrong),
+                  border: _border(gc(context).border),
+                  enabledBorder: _border(gc(context).border),
+                  focusedBorder: _border(gc(context).borderStrong),
                 ),
               ),
             ),
@@ -389,7 +390,7 @@ class _Send extends StatelessWidget {
       button: true,
       label: 'Send',
       child: Material(
-        color: enabled ? GcColors.accent : GcColors.surfaceRaised,
+        color: enabled ? gc(context).accent : gc(context).surfaceRaised,
         borderRadius: BorderRadius.circular(GcRadius.lg),
         child: InkWell(
           onTap: enabled ? onTap : null,
@@ -400,7 +401,7 @@ class _Send extends StatelessWidget {
             child: Icon(
               Icons.arrow_upward_rounded,
               size: 20,
-              color: enabled ? GcColors.onAccent : GcColors.inkFaint,
+              color: enabled ? gc(context).onAccent : gc(context).inkFaint,
             ),
           ),
         ),
