@@ -1,0 +1,51 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  // The dedicated API Worker for the Flutter app. A SEPARATE Worker from `gameclaw`, which keeps
+  // gameclaw.win and www.gameclaw.win and is not touched by anything in this file.
+  //
+  // Deploy with `pnpm cf:deploy:api`, which passes this config explicitly. There is no overlap:
+  // a different "name" means a different Worker, and the empty "routes" below means this one
+  // claims no custom domain at all.
+  "name": "gameclaw-api",
+  "main": "worker.api.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+
+  // The workers.dev subdomain is the hostname: https://gameclaw-api.<account>.workers.dev.
+  // No custom domain, so no DNS record is created or changed anywhere.
+  "workers_dev": true,
+  "preview_urls": false,
+  "routes": [],
+
+  // NO "triggers". The daily-picks and cleanup crons belong to the website Worker and must run
+  // exactly once. See the comment at the top of worker.api.ts.
+
+  "placement": { "mode": "smart" },
+  "observability": { "enabled": true },
+
+  // Public / non-secret configuration. Secrets are set per Worker with
+  // `npx wrangler secret put <NAME> --config wrangler.api.jsonc` and are never committed.
+  "vars": {
+    // Must be this Worker's own origin. scripts/cf-build.mjs refuses to build while it is still
+    // the placeholder, because a wrong value here is baked into the bundle and silently sends
+    // auth redirects to the website.
+    "NEXT_PUBLIC_SITE_URL": "https://REPLACE-ME.workers.dev",
+    "NEXT_PUBLIC_SUPABASE_URL": "https://qefedcphkmxuxjetmtqw.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlZmVkY3Boa214dXhqZXRtdHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NjE0NTUsImV4cCI6MjEwNjMzNzQ1NX0.0uK_oW-vIBwPfpg1qXi53BjXpF2XjfsdUz2SO9hYh6g",
+    "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "pk_live_9d21dd9b8bd208a10cd1a1195a0dbd1d477894b1",
+    "SPORTYBET_MODE": "live",
+    "MSPORT_MODE": "live",
+    "FOOTBALLCOM_MODE": "live",
+    "BETWAY_MODE": "mock",
+    "STATS_MODE": "auto",
+    // Production never serves sample bookmaker data: an unconnected bookmaker refuses instead.
+    "ALLOW_SAMPLE_DATA": "0"
+  },
+
+  // The SAME Hyperdrive configuration as the website Worker. Hyperdrive is billed per
+  // configuration, not per Worker that binds it, so sharing it adds no cost and no second pool
+  // in front of the database.
+  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "673d415bb1174f8092e5649a5675516a" }]
+}

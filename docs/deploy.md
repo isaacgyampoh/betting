@@ -159,3 +159,82 @@ Cutover from Vercel is done (30 Sep 2026): both hostnames are Worker custom doma
   select date_trunc('day', created_at) d, sum(cost_micro_usd)/1e6 usd from usage_logs group by 1 order by 1 desc;
   ```
 - **Prices and limits:** edit the `plans` table. No deploy is needed.
+
+## The API Worker (`gameclaw-api`)
+
+The Flutter app talks to a **separate Worker** on a `workers.dev` hostname. The website Worker
+(`gameclaw`) and both of its domains are untouched by any of this.
+
+| Piece | Where |
+|---|---|
+| Config | `wrangler.api.jsonc`: name `gameclaw-api`, `workers_dev: true`, **no routes**, **no crons** |
+| Entry | `worker.api.ts`: serves `/api/*` only; everything else is a 404 |
+| Build | `pnpm cf:build:api` — same OpenNext build, but `NEXT_PUBLIC_*` read from `wrangler.api.jsonc` |
+| Deploy | `pnpm cf:deploy:api` — passes `--config wrangler.api.jsonc` to both halves |
+
+Three things are deliberate:
+
+**No cron triggers.** The daily-picks and cleanup Cron Triggers stay on the website Worker. Two
+Workers declaring the same crons would publish each day's picks twice and settle them twice,
+against a record whose entire value is that it is never edited after the fact.
+
+**No migrations on deploy.** `cf:deploy:api` does not run `prisma migrate deploy`; the website
+deploy owns the schema. Two deploy paths racing migrations against one database is a bad trade for
+no benefit.
+
+**`/api/*` only.** A second Worker rendering the whole site would put a second copy of it on the
+internet with its own URL, competing with the real one.
+
+### Before the first deploy
+
+1. `npx wrangler login` (the official flow; never paste a token into a chat).
+2. `npx wrangler whoami` — note the account and its **workers.dev subdomain**.
+3. Set `NEXT_PUBLIC_SITE_URL` in `wrangler.api.jsonc` to `https://gameclaw-api.<subdomain>.workers.dev`.
+   `cf:build:api` refuses to build while it is still the placeholder: that value is inlined into
+   the bundle and used for auth redirects, so a wrong one fails silently and everywhere.
+4. Set this Worker's own secrets. They are per-Worker and are **not** inherited from `gameclaw`:
+
+```bash
+for s in DATABASE_URL IP_HASH_SALT ANTHROPIC_API_KEY PAYSTACK_SECRET_KEY API_FOOTBALL_KEY; do
+  npx wrangler secret put "$s" --config wrangler.api.jsonc
+done
+```
+
+`CRON_SECRET` is **not** needed here — this Worker has no cron handler.
+
+5. `pnpm cf:deploy:api`.
+6. Point the app at it and rebuild:
+
+```bash
+flutter build apk --debug \
+  --dart-define=GC_API_BASE=https://gameclaw-api.<subdomain>.workers.dev/api/v1 \
+  --dart-define=GC_SUPABASE_URL=... --dart-define=GC_SUPABASE_ANON_KEY=...
+```
+
+### Cost
+
+A second Worker adds **no new subscription**: Workers Paid is per account, and this account is
+already on it (Hyperdrive and Smart Placement both require it). The new Worker consumes the same
+account-level request and CPU allowance, and binds the **same** Hyperdrive configuration — which
+is billed per configuration, not per Worker that binds it. So the marginal cost is the requests
+the mobile app actually makes, on an allowance already being paid for.
+
+What that does not tell you is how much headroom is left. Check **Workers & Pages → Usage** after
+logging in, before sending real traffic.
+
+### Endpoints the mobile app needs
+
+The app calls exactly seven, all under `/api/v1`:
+
+| Endpoint | Auth |
+|---|---|
+| `GET /matches?date=` | bearer + 18+ |
+| `GET /matches/{id}` | bearer + 18+ |
+| `GET /picks` | optional bearer |
+| `GET /picks/track-record` | public |
+| `POST /me/age-confirmation` | bearer |
+| `GET /ai/allowance` | bearer + 18+ |
+| `POST /ai/chat` | bearer + 18+ |
+
+Auth is `Authorization: Bearer <Supabase access token>`, verified in `lib/auth.ts` against the
+project's JWKS. The app holds nothing else.
