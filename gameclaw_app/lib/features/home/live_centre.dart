@@ -375,9 +375,20 @@ class _Body extends StatelessWidget {
 
     final count = groups.fold(0, (sum, g) => sum + g.fixtures.length);
 
+    // Only on the full, unfiltered day. Once somebody has narrowed to a filter, a competition or
+    // their own teams, they have said what they want to look at, and a row of suggestions on top
+    // of that is noise rather than help.
+    final featured = (filter == LiveFilter.upcoming && !favouritesOnly && competitions.isEmpty)
+        ? cached.value.featured
+        : const <FeaturedFixture>[];
+
     return CustomScrollView(
       slivers: [
         if (cached.fromCache) SliverToBoxAdapter(child: GcStaleBar(fetchedAt: cached.fetchedAt)),
+        if (featured.isNotEmpty)
+          SliverToBoxAdapter(
+            child: _Featured(featured: featured, onTap: onTapFixture),
+          ),
         // Each competition is its own group: the header pins only while that competition's own
         // fixtures are on screen, then the next one pushes it out.
         //
@@ -537,6 +548,141 @@ class _CompetitionPickerState extends State<_CompetitionPicker> {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// The fixtures the day leads with.
+///
+/// Headed "Featured", not "Big Games". Significance is not something this data knows - there is
+/// no attendance, no popularity, no derby flag - so the only claim made here is the one that is
+/// true: these are from the competitions GameClaw ranks highest, and the row says so in as many
+/// words. A day with nothing from a ranked competition shows no row at all, which is a better
+/// answer than promoting a third tier to fill the space.
+class _Featured extends StatelessWidget {
+  const _Featured({required this.featured, required this.onTap});
+
+  final List<FeaturedFixture> featured;
+  final ValueChanged<Fixture> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            GcSpace.gutter,
+            GcSpace.md,
+            GcSpace.gutter,
+            GcSpace.sm,
+          ),
+          child: Row(
+            children: [
+              Text('FEATURED', style: GcType.overline.copyWith(color: gc(context).inkMuted)),
+              const SizedBox(width: GcSpace.sm),
+              Expanded(
+                child: Text(
+                  'from the competitions we rank highest',
+                  style: GcType.caption.copyWith(color: gc(context).inkFaint),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 108,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+            itemCount: featured.length,
+            separatorBuilder: (_, __) => const SizedBox(width: GcSpace.sm),
+            itemBuilder: (context, i) {
+              final item = featured[i];
+              return _FeaturedCard(item: item, onTap: () => onTap(item.fixture));
+            },
+          ),
+        ),
+        const SizedBox(height: GcSpace.md),
+        Divider(height: 1, color: gc(context).border),
+      ],
+    );
+  }
+}
+
+class _FeaturedCard extends StatelessWidget {
+  const _FeaturedCard({required this.item, required this.onTap});
+
+  final FeaturedFixture item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final f = item.fixture;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 232,
+        padding: const EdgeInsets.all(GcSpace.md),
+        decoration: BoxDecoration(
+          color: gc(context).surface,
+          borderRadius: BorderRadius.circular(GcRadius.md),
+          border: Border.all(color: gc(context).border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              item.reason,
+              style: GcType.overline.copyWith(color: gc(context).accentInk),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: GcSpace.sm),
+            _FeaturedSide(team: f.home, goals: f.homeGoals),
+            const SizedBox(height: GcSpace.xs),
+            _FeaturedSide(team: f.away, goals: f.awayGoals),
+            const Spacer(),
+            Text(
+              f.status == MatchStatus.scheduled
+                  ? DateFormat.Hm().format(f.kickoffUtc.toLocal())
+                  : f.statusLabel,
+              style: GcType.caption.copyWith(
+                color: f.status == MatchStatus.live ? gc(context).live : gc(context).inkFaint,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FeaturedSide extends StatelessWidget {
+  const _FeaturedSide({required this.team, required this.goals});
+
+  final Team team;
+  final int? goals;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        GcCrest(url: team.logoUrl, name: team.name, size: 16),
+        const SizedBox(width: GcSpace.sm),
+        Expanded(
+          child: Text(
+            team.name,
+            style: GcType.body.copyWith(color: gc(context).ink),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        // Null before kick-off, and never defaulted to zero.
+        if (goals != null) Text('$goals', style: GcType.figureSm.copyWith(color: gc(context).ink)),
       ],
     );
   }

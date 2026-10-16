@@ -133,7 +133,26 @@ export async function getTodaysPicks(userId: string | null): Promise<DailyPickVi
   return picks.map((p) => toView(p, unlocked));
 }
 
+/** Which slice of the record is being asked for. */
+export type RecordWindow = "all" | "30d";
+
+/** The number of days "30d" means, named so the label and the query cannot drift apart. */
+export const RECORD_WINDOW_DAYS = 30;
+
+/**
+ * Below this many settled picks, a win rate is a number rather than evidence.
+ *
+ * Ten is not a statistical threshold so much as an honesty one: four from six is 67% and means
+ * almost nothing, and showing it next to a lifetime figure invites a comparison the sample cannot
+ * support. The screen says the sample is small rather than quietly letting it look authoritative.
+ */
+export const RECORD_MIN_SAMPLE = 10;
+
 export type TrackRecord = {
+  window: RecordWindow;
+  /** Settled picks behind the rates below. Small samples are called out rather than dressed up. */
+  settled: number;
+  smallSample: boolean;
   total: number;
   won: number;
   lost: number;
@@ -154,8 +173,25 @@ export type TrackRecord = {
  * and publishing them here handed the paid feature away for nothing. Nothing is hidden permanently:
  * every pick opens up the moment it settles, and none is ever edited or removed.
  */
-export async function getTrackRecord(limit = 60): Promise<TrackRecord> {
-  const picks = await db.dailyPick.findMany({ include: pickInclude, orderBy: { forDate: "desc" }, take: limit });
+export async function getTrackRecord(limit = 60, window: RecordWindow = "all"): Promise<TrackRecord> {
+  // The window is on the day the pick was *for*, not when it settled. A pick from the 1st that
+  // settled on the 2nd belongs to the 1st, which is the day it was published and judged on.
+  const since =
+    window === "30d"
+      ? (() => {
+          const d = new Date();
+          d.setUTCHours(0, 0, 0, 0);
+          d.setUTCDate(d.getUTCDate() - (RECORD_WINDOW_DAYS - 1));
+          return d;
+        })()
+      : null;
+
+  const picks = await db.dailyPick.findMany({
+    where: since ? { forDate: { gte: since } } : undefined,
+    include: pickInclude,
+    orderBy: { forDate: "desc" },
+    take: limit,
+  });
   const settled = picks.filter((p) => p.status === "WON" || p.status === "LOST");
   const won = settled.filter((p) => p.status === "WON");
 
@@ -167,6 +203,9 @@ export async function getTrackRecord(limit = 60): Promise<TrackRecord> {
   const rateOf = (rows: typeof settled) => (rows.length ? Math.round((rows.filter((p) => p.status === "WON").length / rows.length) * 1000) / 10 : null);
 
   return {
+    window,
+    settled: settled.length,
+    smallSample: settled.length > 0 && settled.length < RECORD_MIN_SAMPLE,
     total: picks.length,
     won: won.length,
     lost: settled.length - won.length,

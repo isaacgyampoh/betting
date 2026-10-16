@@ -11,18 +11,26 @@ import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_pick_card.dart';
 import '../../ui/components/gc_skeleton.dart';
 import '../../ui/components/gc_states.dart';
+import '../../ui/components/gc_tabs.dart';
 
 /// The published record. Every slip, losses included.
 ///
 /// This screen exists because a tips product is worth exactly what its record is, and a record you
 /// cannot check is worth nothing. Nothing here is filtered, nothing is edited after the fact, and
 /// a losing run shows as a losing run.
-class RecordScreen extends ConsumerWidget {
+class RecordScreen extends ConsumerStatefulWidget {
   const RecordScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final record = ref.watch(trackRecordProvider);
+  ConsumerState<RecordScreen> createState() => _RecordScreenState();
+}
+
+class _RecordScreenState extends ConsumerState<RecordScreen> {
+  RecordWindow _window = RecordWindow.all;
+
+  @override
+  Widget build(BuildContext context) {
+    final record = ref.watch(trackRecordProvider(_window));
 
     return Scaffold(
       body: SafeArea(
@@ -50,18 +58,29 @@ class RecordScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(GcSpace.gutter, 0, GcSpace.gutter, GcSpace.md),
+              child: GcSegmented(
+                segments: [for (final w in RecordWindow.values) w.label],
+                index: RecordWindow.values.indexOf(_window),
+                onChanged: (i) => setState(() => _window = RecordWindow.values[i]),
+              ),
+            ),
             Expanded(
               child: RefreshIndicator(
                 color: gc(context).accentInk,
                 backgroundColor: gc(context).surfaceRaised,
-                onRefresh: () => ref.refresh(trackRecordProvider.future),
+                onRefresh: () => ref.refresh(trackRecordProvider(_window).future),
                 child: record.when(
                   skipLoadingOnRefresh: true,
                   loading: () => const GcFixtureSkeleton(rows: 5),
                   error: (error, _) => ListView(
                     children: [
                       const SizedBox(height: GcSpace.xxl),
-                      GcError(error: error, onRetry: () => ref.invalidate(trackRecordProvider)),
+                      GcError(
+                        error: error,
+                        onRetry: () => ref.invalidate(trackRecordProvider(_window)),
+                      ),
                     ],
                   ),
                   data: (cached) => _Record(cached: cached),
@@ -145,6 +164,15 @@ class _Summary extends StatelessWidget {
               ),
             ],
           ),
+          if (record.total == 0) ...[
+            const SizedBox(height: GcSpace.lg),
+            GcNote(
+              record.window == RecordWindow.last30
+                  ? 'No slips published in the last 30 days.'
+                  : 'No slips published yet.',
+              icon: Icons.inbox_outlined,
+            ),
+          ],
           const SizedBox(height: GcSpace.lg),
           Row(
             children: [
@@ -155,6 +183,18 @@ class _Summary extends StatelessWidget {
               if (record.pending > 0) _Stat(label: 'Running', value: '${record.pending}'),
             ],
           ),
+          // A win rate from a handful of slips is a number, not evidence. Saying so is the
+          // difference between a record and a sales figure - and it matters most on the 30-day
+          // view, which is exactly where the sample is smallest.
+          if (record.smallSample) ...[
+            const SizedBox(height: GcSpace.lg),
+            GcNote(
+              'Only ${record.settled} settled ${record.settled == 1 ? 'slip' : 'slips'} '
+              '${record.window == RecordWindow.last30 ? 'in the last 30 days' : 'so far'}. '
+              'That is too few to judge a win rate on.',
+              icon: Icons.info_outline_rounded,
+            ),
+          ],
           if (roi != null) ...[
             const SizedBox(height: GcSpace.lg),
             Container(

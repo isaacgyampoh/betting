@@ -87,9 +87,10 @@ class FootballRepository {
     parse: CompetitionDirectory.fromJson,
   );
 
-  Future<Cached<TrackRecord>> trackRecord() => _read(
-    key: 'picks:record',
-    fetch: () => _api.get<Map<String, dynamic>>('/picks/track-record'),
+  Future<Cached<TrackRecord>> trackRecord({RecordWindow window = RecordWindow.all}) => _read(
+    key: 'record:${window.query}',
+    fetch: () =>
+        _api.get<Map<String, dynamic>>('/picks/track-record', query: {'window': window.query}),
     parse: TrackRecord.fromJson,
   );
 

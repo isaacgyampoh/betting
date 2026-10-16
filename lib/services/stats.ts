@@ -85,6 +85,53 @@ const PRIORITY: [country: string, league: string][] = [
 
 export type LeagueGroup = { league: MatchSummary["league"]; matches: MatchSummary[] };
 
+/** A fixture picked out of the day, with the reason it was picked. */
+export type FeaturedFixture = { match: MatchSummary; reason: string };
+
+/**
+ * The handful of fixtures worth leading the day with.
+ *
+ * Called "Featured", not "Big Games", and that is a deliberate retreat. Significance is not
+ * something this data knows: the provider publishes no attendance, no popularity, no derby flag
+ * and no importance score, and inventing one would mean dressing a guess as a fact on the screen
+ * people trust least. What it does publish is which competition a fixture is in, and the rank
+ * order those competitions already have in PRIORITY - which is an editorial judgement we made
+ * openly, rather than a measurement we are pretending to have taken.
+ *
+ * So the rule is small enough to state on the screen: the earliest-kicking fixtures from the
+ * highest-ranked competitions playing today, one per competition so a single league cannot take
+ * the whole row, and nothing at all from a competition outside the ranked list. A quiet day with
+ * no ranked football returns nothing and the section does not appear - which is the honest
+ * outcome, and better than filling it with a third tier nobody asked for.
+ *
+ * It deliberately does not sort by kick-off across competitions: the order is the competition
+ * order, so the row reads the same way the list below it does.
+ */
+export function featuredFixtures(groups: LeagueGroup[], max = 5): FeaturedFixture[] {
+  const ranked = groups
+    .map((group) => ({
+      group,
+      rank: PRIORITY.findIndex(([c, l]) => c === group.league.country && l === group.league.name),
+    }))
+    .filter((entry) => entry.rank !== -1)
+    .sort((a, b) => a.rank - b.rank);
+
+  const featured: FeaturedFixture[] = [];
+  for (const { group } of ranked) {
+    if (featured.length >= max) break;
+    // Not yet finished where possible: a result is not something to lead the day with.
+    const upcoming = group.matches.filter((m) => m.status !== "FINISHED");
+    const match = (upcoming.length ? upcoming : group.matches)[0];
+    if (!match) continue;
+    // Country first, as everywhere else in the app. Without it the row leads with "Serie A" twice
+    // on any day Italy and Brazil both play, which reads as a duplicate rather than two
+    // competitions - and "Premier League" is shared by England, Armenia, Egypt and more.
+    featured.push({ match, reason: `${group.league.country} · ${group.league.name}` });
+  }
+  return featured;
+}
+
+
 const BUSY_MESSAGE = "Match stats are busy right now. Please try again in a minute.";
 
 async function orBusy<T>(p: Promise<T>): Promise<T> {
@@ -110,7 +157,7 @@ const MAX_LISTED = 150;
 export async function listMatches(
   date: string,
   search?: string,
-): Promise<{ groups: LeagueGroup[]; source: StatsProvider["source"]; total: number; shown: number }> {
+): Promise<{ groups: LeagueGroup[]; featured: FeaturedFixture[]; source: StatsProvider["source"]; total: number; shown: number }> {
   const provider = statsProvider();
   const all = await orBusy(provider.fixturesByDate(date));
   await rememberLogos(all);
@@ -144,7 +191,7 @@ export async function listMatches(
     groups.push(g);
     shown += g.matches.length;
   }
-  return { groups, source: provider.source, total: matches.length, shown };
+  return { groups, featured: featuredFixtures(groups), source: provider.source, total: matches.length, shown };
 }
 
 

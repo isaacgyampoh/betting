@@ -830,16 +830,37 @@ class MatchDetail {
 /// The grouping is the server's decision, not the app's: it knows which competitions matter and
 /// caps a day's list at a size a phone can actually render. [total] and [shown] are kept so the
 /// screen can say "150 of 1,284" rather than implying the day had 150 games.
+/// A fixture the day leads with, and the reason it was chosen.
+///
+/// The reason is always the competition. Nothing here claims a fixture is important - the data
+/// has no way to know that - only that it is in a competition we rank highly, which is an
+/// editorial judgement the app states rather than dresses up as a measurement.
+class FeaturedFixture {
+  const FeaturedFixture({required this.fixture, required this.reason});
+
+  final Fixture fixture;
+  final String reason;
+
+  factory FeaturedFixture.fromJson(Map<String, dynamic> json) => FeaturedFixture(
+    fixture: Fixture.fromJson(json['match'] as Map<String, dynamic>),
+    reason: json['reason'] as String? ?? '',
+  );
+}
+
 class MatchDay {
   const MatchDay({
     required this.date,
     required this.groups,
+    required this.featured,
     required this.total,
     required this.shown,
   });
 
   final String date;
   final List<LeagueGroup> groups;
+
+  /// Empty on a day with nothing from a ranked competition, and the section then does not appear.
+  final List<FeaturedFixture> featured;
 
   /// Fixtures played that day, which is usually far more than [shown].
   final int total;
@@ -851,6 +872,9 @@ class MatchDay {
     date: json['date'] as String? ?? '',
     groups: (json['groups'] as List<dynamic>? ?? const [])
         .map((g) => LeagueGroup.fromJson(g as Map<String, dynamic>))
+        .toList(growable: false),
+    featured: (json['featured'] as List<dynamic>? ?? const [])
+        .map((f) => FeaturedFixture.fromJson(f as Map<String, dynamic>))
         .toList(growable: false),
     total: (json['total'] as num?)?.toInt() ?? 0,
     shown: (json['shown'] as num?)?.toInt() ?? 0,
@@ -982,8 +1006,20 @@ class DailyPick {
 ///
 /// [winRate] and [roi] are null until something has settled, because a rate over zero settled
 /// picks is not 0% - it is not a number yet.
+/// Which slice of the published record is being shown.
+enum RecordWindow {
+  all('all', 'All time'),
+  last30('30d', 'Last 30 days');
+
+  const RecordWindow(this.query, this.label);
+  final String query;
+  final String label;
+}
+
 class TrackRecord {
   const TrackRecord({
+    required this.window,
+    required this.smallSample,
     required this.total,
     required this.won,
     required this.lost,
@@ -992,6 +1028,12 @@ class TrackRecord {
     required this.roi,
     required this.picks,
   });
+
+  final RecordWindow window;
+
+  /// True when there are settled picks, but too few for the rates to mean much. The screen says
+  /// so rather than letting a small number sit next to a lifetime figure looking authoritative.
+  final bool smallSample;
 
   final int total;
   final int won;
@@ -1004,6 +1046,11 @@ class TrackRecord {
   int get settled => won + lost;
 
   factory TrackRecord.fromJson(Map<String, dynamic> json) => TrackRecord(
+    window: RecordWindow.values.firstWhere(
+      (w) => w.query == json['window'],
+      orElse: () => RecordWindow.all,
+    ),
+    smallSample: json['smallSample'] as bool? ?? false,
     total: (json['total'] as num?)?.toInt() ?? 0,
     won: (json['won'] as num?)?.toInt() ?? 0,
     lost: (json['lost'] as num?)?.toInt() ?? 0,

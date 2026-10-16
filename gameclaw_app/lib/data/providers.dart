@@ -110,8 +110,8 @@ final todaysPicksProvider = FutureProvider<Cached<List<DailyPick>>>(
   (ref) => ref.watch(repositoryProvider).todaysPicks(),
 );
 
-final trackRecordProvider = FutureProvider<Cached<TrackRecord>>(
-  (ref) => ref.watch(repositoryProvider).trackRecord(),
+final trackRecordProvider = FutureProvider.family<Cached<TrackRecord>, RecordWindow>(
+  (ref, window) => ref.watch(repositoryProvider).trackRecord(window: window),
 );
 
 /// The teams this phone follows, as a live set of ids.
