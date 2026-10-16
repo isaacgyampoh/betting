@@ -138,4 +138,63 @@ void main() {
       expect(detail.fetchedAt, at);
     });
   });
+
+  /// Both of these came from looking at the screen on a real phone, against a competition the
+  /// provider covers thinly. Neither would have failed a test written from the API's documentation.
+  group('what the screen actually shows', () {
+    test('a goal nobody is named for reads as a goal, not as the provider\'s internal wording', () {
+      // Lower-coverage competitions report that a goal happened and by which side, and no more.
+      // Falling through to the raw detail put "Normal Goal, Normal Goal" down the timeline.
+      final anonymous = MatchEvent.fromJson({
+        'minute': 14, 'side': 'HOME', 'type': 'GOAL', 'detail': 'Normal Goal', 'player': null,
+      });
+      expect(anonymous.label, 'Goal');
+
+      final named = MatchEvent.fromJson({
+        'minute': 14, 'side': 'HOME', 'type': 'GOAL', 'detail': 'Normal Goal', 'player': 'Ada Hegerberg',
+      });
+      expect(named.label, 'Ada Hegerberg');
+    });
+
+    test('an event we do not model still keeps the provider wording', () {
+      final odd = MatchEvent.fromJson({
+        'minute': 90, 'side': 'AWAY', 'type': 'PENALTY_SHOOTOUT', 'detail': 'Shootout goal',
+      });
+      expect(odd.label, 'Shootout goal');
+    });
+
+    test('a table whose rank restarts is more than one group', () {
+      // Exactly what API-Football returned for the Australian Championship: sixteen rows in one
+      // array, every row carrying the same group name, the rank running 1-4 four times over.
+      StandingRow row(int rank, String name) => StandingRow.fromJson({
+            'rank': rank, 'team': {'id': rank * 100, 'name': name}, 'played': 0, 'won': 0,
+            'drawn': 0, 'lost': 0, 'goalsFor': 0, 'goalsAgainst': 0, 'points': 0,
+          });
+
+      final blocks = StandingsBlock.split([
+        row(1, 'Sutherland Sharks'), row(2, 'Sydney United'), row(3, 'South Melbourne'), row(4, 'Canberra FC'),
+        row(1, 'Adelaide City'), row(2, 'Broadmeadow Magic'), row(3, 'Avondale'), row(4, 'Wests APIA'),
+      ]);
+
+      expect(blocks, hasLength(2));
+      expect(blocks.first.rows.first.team.name, 'Sutherland Sharks');
+      expect(blocks.last.rows.first.team.name, 'Adelaide City');
+      expect(blocks.every((b) => b.rows.length == 4), isTrue);
+    });
+
+    test('an ordinary table is left as one block', () {
+      final rows = [
+        for (var i = 1; i <= 20; i++)
+          StandingRow.fromJson({
+            'rank': i, 'team': {'id': i, 'name': 'Team $i'}, 'played': 10, 'won': 5, 'drawn': 2,
+            'lost': 3, 'goalsFor': 15, 'goalsAgainst': 12, 'points': 17,
+          }),
+      ];
+      expect(StandingsBlock.split(rows), hasLength(1));
+    });
+
+    test('an empty table is no blocks, not one empty one', () {
+      expect(StandingsBlock.split(const []), isEmpty);
+    });
+  });
 }

@@ -169,6 +169,30 @@ class MatchEvent {
 
   String get minuteLabel => extra == null ? "$minute'" : "$minute+$extra'";
 
+  /// What to put on the line.
+  ///
+  /// The player's name when the provider gave one. Many competitions do not - they report that a
+  /// goal happened and by which side, and nothing more - and falling through to [detail] then puts
+  /// the provider's internal wording on screen: a timeline reading "Normal Goal, Normal Goal" looks
+  /// like a bug rather than like two goals. So an event we model gets our own plain wording, and
+  /// only an event we do not model falls back to what the provider called it.
+  String get label {
+    final named = player;
+    if (named != null && named.isNotEmpty) return named;
+    return switch (type) {
+      MatchEventType.goal => 'Goal',
+      MatchEventType.ownGoal => 'Own goal',
+      MatchEventType.penalty => 'Penalty scored',
+      MatchEventType.penaltyMissed => 'Penalty missed',
+      MatchEventType.yellow => 'Yellow card',
+      MatchEventType.secondYellow => 'Second yellow',
+      MatchEventType.red => 'Red card',
+      MatchEventType.substitution => 'Substitution',
+      MatchEventType.varReview => 'VAR review',
+      MatchEventType.unknown => detail.isEmpty ? 'Unknown event' : detail,
+    };
+  }
+
   factory MatchEvent.fromJson(Map<String, dynamic> json) => MatchEvent(
         minute: (json['minute'] as num?)?.toInt() ?? 0,
         extra: (json['extra'] as num?)?.toInt(),
@@ -287,6 +311,33 @@ class FormSummary {
         bttsRate: (json['bttsRate'] as num?)?.toDouble() ?? 0,
         over25Rate: (json['over25Rate'] as num?)?.toDouble() ?? 0,
       );
+}
+
+/// A block of a table.
+///
+/// Some competitions are played in groups, and the provider hands them over as one flat list with
+/// every row carrying the same group name - the four-group Australian Championship arrives as
+/// sixteen rows labelled "Australian Championship", with the rank running 1-4 four times over.
+/// Rendered as one table that reads as broken.
+///
+/// The split is recoverable: a rank lower than the one before it is a new group, which is what a
+/// reset means. The names are not, so none are invented - the blocks are shown unnamed and the
+/// screen says why.
+class StandingsBlock {
+  const StandingsBlock(this.rows);
+  final List<StandingRow> rows;
+
+  /// Splits [rows] wherever the rank stops increasing.
+  static List<StandingsBlock> split(List<StandingRow> rows) {
+    if (rows.isEmpty) return const [];
+    final blocks = <List<StandingRow>>[[]];
+    for (final row in rows) {
+      final current = blocks.last;
+      if (current.isNotEmpty && row.rank <= current.last.rank) blocks.add([]);
+      blocks.last.add(row);
+    }
+    return [for (final block in blocks) StandingsBlock(block)];
+  }
 }
 
 class StandingRow {

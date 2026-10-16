@@ -303,13 +303,10 @@ class _Names extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The provider's wording is the fallback, so an event type the app does not model still reads
-    // as something rather than as a blank line.
-    final primary = event.player ?? event.detail;
     return Column(
       crossAxisAlignment: alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
-        Text(primary, style: GcType.body.copyWith(fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(event.label, style: GcType.body.copyWith(fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
         if (event.other != null)
           Text(event.other!, style: GcType.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
       ],
@@ -405,11 +402,44 @@ class _Table extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final blocks = StandingsBlock.split(rows);
+
     return GcSection(
       title: 'Table',
       padded: false,
       child: Column(
         children: [
+          if (blocks.length > 1)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(GcSpace.lg, 0, GcSpace.lg, GcSpace.md),
+              child: Text(
+                // Said rather than papered over: the groups are plainly there in the ranks, and
+                // the provider does not name them, so neither do we.
+                'This competition is played in ${blocks.length} groups. '
+                'The provider does not name them, so they are shown in the order it gave.',
+                style: GcType.caption,
+              ),
+            ),
+          for (final (index, block) in blocks.indexed) ...[
+            if (index > 0) const Divider(height: GcSpace.lg, indent: GcSpace.lg, endIndent: GcSpace.lg),
+            _Block(rows: block.rows, highlight: highlight),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Block extends StatelessWidget {
+  const _Block({required this.rows, required this.highlight});
+
+  final List<StandingRow> rows;
+  final Set<int> highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
           for (final row in rows)
             Container(
               color: highlight.contains(row.team.id) ? GcColors.accent.withValues(alpha: 0.08) : null,
@@ -431,8 +461,7 @@ class _Table extends StatelessWidget {
                 ],
               ),
             ),
-        ],
-      ),
+      ],
     );
   }
 }

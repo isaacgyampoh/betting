@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The two brand colours Android itself needs, outside Flutter's reach: the window behind the app
+     before the engine has drawn, and the launcher icon's background layer. They are the same
+     values as GcColors.canvas and GcColors.accent in lib/theme/tokens.dart. -->
+<resources>
+    <color name="gc_canvas">#FF0B0B0D</color>
+    <color name="gc_accent">#FF4C7DF0</color>
+</resources>

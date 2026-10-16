@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../data/api_client.dart';
 import '../data/repository.dart';
@@ -40,6 +41,12 @@ class GcAsyncView<T> extends StatelessWidget {
   }
 }
 
+/// A failure, with the one action that can actually resolve it.
+///
+/// Which action that is depends on the failure, and offering the wrong one is worse than offering
+/// none: a Try again under "please sign in" invites the user to tap it until they give up. So
+/// signing in gets a sign-in button, the 18+ refusal gets the gate, a self-exclusion gets nothing
+/// to press, and only a transport problem gets a retry.
 class GcErrorView extends StatelessWidget {
   const GcErrorView({super.key, required this.error, required this.onRetry});
 
@@ -48,11 +55,25 @@ class GcErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Unauthorised is the one failure a retry cannot fix, so it does not offer one.
-    final canRetry = error is! UnauthorizedFailure;
     final message = error is ApiFailure
         ? (error as ApiFailure).message
         : 'Something went wrong. Please try again.';
+
+    final (icon, action) = switch (error) {
+      OfflineFailure() => (Icons.wifi_off_rounded, _Action('Try again', onRetry)),
+      TimeoutFailure() => (Icons.schedule_rounded, _Action('Try again', onRetry)),
+      UnauthorizedFailure() => (
+          Icons.lock_outline_rounded,
+          _Action('Sign in', () => context.push('/signin')),
+        ),
+      AgeNotConfirmedFailure() => (
+          Icons.verified_user_outlined,
+          _Action('Confirm', () => context.push('/age')),
+        ),
+      // A self-exclusion the user set themselves. There is deliberately nothing here to press.
+      ForbiddenFailure() => (Icons.block_rounded, null),
+      _ => (Icons.error_outline_rounded, _Action('Try again', onRetry)),
+    };
 
     return Center(
       child: Padding(
@@ -60,22 +81,24 @@ class GcErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              error is OfflineFailure ? Icons.wifi_off_rounded : Icons.error_outline_rounded,
-              color: GcColors.inkFaint,
-              size: 32,
-            ),
+            Icon(icon, color: GcColors.inkFaint, size: 32),
             const SizedBox(height: GcSpace.md),
             Text(message, style: GcType.body, textAlign: TextAlign.center),
-            if (canRetry) ...[
+            if (action != null) ...[
               const SizedBox(height: GcSpace.lg),
-              FilledButton(onPressed: onRetry, child: const Text('Try again')),
+              FilledButton(onPressed: action.onTap, child: Text(action.label)),
             ],
           ],
         ),
       ),
     );
   }
+}
+
+class _Action {
+  const _Action(this.label, this.onTap);
+  final String label;
+  final VoidCallback onTap;
 }
 
 /// Nothing to show, and why. Never a blank screen.

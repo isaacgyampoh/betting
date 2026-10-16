@@ -51,6 +51,21 @@ class UnauthorizedFailure extends ApiFailure {
   const UnauthorizedFailure() : super('Please sign in to continue.');
 }
 
+/// Signed in, but the 18+ confirmation has not been given.
+///
+/// Kept apart from [UnauthorizedFailure] because both arrive as a 4xx and the wrong one sends a
+/// signed-in user to the sign-in screen, where signing in again changes nothing and lands them
+/// right back here. The server distinguishes them by code; so do we.
+class AgeNotConfirmedFailure extends ApiFailure {
+  const AgeNotConfirmedFailure(super.message);
+}
+
+/// Signed in and confirmed, but not allowed - most often a self-exclusion the user set themselves.
+/// The server's message says until when, and it is shown as given.
+class ForbiddenFailure extends ApiFailure {
+  const ForbiddenFailure(super.message);
+}
+
 /// The server answered with a refusal and its own message, which is better than anything
 /// invented here - it knows why.
 class ServerFailure extends ApiFailure {
@@ -118,15 +133,24 @@ class ApiClient {
     final status = response.statusCode ?? 0;
     final body = response.data;
 
-    if (status == 401 || status == 403) throw const UnauthorizedFailure();
+    // The API answers every failure as { error: { code, message } }. Its code is what tells the
+    // three 4xx refusals apart, and its wording beats anything invented here - it knows why.
+    final error = body is Map<String, dynamic> ? body['error'] as Map<String, dynamic>? : null;
+    final code = error?['code'] as String?;
+    final message = error?['message'] as String?;
+
+    if (status == 401) throw const UnauthorizedFailure();
+    if (status == 403) {
+      throw code == 'AGE_NOT_CONFIRMED'
+          ? AgeNotConfirmedFailure(message ?? 'Please confirm you are 18 or older to continue.')
+          : ForbiddenFailure(message ?? 'You do not have access to that.');
+    }
 
     if (status < 200 || status >= 300) {
-      // The API answers failures as { error: { code, message } }. Prefer its wording.
-      final error = body is Map<String, dynamic> ? body['error'] as Map<String, dynamic>? : null;
       throw ServerFailure(
-        error?['message'] as String? ?? 'The server could not complete that request.',
+        message ?? 'The server could not complete that request.',
         status: status,
-        code: error?['code'] as String?,
+        code: code,
       );
     }
 

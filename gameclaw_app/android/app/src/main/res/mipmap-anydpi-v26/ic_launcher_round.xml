@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 8+ composes the icon from these layers and applies its own mask, so the foreground is
+     drawn well inside the 108dp canvas: only the middle 72dp survives every launcher's shape.
+     The monochrome layer is what Android 13+ tints for a themed icon; without it the launcher
+     falls back to the full-colour icon and the home screen looks half-themed. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/gc_accent" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

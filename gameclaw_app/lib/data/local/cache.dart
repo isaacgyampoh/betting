@@ -49,6 +49,10 @@ class CacheDb extends _$CacheDb {
         CachedResponse(key: key, payload: payload, fetchedAt: fetchedAt),
       );
 
+  /// Forgets everything. Called on sign-out: a phone gets handed around, and the next person to
+  /// sign in must not find the last one's slips sitting in the cache.
+  Future<int> clearAll() => delete(cachedResponses).go();
+
   /// Drops anything older than [age]. Called on startup rather than on every write: a cache sweep
   /// in the path of a read is latency the user pays for no benefit.
   Future<int> sweep(Duration age) =>

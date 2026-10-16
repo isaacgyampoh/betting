@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/auth/age_gate_screen.dart';
+import '../features/auth/sign_in_screen.dart';
 import '../features/claw/claw_screen.dart';
 import '../features/discover/discover_screen.dart';
 import '../features/home/home_screen.dart';
@@ -19,6 +21,8 @@ import 'shell.dart';
 /// The match screen is a child route of both Home and Scores rather than a shared top-level one.
 /// That is what keeps it inside the tab it was opened from - a match opened from Home belongs to
 /// Home's stack, and backing out of it should land on Home.
+final _rootKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
   // A relative path: as a child of /home it resolves to /home/match/42, and as a child of
   // /scores to /scores/match/42.
@@ -32,8 +36,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
 
   return GoRouter(
+    navigatorKey: _rootKey,
     initialLocation: '/home',
     routes: [
+      // Above the shell, so neither covers the bottom bar with a form the user cannot leave
+      // halfway through, and neither belongs to a tab's stack.
+      GoRoute(
+        path: '/signin',
+        parentNavigatorKey: _rootKey,
+        builder: (_, __) => const SignInScreen(),
+      ),
+      GoRoute(
+        path: '/age',
+        parentNavigatorKey: _rootKey,
+        builder: (_, __) => const AgeGateScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => GcShell(shell: shell),
         branches: [

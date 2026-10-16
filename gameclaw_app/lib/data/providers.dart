@@ -4,30 +4,9 @@ import '../domain/models.dart';
 import 'api_client.dart';
 import 'local/cache.dart';
 import 'repository.dart';
-import 'secure_store.dart';
+import 'session.dart';
 
-final secureStoreProvider = Provider<SecureStore>((ref) => SecureStore());
-
-/// The signed-in user's token, or null.
-///
-/// Held here rather than read from the keystore on every request: a keystore read is a platform
-/// channel round trip, and the request interceptor asks for the token on every single call.
-class SessionController extends AsyncNotifier<String?> {
-  @override
-  Future<String?> build() => ref.read(secureStoreProvider).readSession();
-
-  Future<void> signedIn(String token) async {
-    await ref.read(secureStoreProvider).writeSession(token);
-    state = AsyncData(token);
-  }
-
-  Future<void> signedOut() async {
-    await ref.read(secureStoreProvider).clear();
-    state = const AsyncData(null);
-  }
-}
-
-final sessionProvider = AsyncNotifierProvider<SessionController, String?>(SessionController.new);
+export 'session.dart';
 
 final cacheDbProvider = Provider<CacheDb>((ref) {
   final db = CacheDb();
@@ -41,19 +20,26 @@ final cacheDbProvider = Provider<CacheDb>((ref) {
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     config: ApiConfig.fromEnvironment(),
-    // Read per request, from whatever the session currently is. Not captured: a token captured at
-    // construction is the stale one the moment the user signs in or out.
-    token: () async => ref.read(sessionProvider).value,
+    // Asked per request, and the session refreshes it if it has expired. Not captured: a token
+    // captured at construction is the stale one the moment it rotates.
+    token: () => ref.read(sessionProvider.notifier).validToken(),
   );
 });
 
-final repositoryProvider = Provider<FootballRepository>((ref) => FootballRepository(
-      api: ref.watch(apiClientProvider),
-      cache: ref.watch(cacheDbProvider),
-    ));
+final repositoryProvider = Provider<FootballRepository>((ref) {
+  // Signing in or out rebuilds this, and with it every screen reading from it. Watching the token
+  // itself would re-fetch everything each time it quietly rotates.
+  ref.watch(isSignedInProvider);
+  return FootballRepository(
+    api: ref.watch(apiClientProvider),
+    cache: ref.watch(cacheDbProvider),
+  );
+});
 
-final chatRepositoryProvider =
-    Provider<ChatRepository>((ref) => ChatRepository(api: ref.watch(apiClientProvider)));
+final chatRepositoryProvider = Provider<ChatRepository>((ref) {
+  ref.watch(isSignedInProvider);
+  return ChatRepository(api: ref.watch(apiClientProvider));
+});
 
 /// Today in UTC as YYYY-MM-DD, which is how the server keys a matchday.
 String utcDay(DateTime day) {
@@ -76,3 +62,25 @@ final todaysPicksProvider = FutureProvider<Cached<List<DailyPick>>>(
 final trackRecordProvider = FutureProvider<Cached<TrackRecord>>(
   (ref) => ref.watch(repositoryProvider).trackRecord(),
 );
+
+/// Signs out, and forgets everything read for that account.
+final signOutProvider = Provider<Future<void> Function()>((ref) {
+  return () async {
+    await ref.read(sessionProvider.notifier).signOut();
+    await ref.read(cacheDbProvider).clearAll();
+  };
+});
+
+/// Confirms the user is 18 or older, which the API requires before it will answer anything about
+/// football. Clears the age gate on success by rebuilding everything that was refused.
+final confirmAgeProvider = Provider<Future<void> Function()>((ref) {
+  return () async {
+    await ref.read(apiClientProvider).post<Map<String, dynamic>>(
+      '/me/age-confirmation',
+      body: {'confirmedOver18': true, 'acceptedTerms': true},
+    );
+    ref.invalidate(matchDayProvider);
+    ref.invalidate(matchDetailProvider);
+    ref.invalidate(todaysPicksProvider);
+  };
+});

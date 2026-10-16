@@ -33,7 +33,36 @@ release build, which keeps Android's refusal of plain HTTP:
 
 ```bash
 adb reverse tcp:3000 tcp:3000
-flutter build apk --debug --dart-define=GC_API_BASE=http://localhost:3000/api/v1
+flutter build apk --debug \
+  --dart-define=GC_API_BASE=http://localhost:3000/api/v1 \
+  --dart-define=GC_SUPABASE_URL=https://<project>.supabase.co \
+  --dart-define=GC_SUPABASE_ANON_KEY=<anon key>
+```
+
+## Signing in
+
+The API accepts `Authorization: Bearer <supabase access token>` and checks the signature itself, so
+the app talks to Supabase for a token and to GameClaw for everything else. Email and password, over
+Supabase's REST API - no SDK, because the app needs an eighth of one.
+
+The anon key is designed to be public: it identifies the project and grants nothing on its own,
+which is why the web client has always shipped it in its bundle. The service key, which does grant
+everything, is not in the app and never will be. Without the two flags above the sign-in screen
+says so rather than offering a form that cannot work.
+
+The session lives in the OS keystore and is refreshed on the first request that needs it, one
+refresh at a time - Supabase rotates refresh tokens, so six screens loading at once would otherwise
+fire six refreshes and five would be rejected with a token that no longer exists.
+
+Signing out clears the cache as well as the session. A phone gets handed around.
+
+## The launcher icon
+
+Drawn by `tool/make_icon.py` rather than exported by hand, so every density comes out of the same
+geometry:
+
+```bash
+python3 tool/make_icon.py android/app/src/main/res /tmp/gameclaw-512.png
 ```
 
 ## The backend

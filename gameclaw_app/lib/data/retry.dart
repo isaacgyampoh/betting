@@ -19,7 +19,9 @@ Duration? gcRetry(int attempt, Object error) {
     OfflineFailure() || TimeoutFailure() => true,
     // 5xx is the server having a bad moment. 4xx is the server having decided.
     ServerFailure(:final status) => status >= 500,
-    UnauthorizedFailure() => false,
+    // All three of these are the server having decided something about this user. Asking again
+    // with the same session gets the same answer.
+    UnauthorizedFailure() || AgeNotConfirmedFailure() || ForbiddenFailure() => false,
     // Anything unrecognised is most likely a bug in our own parsing, and a bug does not get better
     // by being run again.
     _ => false,

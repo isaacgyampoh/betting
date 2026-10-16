@@ -1,10 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Where the session token lives.
+import 'auth_client.dart';
+
+/// Where the session lives.
 ///
 /// The OS keystore, not shared preferences: the value is encrypted with a Keystore-held key, so
-/// the token is not readable by pulling the app's data directory off a rooted device or out of an
-/// adb backup.
+/// the tokens are not readable by pulling the app's data directory off a rooted device or out of
+/// an adb backup.
 ///
 /// Only the user's own session goes in here. There is no API key, no bookmaker credential and no
 /// database password anywhere in the binary - those stay on the server, because anything shipped
@@ -16,9 +20,11 @@ class SecureStore {
 
   static const _session = 'gc.session';
 
-  Future<String?> readSession() async {
+  Future<AuthSession?> readSession() async {
     try {
-      return await _storage.read(key: _session);
+      final raw = await _storage.read(key: _session);
+      if (raw == null) return null;
+      return AuthSession.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     } on Exception {
       // A keystore that cannot be opened - a restored backup on new hardware, a corrupt entry -
       // means no session, not a crash on launch. The user signs in again.
@@ -26,9 +32,9 @@ class SecureStore {
     }
   }
 
-  Future<void> writeSession(String token) async {
+  Future<void> writeSession(AuthSession session) async {
     try {
-      await _storage.write(key: _session, value: token);
+      await _storage.write(key: _session, value: jsonEncode(session.toJson()));
     } on Exception {
       // Nothing useful to do: the user is signed in for this run and will be asked again next time.
     }

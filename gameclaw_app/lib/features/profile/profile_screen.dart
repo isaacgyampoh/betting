@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/api_client.dart';
 import '../../data/providers.dart';
@@ -25,12 +26,22 @@ class ProfileScreen extends ConsumerWidget {
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             ),
             error: (error, _) => GcSection(title: 'Account', child: GcNote('$error')),
-            data: (token) => token == null
-                ? const GcSection(
+            data: (session) => session == null
+                ? GcSection(
                     title: 'Account',
-                    child: GcNote(
-                      'Not signed in. Scores and the published record are open to everyone; '
-                      'building a slip needs an account.',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const GcNote(
+                          'Not signed in. Scores and the published record are open to everyone; '
+                          'building a slip needs an account.',
+                        ),
+                        const SizedBox(height: GcSpace.md),
+                        FilledButton(
+                          onPressed: () => context.push('/signin'),
+                          child: const Text('Sign in'),
+                        ),
+                      ],
                     ),
                   )
                 : GcSection(
@@ -38,10 +49,10 @@ class ProfileScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const GcNote('Signed in on this device.'),
+                        GcNote(session.email ?? 'Signed in on this device.'),
                         const SizedBox(height: GcSpace.md),
                         OutlinedButton(
-                          onPressed: () => ref.read(sessionProvider.notifier).signedOut(),
+                          onPressed: () => ref.read(signOutProvider)(),
                           child: const Text('Sign out'),
                         ),
                       ],
