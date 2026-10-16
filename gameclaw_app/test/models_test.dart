@@ -258,4 +258,108 @@ void main() {
       expect(StandingsBlock.split(const []), isEmpty);
     });
   });
+
+  _phaseTwo();
+}
+
+/// Statistics and line-ups, added once the provider audit confirmed which of them are real.
+///
+/// The audit is the reason these exist in this shape: a big-five fixture returned possession as
+/// "33%", expected goals as a decimal string, and a full grid per starter; the same two endpoints
+/// on a lower-coverage competition returned empty arrays with no error at all.
+void _phaseTwo() {
+  group('team statistics', () {
+    test('an unreported count stays null and never becomes zero', () {
+      final stats = TeamStatistics.fromJson({
+        'team': {'id': 1, 'name': 'Arsenal'},
+        'possession': 58,
+        'shotsTotal': 14,
+        'expectedGoals': null,
+      });
+      expect(stats.possession, 58);
+      expect(stats.shotsTotal, 14);
+      expect(stats.expectedGoals, isNull);
+      expect(stats.corners, isNull, reason: 'absent from the payload entirely');
+    });
+
+    test('a genuine zero survives as a zero', () {
+      final stats = TeamStatistics.fromJson({
+        'team': {'id': 1, 'name': 'Arsenal'},
+        'redCards': 0,
+      });
+      expect(stats.redCards, 0);
+      expect(stats.redCards, isNot(isNull));
+    });
+  });
+
+  group('line-ups', () {
+    Map<String, dynamic> player(int n, String name, String? grid) => {
+      'name': name,
+      'number': n,
+      'position': 'D',
+      'grid': grid,
+    };
+
+    test("a grid reads as the provider's row and column", () {
+      final p = LineupPlayer.fromJson(player(2, 'M. van Ewijk', '2:4'));
+      expect(p.row, 2);
+      expect(p.column, 4);
+    });
+
+    test('no grid means no position, not position zero', () {
+      final p = LineupPlayer.fromJson(player(19, 'C. Rushworth', null));
+      expect(p.row, isNull);
+      expect(p.column, isNull);
+    });
+
+    test('a malformed grid is treated as absent rather than guessed at', () {
+      expect(LineupPlayer.fromJson(player(1, 'X', 'nonsense')).row, isNull);
+      expect(LineupPlayer.fromJson(player(1, 'X', '3')).column, isNull);
+    });
+
+    test('a pitch is only drawn when every starter has a position', () {
+      Lineup build(List<String?> grids) => Lineup.fromJson({
+        'team': {'id': 1, 'name': 'Coventry'},
+        'formation': '4-2-3-1',
+        'coach': 'F. Lampard',
+        'startXI': [for (final (i, g) in grids.indexed) player(i + 1, 'Player ${i + 1}', g)],
+        'substitutes': <dynamic>[],
+      });
+
+      expect(build(['1:1', '2:1', '2:2']).canDrawPitch, isTrue);
+      // One ungridded player and the shape is unknown. A list is honest; a pitch would be a
+      // claim about how the team set up.
+      expect(build(['1:1', '2:1', null]).canDrawPitch, isFalse);
+      expect(build([]).canDrawPitch, isFalse);
+    });
+
+    test('a competition with no line-ups gives an empty list, not a fabricated one', () {
+      final detail = MatchDetail.fromJson({
+        'match': {
+          'id': 1,
+          'kickoffAt': '2026-10-16T15:00:00.000Z',
+          'status': 'FINISHED',
+          'statusLabel': 'Match Finished',
+          'league': {'id': 1202, 'name': 'Australian Championship', 'country': 'Australia'},
+          'home': {'id': 1, 'name': 'A'},
+          'away': {'id': 2, 'name': 'B'},
+        },
+        'statistics': <dynamic>[],
+        'lineups': <dynamic>[],
+        'coverage': {
+          'events': true,
+          'lineups': false,
+          'statistics': false,
+          'playerStats': false,
+          'standings': true,
+        },
+      });
+
+      expect(detail.statistics, isEmpty);
+      expect(detail.lineups, isEmpty);
+      // And the coverage flag is what makes that legible rather than ambiguous.
+      expect(detail.coverage!.statistics, isFalse);
+      expect(detail.coverage!.lineups, isFalse);
+    });
+  });
 }

@@ -395,6 +395,138 @@ class StandingRow {
   );
 }
 
+/// One side's team statistics, as the provider reported them.
+///
+/// Every field is nullable and every null means "not reported", never zero. A competition that
+/// carries no statistics returns none at all, which is why [Coverage.statistics] travels with the
+/// match: an empty list and a competition that never publishes are different facts.
+class TeamStatistics {
+  const TeamStatistics({
+    required this.team,
+    this.possession,
+    this.shotsTotal,
+    this.shotsOnGoal,
+    this.shotsOffGoal,
+    this.shotsBlocked,
+    this.corners,
+    this.offsides,
+    this.fouls,
+    this.yellowCards,
+    this.redCards,
+    this.saves,
+    this.passesTotal,
+    this.passesAccurate,
+    this.expectedGoals,
+  });
+
+  final Team team;
+
+  /// Percentage of the ball, 0-100.
+  final int? possession;
+  final int? shotsTotal;
+  final int? shotsOnGoal;
+  final int? shotsOffGoal;
+  final int? shotsBlocked;
+  final int? corners;
+  final int? offsides;
+  final int? fouls;
+  final int? yellowCards;
+  final int? redCards;
+  final int? saves;
+  final int? passesTotal;
+  final int? passesAccurate;
+
+  /// Expected goals, on the few competitions that carry them.
+  final double? expectedGoals;
+
+  factory TeamStatistics.fromJson(Map<String, dynamic> json) => TeamStatistics(
+    team: Team.fromJson(json['team'] as Map<String, dynamic>? ?? const {}),
+    possession: (json['possession'] as num?)?.round(),
+    shotsTotal: (json['shotsTotal'] as num?)?.toInt(),
+    shotsOnGoal: (json['shotsOnGoal'] as num?)?.toInt(),
+    shotsOffGoal: (json['shotsOffGoal'] as num?)?.toInt(),
+    shotsBlocked: (json['shotsBlocked'] as num?)?.toInt(),
+    corners: (json['corners'] as num?)?.toInt(),
+    offsides: (json['offsides'] as num?)?.toInt(),
+    fouls: (json['fouls'] as num?)?.toInt(),
+    yellowCards: (json['yellowCards'] as num?)?.toInt(),
+    redCards: (json['redCards'] as num?)?.toInt(),
+    saves: (json['saves'] as num?)?.toInt(),
+    passesTotal: (json['passesTotal'] as num?)?.toInt(),
+    passesAccurate: (json['passesAccurate'] as num?)?.toInt(),
+    expectedGoals: (json['expectedGoals'] as num?)?.toDouble(),
+  );
+}
+
+class LineupPlayer {
+  const LineupPlayer({required this.name, this.number, this.position, this.grid});
+
+  final String name;
+  final int? number;
+
+  /// The provider's position letter: G, D, M, F.
+  final String? position;
+
+  /// Where the provider places the player, as "row:column" counting out from the goalkeeper.
+  /// Null for substitutes, and for competitions that give a lineup without positions - a pitch
+  /// view has to handle that rather than guess a shape.
+  final String? grid;
+
+  /// The row this player stands in, 1 being the goalkeeper. Null when ungridded.
+  int? get row => _part(0);
+
+  /// Position across that row, 1 being one touchline.
+  int? get column => _part(1);
+
+  int? _part(int index) {
+    final parts = grid?.split(':');
+    if (parts == null || parts.length != 2) return null;
+    return int.tryParse(parts[index]);
+  }
+
+  factory LineupPlayer.fromJson(Map<String, dynamic> json) => LineupPlayer(
+    name: json['name'] as String? ?? '',
+    number: (json['number'] as num?)?.toInt(),
+    position: json['position'] as String?,
+    grid: json['grid'] as String?,
+  );
+}
+
+class Lineup {
+  const Lineup({
+    required this.team,
+    required this.formation,
+    required this.coach,
+    required this.startXI,
+    required this.substitutes,
+  });
+
+  final Team team;
+
+  /// e.g. "4-2-3-1". Null when the provider does not say, and then nothing invents one.
+  final String? formation;
+  final String? coach;
+  final List<LineupPlayer> startXI;
+  final List<LineupPlayer> substitutes;
+
+  /// True when every starter has a grid position, which is what a pitch view needs. A lineup
+  /// without them is still a real lineup and is shown as a list.
+  bool get canDrawPitch =>
+      startXI.isNotEmpty && startXI.every((p) => p.row != null && p.column != null);
+
+  factory Lineup.fromJson(Map<String, dynamic> json) => Lineup(
+    team: Team.fromJson(json['team'] as Map<String, dynamic>? ?? const {}),
+    formation: json['formation'] as String?,
+    coach: json['coach'] as String?,
+    startXI: (json['startXI'] as List<dynamic>? ?? const [])
+        .map((p) => LineupPlayer.fromJson(p as Map<String, dynamic>))
+        .toList(growable: false),
+    substitutes: (json['substitutes'] as List<dynamic>? ?? const [])
+        .map((p) => LineupPlayer.fromJson(p as Map<String, dynamic>))
+        .toList(growable: false),
+  );
+}
+
 /// A fixture with everything the match centre shows, and an explicit record of what is missing.
 class MatchDetail {
   const MatchDetail({
@@ -407,6 +539,8 @@ class MatchDetail {
     this.awayForm,
     this.headToHead = const [],
     this.standings,
+    this.statistics = const [],
+    this.lineups = const [],
     this.busy = false,
   });
 
@@ -422,6 +556,12 @@ class MatchDetail {
 
   /// The table. Null for a cup or a friendly, which have none.
   final List<StandingRow>? standings;
+
+  /// Team statistics, home side first. Empty on a competition that carries none.
+  final List<TeamStatistics> statistics;
+
+  /// Line-ups, home side first. Empty on a competition that carries none.
+  final List<Lineup> lineups;
 
   /// Some sections hit the provider's per-minute limit. A refresh shortly will fill them, and
   /// saying so is better than showing a gap that looks permanent.
@@ -463,6 +603,12 @@ class MatchDetail {
           : (json['standings'] as List<dynamic>)
                 .map((r) => StandingRow.fromJson(r as Map<String, dynamic>))
                 .toList(growable: false),
+      statistics: (json['statistics'] as List<dynamic>? ?? const [])
+          .map((s) => TeamStatistics.fromJson(s as Map<String, dynamic>))
+          .toList(growable: false),
+      lineups: (json['lineups'] as List<dynamic>? ?? const [])
+          .map((l) => Lineup.fromJson(l as Map<String, dynamic>))
+          .toList(growable: false),
       busy: json['busy'] == true,
     );
   }

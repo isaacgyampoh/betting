@@ -52,8 +52,15 @@ export type MatchDetail = {
   events: MatchEvent[];
   /** What this competition carries, so the page can say what is missing instead of showing blanks. */
   coverage: LeagueCoverage | null;
+  /**
+   * Team statistics, home side first. Empty when the competition carries none - which the
+   * `coverage.statistics` flag distinguishes from a match where nothing has happened yet.
+   */
+  statistics: TeamStatistics[];
+  /** Line-ups, home side first. Empty when the competition carries none. */
+  lineups: Lineup[];
   /** Sections the stats provider's plan doesn't include (shown as a note, never faked). */
-  unavailable: ("form" | "h2h" | "standings" | "events")[];
+  unavailable: ("form" | "h2h" | "standings" | "events" | "statistics" | "lineups")[];
   /** Some sections hit the provider's per-minute limit; a refresh shortly will fill them. */
   busy: boolean;
   source: StatsSource;
@@ -94,6 +101,63 @@ export type LeagueCoverage = {
   standings: boolean;
 };
 
+/**
+ * One side's team statistics for a match, as the provider reports them.
+ *
+ * Every field is nullable and every null means "not reported", never zero. The provider returns
+ * explicit nulls for counts it does not have, and a competition with no statistics coverage at all
+ * returns an empty array - which is indistinguishable from "nothing happened" without the coverage
+ * flag, and is why `LeagueCoverage.statistics` travels alongside.
+ *
+ * Possession arrives as a string like "33%" and expected goals as a string like "1.24"; both are
+ * parsed here so the client never has to, and both stay null when absent rather than becoming 0.
+ */
+export type TeamStatistics = {
+  team: TeamRef;
+  /** Percentage of the ball, 0-100. */
+  possession: number | null;
+  shotsTotal: number | null;
+  shotsOnGoal: number | null;
+  shotsOffGoal: number | null;
+  shotsBlocked: number | null;
+  shotsInsideBox: number | null;
+  shotsOutsideBox: number | null;
+  corners: number | null;
+  offsides: number | null;
+  fouls: number | null;
+  yellowCards: number | null;
+  redCards: number | null;
+  saves: number | null;
+  passesTotal: number | null;
+  passesAccurate: number | null;
+  /** Expected goals, when the competition carries them. Absent on most. */
+  expectedGoals: number | null;
+};
+
+export type LineupPlayer = {
+  id: number | null;
+  name: string;
+  /** Shirt number, when reported. */
+  number: number | null;
+  /** The provider's position letter: G, D, M, F. */
+  position: string | null;
+  /**
+   * Where the provider places the player, as "row:column" counting from the goalkeeper. Null for
+   * substitutes and for competitions that report a lineup without positions - a pitch view must
+   * handle that rather than guess a formation.
+   */
+  grid: string | null;
+};
+
+export type Lineup = {
+  team: TeamRef;
+  /** e.g. "4-2-3-1". Null when the provider does not say. */
+  formation: string | null;
+  coach: string | null;
+  startXI: LineupPlayer[];
+  substitutes: LineupPlayer[];
+};
+
 export interface StatsProvider {
   readonly source: StatsSource;
   fixturesByDate(date: string): Promise<MatchSummary[]>; // YYYY-MM-DD (UTC)
@@ -105,4 +169,8 @@ export interface StatsProvider {
   events(fixtureId: number, homeTeamId: number): Promise<MatchEvent[]>;
   /** What this competition's season actually includes. Null when the provider does not say. */
   coverage(leagueId: number, season: number): Promise<LeagueCoverage | null>;
+  /** Team statistics, home side first. Empty when the competition does not carry them. */
+  statistics(fixtureId: number, homeTeamId: number): Promise<TeamStatistics[]>;
+  /** Line-ups, home side first. Empty when the competition does not carry them. */
+  lineups(fixtureId: number, homeTeamId: number): Promise<Lineup[]>;
 }

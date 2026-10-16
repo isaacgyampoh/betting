@@ -6,6 +6,7 @@ import 'package:gameclaw_app/domain/models.dart';
 import 'package:gameclaw_app/theme/tokens.dart';
 import 'package:gameclaw_app/ui/components/gc_button.dart';
 import 'package:gameclaw_app/ui/components/gc_fixture_row.dart';
+import 'package:gameclaw_app/ui/components/gc_pitch.dart';
 import 'package:gameclaw_app/ui/components/gc_states.dart';
 import 'package:gameclaw_app/data/api_client.dart';
 
@@ -252,6 +253,97 @@ void main() {
         width: 320,
       );
       expect(find.text('Find matches'), findsOneWidget);
+    });
+  });
+
+  _pitchTests();
+}
+
+/// The pitch view, and the rule that decides whether it is drawn at all.
+///
+/// The data shapes here are the ones the live provider actually returned when the two endpoints
+/// were audited: a Championship fixture with a grid on every starter, and a Costa Rican fixture
+/// whose lineup was real but carried no grid at all.
+void _pitchTests() {
+  LineupPlayer p(int n, String name, String pos, String? grid) =>
+      LineupPlayer.fromJson({'name': name, 'number': n, 'position': pos, 'grid': grid});
+
+  Lineup gridded() => Lineup(
+    team: const Team(id: 1, name: 'Coventry'),
+    formation: '4-2-3-1',
+    coach: 'F. Lampard',
+    startXI: [
+      p(19, 'C. Rushworth', 'G', '1:1'),
+      p(27, 'M. van Ewijk', 'D', '2:4'),
+      p(2, 'E. Pinnock', 'D', '2:3'),
+      p(4, 'B. Thomas', 'D', '2:2'),
+      p(3, 'J. Bidwell', 'D', '2:1'),
+      p(8, 'J. Eccles', 'M', '3:2'),
+      p(6, 'B. Sheaf', 'M', '3:1'),
+      p(10, 'E. Simms', 'F', '4:1'),
+    ],
+    substitutes: const [],
+  );
+
+  Lineup ungridded() => Lineup(
+    team: const Team(id: 2, name: 'Deportivo Saprissa'),
+    formation: null,
+    coach: 'H. Medford',
+    // The real order the provider gave: the goalkeeper is fourth.
+    startXI: [
+      p(25, 'S. Acuña', 'M', null),
+      p(4, 'K. Waston', 'D', null),
+      p(7, 'N. Williams', 'F', null),
+      p(40, 'A. Madríz', 'G', null),
+    ],
+    substitutes: const [],
+  );
+
+  group('the pitch is only drawn from real positions', () {
+    testWidgets('a gridded lineup draws a pitch', (tester) async {
+      final lineup = gridded();
+      expect(lineup.canDrawPitch, isTrue);
+
+      tester.view.physicalSize = const Size(360, 720);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: gcTheme(),
+          home: Scaffold(body: GcPitch(lineup: lineup)),
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      // Surnames on the pitch, shirt numbers in the shirts.
+      expect(find.text('Rushworth'), findsOneWidget);
+      expect(find.text('19'), findsOneWidget);
+    });
+
+    testWidgets('a lineup with no grid cannot be drawn, and says so by not claiming to', (
+      tester,
+    ) async {
+      // Real, complete, and with no positions. A pitch here would be a picture of a shape the
+      // provider never reported.
+      expect(ungridded().canDrawPitch, isFalse);
+    });
+
+    testWidgets('the pitch survives a narrow screen at large text', (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: gcTheme(),
+          home: MediaQuery(
+            data: const MediaQueryData(size: Size(320, 640), textScaler: TextScaler.linear(1.6)),
+            child: Scaffold(body: GcPitch(lineup: gridded())),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
     });
   });
 }

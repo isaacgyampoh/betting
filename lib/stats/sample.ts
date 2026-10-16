@@ -130,6 +130,57 @@ export const sampleStatsProvider: StatsProvider = {
   async coverage() {
     return { events: true, lineups: true, statistics: true, playerStats: true, standings: true };
   },
+  // One fixed set, so tests are deterministic. Deliberately includes a null: the live provider
+  // sends explicit nulls for counts it does not have, and anything downstream that turns those
+  // into zeros is claiming something did not happen when it is simply unknown.
+  async statistics(_fixtureId: number, homeTeamId: number) {
+    const side = (id: number, possession: number, shots: number, xg: number | null) => ({
+      team: { id, name: `Team ${id}`, logo: null },
+      possession,
+      shotsTotal: shots,
+      shotsOnGoal: Math.max(0, shots - 4),
+      shotsOffGoal: 3,
+      shotsBlocked: 1,
+      shotsInsideBox: Math.max(0, shots - 3),
+      shotsOutsideBox: 3,
+      corners: 5,
+      offsides: 2,
+      fouls: 9,
+      yellowCards: 1,
+      redCards: 0,
+      saves: 3,
+      passesTotal: 420,
+      passesAccurate: 360,
+      expectedGoals: xg,
+    });
+    return [side(homeTeamId, 58, 14, 1.8), side(homeTeamId + 1, 42, 9, null)];
+  },
+  async lineups(_fixtureId: number, homeTeamId: number) {
+    const eleven = (prefix: string) =>
+      Array.from({ length: 11 }, (_, i) => ({
+        id: null,
+        name: `${prefix} Player ${i + 1}`,
+        number: i + 1,
+        position: i === 0 ? "G" : i < 5 ? "D" : i < 9 ? "M" : "F",
+        grid: i === 0 ? "1:1" : `${Math.min(4, Math.floor((i - 1) / 4) + 2)}:${((i - 1) % 4) + 1}`,
+      }));
+    return [
+      {
+        team: { id: homeTeamId, name: `Team ${homeTeamId}`, logo: null },
+        formation: "4-4-2",
+        coach: "Sample Coach",
+        startXI: eleven("Home"),
+        substitutes: [],
+      },
+      {
+        team: { id: homeTeamId + 1, name: `Team ${homeTeamId + 1}`, logo: null },
+        formation: "4-3-3",
+        coach: "Other Coach",
+        startXI: eleven("Away"),
+        substitutes: [],
+      },
+    ];
+  },
   async standings(leagueId) {
     const teams = leagueTeams(leagueId);
     const fillers = ["Rovers", "Athletic", "City", "United", "Stars", "Wanderers"].map((s) => team(`${Object.values(LEAGUES).find((l) => l.id === leagueId)?.country ?? "Sample"} ${s}`));

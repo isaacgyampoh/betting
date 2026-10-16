@@ -7,7 +7,7 @@ import { bestMatch, levelFromCompetition, withSquadLevel } from "@/lib/matching/
 import { createApiFootballProvider, StatsPlanLimitError, StatsRateLimitError } from "@/lib/stats/api-football";
 import { buildTeamForm } from "@/lib/stats/form";
 import { sampleStatsProvider } from "@/lib/stats/sample";
-import type { MatchDetail, MatchEvent, MatchSummary, StatsProvider } from "@/lib/stats/types";
+import type { Lineup, MatchDetail, MatchEvent, MatchSummary, StatsProvider, TeamStatistics } from "@/lib/stats/types";
 import { getAliasIndex } from "@/lib/services/events";
 import { rememberLogos } from "@/lib/services/team-logos";
 import { enforceRateLimit, logUsage } from "@/lib/services/usage";
@@ -126,8 +126,18 @@ export const H2H_GAMES = 6;
  * another region. The build that asked for the research is itself metered and rate-limited, which
  * is what bounds it.
  */
-export type DetailOptions = { sections?: ("form" | "h2h" | "standings" | "events")[]; meter?: boolean };
-const ALL_SECTIONS: NonNullable<DetailOptions["sections"]> = ["form", "h2h", "standings", "events"];
+export type DetailOptions = {
+  sections?: ("form" | "h2h" | "standings" | "events" | "statistics" | "lineups")[];
+  meter?: boolean;
+};
+const ALL_SECTIONS: NonNullable<DetailOptions["sections"]> = [
+  "form",
+  "h2h",
+  "standings",
+  "events",
+  "statistics",
+  "lineups",
+];
 
 export async function getMatchDetail(
   user: AuthUser | null,
@@ -172,7 +182,7 @@ export async function getMatchDetail(
   };
 
   const skip = async <T,>(empty: T) => empty;
-  const [homeLast, awayLast, h2h, standings, events, coverage] = await Promise.all([
+  const [homeLast, awayLast, h2h, standings, events, coverage, statistics, lineups] = await Promise.all([
     // Ten games, not five: "9 of 10" is far stronger evidence than "4 of 5", and a home/away split
     // of five leaves only two or three games a side, which says almost nothing.
     want.has("form") ? section("form", () => provider.lastFixtures(match.home.id, FORM_GAMES), []) : skip([] as MatchSummary[]),
@@ -183,6 +193,13 @@ export async function getMatchDetail(
     // rather than showing an empty panel.
     want.has("events") ? section("events", () => provider.events(match.id, match.home.id), []) : skip([] as MatchEvent[]),
     want.has("events") ? provider.coverage(match.league.id, match.league.season).catch(() => null) : skip(null),
+    // Both are empty on most competitions outside the big ones, which is a fact about the
+    // competition rather than a failure. The coverage flag above is what lets a screen tell that
+    // apart from a match where nothing has happened yet.
+    want.has("statistics")
+      ? section("statistics", () => provider.statistics(match.id, match.home.id), [])
+      : skip([] as TeamStatistics[]),
+    want.has("lineups") ? section("lineups", () => provider.lineups(match.id, match.home.id), []) : skip([] as Lineup[]),
   ]);
 
   if (user && meter) {
@@ -194,6 +211,8 @@ export async function getMatchDetail(
     h2h: h2h.filter((m) => m.status === "FINISHED").sort((a, b) => b.kickoffAt.localeCompare(a.kickoffAt)),
     standings,
     events,
+    statistics,
+    lineups,
     coverage,
     unavailable: [...unavailable],
     busy,

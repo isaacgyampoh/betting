@@ -10,6 +10,7 @@ import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_crest.dart';
 import '../../ui/components/gc_fixture_row.dart';
 import '../../ui/components/gc_live.dart';
+import '../../ui/components/gc_pitch.dart';
 import '../../ui/components/gc_skeleton.dart';
 import '../../ui/components/gc_states.dart';
 import '../../ui/components/gc_tabs.dart';
@@ -145,6 +146,10 @@ class _Detail extends StatelessWidget {
     return [
       ('Overview', _Overview(detail: detail)),
       ('Timeline', _Timeline(detail: detail)),
+      // Only when the provider actually returned them. A Statistics tab that is always empty
+      // promises data this competition does not carry, every single time it is opened.
+      if (detail.statistics.length >= 2) ('Stats', _Statistics(stats: detail.statistics)),
+      if (detail.lineups.length >= 2) ('Lineups', _Lineups(lineups: detail.lineups)),
       if (table != null && table.isNotEmpty)
         ('Table', _Table(rows: table, highlight: {detail.fixture.home.id, detail.fixture.away.id})),
       if (detail.headToHead.isNotEmpty) ('H2H', _HeadToHead(matches: detail.headToHead)),
@@ -844,6 +849,297 @@ class _HeadToHead extends StatelessWidget {
       separatorBuilder: (_, __) =>
           const Divider(height: 1, indent: GcSpace.gutter, endIndent: GcSpace.gutter),
       itemBuilder: (context, i) => GcFixtureRow(fixture: matches[i]),
+    );
+  }
+}
+
+/// Team statistics, home against away.
+///
+/// A row appears only when the provider reported that statistic for both sides. One side having a
+/// number and the other not is not a comparison, and showing it as 14 against 0 would invent the
+/// zero - which is the one thing this product does not do.
+class _Statistics extends StatelessWidget {
+  const _Statistics({required this.stats});
+
+  final List<TeamStatistics> stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final home = stats.first;
+    final away = stats[1];
+
+    final rows = <(String, num?, num?, bool)>[
+      ('Possession', home.possession, away.possession, true),
+      ('Shots', home.shotsTotal, away.shotsTotal, false),
+      ('Shots on target', home.shotsOnGoal, away.shotsOnGoal, false),
+      ('Shots off target', home.shotsOffGoal, away.shotsOffGoal, false),
+      ('Blocked shots', home.shotsBlocked, away.shotsBlocked, false),
+      ('Corners', home.corners, away.corners, false),
+      ('Offsides', home.offsides, away.offsides, false),
+      ('Fouls', home.fouls, away.fouls, false),
+      ('Yellow cards', home.yellowCards, away.yellowCards, false),
+      ('Red cards', home.redCards, away.redCards, false),
+      ('Saves', home.saves, away.saves, false),
+      ('Passes', home.passesTotal, away.passesTotal, false),
+      ('Accurate passes', home.passesAccurate, away.passesAccurate, false),
+      ('Expected goals', home.expectedGoals, away.expectedGoals, false),
+    ].where((r) => r.$2 != null && r.$3 != null).toList();
+
+    if (rows.isEmpty) {
+      return ListView(
+        children: const [
+          SizedBox(height: GcSpace.xxl),
+          GcEmpty(
+            icon: Icons.bar_chart_rounded,
+            title: 'No statistics reported',
+            note: 'The provider returned a statistics panel for this match but no counts in it.',
+          ),
+        ],
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.only(top: GcSpace.md, bottom: GcSpace.xxxl),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  home.team.name,
+                  style: GcType.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  away.team.name,
+                  style: GcType.label,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: GcSpace.lg),
+        for (final (label, h, a, isPercent) in rows)
+          _StatRow(label: label, home: h!, away: a!, isPercent: isPercent),
+      ],
+    );
+  }
+}
+
+/// One statistic, as two bars growing out from the middle.
+///
+/// The split is each side's share of the pair, so the longer bar is the bigger number without
+/// reading either. When both are zero the bars are empty rather than half each - nobody had more
+/// of nothing.
+class _StatRow extends StatelessWidget {
+  const _StatRow({
+    required this.label,
+    required this.home,
+    required this.away,
+    required this.isPercent,
+  });
+
+  final String label;
+  final num home;
+  final num away;
+  final bool isPercent;
+
+  String _format(num value) {
+    if (isPercent) return '${value.round()}%';
+    return value is int || value == value.roundToDouble()
+        ? value.round().toString()
+        : value.toStringAsFixed(2);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = home + away;
+    final homeShare = total == 0 ? 0.0 : home / total;
+    final awayShare = total == 0 ? 0.0 : away / total;
+    final homeLeads = home >= away;
+
+    Widget bar(double share, bool leading, {required bool fromCentreRight}) => ClipRRect(
+      borderRadius: BorderRadius.circular(GcRadius.xs),
+      child: Align(
+        alignment: fromCentreRight ? Alignment.centerLeft : Alignment.centerRight,
+        child: FractionallySizedBox(
+          widthFactor: share.clamp(0.0, 1.0),
+          child: Container(height: 6, color: leading ? GcColors.accent : GcColors.borderStrong),
+        ),
+      ),
+    );
+
+    return Semantics(
+      label: '$label: ${_format(home)} against ${_format(away)}',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(GcSpace.gutter, 0, GcSpace.gutter, GcSpace.lg),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    _format(home),
+                    style: GcType.figure.copyWith(
+                      color: homeLeads ? GcColors.ink : GcColors.inkMuted,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(label, style: GcType.caption, textAlign: TextAlign.center),
+                ),
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    _format(away),
+                    textAlign: TextAlign.right,
+                    style: GcType.figure.copyWith(
+                      color: homeLeads ? GcColors.inkMuted : GcColors.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: GcSpace.sm),
+            Row(
+              children: [
+                Expanded(child: bar(homeShare, homeLeads, fromCentreRight: false)),
+                const SizedBox(width: GcSpace.xs),
+                Expanded(child: bar(awayShare, !homeLeads, fromCentreRight: true)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Lineups extends StatefulWidget {
+  const _Lineups({required this.lineups});
+
+  final List<Lineup> lineups;
+
+  @override
+  State<_Lineups> createState() => _LineupsState();
+}
+
+class _LineupsState extends State<_Lineups> {
+  int _side = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final lineup = widget.lineups[_side];
+
+    return ListView(
+      padding: const EdgeInsets.only(top: GcSpace.md, bottom: GcSpace.xxxl),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+          child: GcSegmented(
+            segments: [for (final l in widget.lineups) l.team.name],
+            index: _side,
+            onChanged: (i) => setState(() => _side = i),
+          ),
+        ),
+        const SizedBox(height: GcSpace.lg),
+        if (lineup.formation != null || lineup.coach != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(GcSpace.gutter, 0, GcSpace.gutter, GcSpace.md),
+            child: Row(
+              children: [
+                if (lineup.formation != null)
+                  Text(lineup.formation!, style: GcType.figure.copyWith(color: GcColors.accent)),
+                const Spacer(),
+                if (lineup.coach != null) Text(lineup.coach!, style: GcType.caption),
+              ],
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+          // A lineup without grid positions is still a real lineup. It is shown as a list rather
+          // than placed on a pitch by guesswork, because a guessed shape is a claim about how a
+          // team set up.
+          child: lineup.canDrawPitch
+              ? GcPitch(lineup: lineup)
+              : _PlayerList(players: lineup.startXI),
+        ),
+        if (lineup.substitutes.isNotEmpty) ...[
+          const GcSectionHeader(title: 'Substitutes'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+            child: _PlayerList(players: lineup.substitutes),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PlayerList extends StatelessWidget {
+  const _PlayerList({required this.players});
+
+  final List<LineupPlayer> players;
+
+  /// Goalkeeper, defence, midfield, attack.
+  ///
+  /// Without a grid the provider's own order is arbitrary - a real Costa Rican lineup arrived with
+  /// the goalkeeper fourth. Sorting by the position letter it did give is a presentation choice
+  /// made from data we have, not a formation invented from data we do not.
+  static const _order = {'G': 0, 'D': 1, 'M': 2, 'F': 3};
+
+  List<LineupPlayer> get _sorted {
+    final sorted = [...players];
+    sorted.sort((a, b) {
+      final ra = _order[a.position] ?? 9;
+      final rb = _order[b.position] ?? 9;
+      return ra != rb ? ra.compareTo(rb) : (a.number ?? 99).compareTo(b.number ?? 99);
+    });
+    return sorted;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (final player in _sorted)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: GcSpace.sm),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 26,
+                  child: Text(
+                    player.number?.toString() ?? '–',
+                    style: GcType.figureSm.copyWith(color: GcColors.inkFaint),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    player.name,
+                    style: GcType.body.copyWith(fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (player.position != null)
+                  Text(
+                    player.position!,
+                    style: GcType.caption.copyWith(fontSize: 11, color: GcColors.inkFaint),
+                  ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

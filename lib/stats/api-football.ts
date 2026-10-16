@@ -4,7 +4,16 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import type { Prisma } from "@/lib/generated/prisma/client";
-import type { MatchEvent, MatchStatus, MatchSummary, StandingRow, StatsProvider } from "@/lib/stats/types";
+import type {
+  Lineup,
+  LineupPlayer,
+  MatchEvent,
+  MatchStatus,
+  MatchSummary,
+  StandingRow,
+  StatsProvider,
+  TeamStatistics,
+} from "@/lib/stats/types";
 
 // API-Football v3 (https://www.api-football.com/documentation-v3). Every response is cached in
 // Postgres (stats_cache) so repeated views cost nothing against the daily request quota.
@@ -56,6 +65,99 @@ type ApiStanding = {
   form: string | null;
   all: { played: number; win: number; draw: number; lose: number; goals: { for: number; against: number } };
 };
+
+type ApiStatistics = {
+  team: { id: number; name: string; logo: string | null };
+  statistics: { type: string; value: number | string | null }[];
+};
+
+type ApiLineupPlayer = {
+  player: { id: number | null; name: string; number: number | null; pos: string | null; grid: string | null };
+};
+
+type ApiLineup = {
+  team: { id: number; name: string; logo: string | null };
+  formation: string | null;
+  coach: { name: string | null } | null;
+  startXI: ApiLineupPlayer[] | null;
+  substitutes: ApiLineupPlayer[] | null;
+};
+
+/**
+ * The provider labels each statistic with a display string, and those strings are the contract.
+ * Mapped explicitly rather than normalised with a slug function: a provider that renames one
+ * should drop that single statistic, not silently mis-file it under another.
+ */
+const STAT_KEYS = {
+  "Ball Possession": "possession",
+  "Total Shots": "shotsTotal",
+  "Shots on Goal": "shotsOnGoal",
+  "Shots off Goal": "shotsOffGoal",
+  "Blocked Shots": "shotsBlocked",
+  "Shots insidebox": "shotsInsideBox",
+  "Shots outsidebox": "shotsOutsideBox",
+  "Corner Kicks": "corners",
+  Offsides: "offsides",
+  Fouls: "fouls",
+  "Yellow Cards": "yellowCards",
+  "Red Cards": "redCards",
+  "Goalkeeper Saves": "saves",
+  "Total passes": "passesTotal",
+  "Passes accurate": "passesAccurate",
+  expected_goals: "expectedGoals",
+} as const satisfies Record<string, keyof Omit<TeamStatistics, "team">>;
+
+/**
+ * A reported number, or null.
+ *
+ * Null is the whole point: the provider sends an explicit null for a count it does not have, and a
+ * zero would claim that nothing happened. Possession comes as "33%" and expected goals as "1.24",
+ * so both are strings that have to be read as numbers - and a string that is not a number is also
+ * null rather than 0.
+ */
+function statValue(raw: number | string | null | undefined): number | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  const parsed = Number.parseFloat(raw.replace("%", "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toTeamStatistics(row: ApiStatistics): TeamStatistics {
+  const out: TeamStatistics = {
+    team: row.team,
+    possession: null, shotsTotal: null, shotsOnGoal: null, shotsOffGoal: null, shotsBlocked: null,
+    shotsInsideBox: null, shotsOutsideBox: null, corners: null, offsides: null, fouls: null,
+    yellowCards: null, redCards: null, saves: null, passesTotal: null, passesAccurate: null,
+    expectedGoals: null,
+  };
+  for (const { type, value } of row.statistics ?? []) {
+    const key = STAT_KEYS[type as keyof typeof STAT_KEYS];
+    if (key) out[key] = statValue(value);
+  }
+  return out;
+}
+
+function toLineup(row: ApiLineup): Lineup {
+  const player = (p: ApiLineupPlayer): LineupPlayer => ({
+    id: p.player.id,
+    name: p.player.name,
+    number: p.player.number,
+    position: p.player.pos,
+    grid: p.player.grid,
+  });
+  return {
+    team: row.team,
+    formation: row.formation || null,
+    coach: row.coach?.name ?? null,
+    startXI: (row.startXI ?? []).map(player),
+    substitutes: (row.substitutes ?? []).map(player),
+  };
+}
+
+/** Home side first, so a screen never has to work out which column is which. */
+function homeFirst<T extends { team: { id: number } }>(rows: T[], homeTeamId: number): T[] {
+  return [...rows].sort((a, b) => (a.team.id === homeTeamId ? -1 : b.team.id === homeTeamId ? 1 : 0));
+}
 
 const STATUS: Record<string, MatchStatus> = {
   TBD: "SCHEDULED", NS: "SCHEDULED",
@@ -314,6 +416,25 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
       return rows
         .map((e) => toMatchEvent(e, homeTeamId))
         .sort((a, b) => a.minute - b.minute || (a.extra ?? 0) - (b.extra ?? 0));
+    },
+    /**
+     * Team statistics. Cached briefly while a match is live and for a day once it is not: a
+     * finished match's counts never change, and a live one is why the page is open.
+     *
+     * An empty array means the competition does not carry them. That is not an error, and it is
+     * only distinguishable from "nothing has happened yet" via the coverage flag.
+     */
+    async statistics(fixtureId, homeTeamId) {
+      const rows = await call<ApiStatistics>("/fixtures/statistics", { fixture: fixtureId }, 2 * MIN, "fixtures-statistics");
+      return homeFirst(rows.map(toTeamStatistics), homeTeamId);
+    },
+    /**
+     * Line-ups. Published about an hour before kick-off and unchanged afterwards, so cached for
+     * longer than the live panels.
+     */
+    async lineups(fixtureId, homeTeamId) {
+      const rows = await call<ApiLineup>("/fixtures/lineups", { fixture: fixtureId }, 10 * MIN, "fixtures-lineups");
+      return homeFirst(rows.map(toLineup), homeTeamId);
     },
     async coverage(leagueId, season) {
       const rows = await call<ApiLeague>("/leagues", { id: leagueId }, 24 * HOUR);

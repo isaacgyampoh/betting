@@ -39,7 +39,7 @@ describe("form + insights", () => {
   it("describes stats without predicting", () => {
     const form = buildTeamForm(team, games);
     const other = buildTeamForm({ id: 2, name: "B", logo: null }, []);
-    const lines = matchInsights({ match: games[4], form: { home: form, away: other }, h2h: [], standings: null, unavailable: [], events: [], coverage: null, busy: false, source: "sample" });
+    const lines = matchInsights({ match: games[4], form: { home: form, away: other }, h2h: [], standings: null, unavailable: [], statistics: [], lineups: [], events: [], coverage: null, busy: false, source: "sample" });
     expect(lines[0]).toBe("Man Utd: 2W 1D 1L in the last 4, scoring 7 and conceding 5.");
     expect(lines.join(" ")).not.toMatch(/will|predict|likely/i);
   });
