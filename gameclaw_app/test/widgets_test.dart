@@ -120,6 +120,29 @@ void main() {
       expect(find.text('–'), findsNothing);
     });
 
+    // The animated path. A live score change slides the number rather than swapping it, and both
+    // sides of a level score produce the same value - two siblings keyed on it is a duplicate-key
+    // crash, on every 0-0, 1-1 and 2-2 in play.
+    testWidgets('a live match level at nil-nil does not collide its own keys', (tester) async {
+      await pumpAt(
+        tester,
+        GcFixtureRow(fixture: fixture(label: "23'", homeGoals: 0, awayGoals: 0)),
+        width: 360,
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('0'), findsNWidgets(2));
+    });
+
+    testWidgets('a live match level at one each is fine too', (tester) async {
+      await pumpAt(
+        tester,
+        GcFixtureRow(fixture: fixture(label: "71'", homeGoals: 1, awayGoals: 1)),
+        width: 360,
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('1'), findsNWidgets(2));
+    });
+
     testWidgets("a live match shows the provider's own clock", (tester) async {
       await pumpAt(tester, GcFixtureRow(fixture: fixture(label: "45+2'")), width: 360);
       expect(find.text("45+2'"), findsOneWidget);

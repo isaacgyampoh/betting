@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../motion.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/models.dart';
@@ -191,14 +193,36 @@ class _Score extends StatelessWidget {
       );
     }
 
-    Widget line(int goals, bool lost) => Text(
-      '$goals',
-      textAlign: TextAlign.right,
-      style: GcType.score.copyWith(
-        fontSize: 15,
-        color: live ? gc(context).live : (lost ? gc(context).inkMuted : gc(context).ink),
-      ),
-    );
+    // A goal is the one thing on this screen somebody is waiting for, so the number does not
+    // simply swap underneath them: the old one leaves upward and the new one arrives from below,
+    // the way a flip board moves. Keyed on the value, so nothing moves unless the score changed -
+    // a refresh that returns the same score is still a silent, still frame.
+    Widget line(int goals, bool lost) {
+      Widget text({Key? key}) => Text(
+        '$goals',
+        key: key,
+        textAlign: TextAlign.right,
+        style: GcType.score.copyWith(
+          fontSize: 15,
+          color: live ? gc(context).live : (lost ? gc(context).inkMuted : gc(context).ink),
+        ),
+      );
+      // The key belongs inside the switcher and nowhere else. Both sides of a 0-0 produce the
+      // same value, and two siblings keyed ValueKey(0) in one Column is a duplicate-key crash -
+      // on every level score in every live match. The existing nil-nil test caught it.
+      if (!live || !gcMotionAllowed(context)) return text();
+      return AnimatedSwitcher(
+        duration: GcMotion.base,
+        switchInCurve: GcMotion.emphasis,
+        transitionBuilder: (child, animation) => ClipRect(
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0, 0.6), end: Offset.zero).animate(animation),
+            child: FadeTransition(opacity: animation, child: child),
+          ),
+        ),
+        child: text(key: ValueKey(goals)),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -232,7 +256,7 @@ class _Star extends StatelessWidget {
           child: Icon(
             on ? Icons.star_rounded : Icons.star_outline_rounded,
             size: 18,
-            color: on ? gc(context).accent : gc(context).inkFaint,
+            color: on ? gc(context).accentInk : gc(context).inkFaint,
           ),
         ),
       ),

@@ -142,7 +142,7 @@ class _TeamRow extends StatelessWidget {
           ),
           GcIconButton(
             icon: Icons.star_rounded,
-            colour: gc(context).accent,
+            colour: gc(context).accentInk,
             tooltip: 'Unfollow ${team.name}',
             onPressed: onRemove,
           ),

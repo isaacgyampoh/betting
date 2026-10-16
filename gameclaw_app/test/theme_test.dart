@@ -41,6 +41,24 @@ void main() {
         expect(contrast(p.accentInk, p.canvas), greaterThan(4.5));
       });
 
+      // The usage rule the split exists to enforce: accent is a fill, accentInk is ink. A tab
+      // bar drawing its selected icon and label in accent was lime on white at about 1.3:1 -
+      // technically coloured, practically unreadable. Measured here so the two can never be
+      // quietly collapsed back into one value.
+      test('$name: the fill colour is not fit to be ink on this canvas', () {
+        if (name == 'light') {
+          expect(
+            contrast(p.accent, p.canvas),
+            lessThan(3.0),
+            reason: 'the lime fill is not a text colour on white; that is why accentInk exists',
+          );
+          expect(p.accentInk, isNot(p.accent));
+        } else {
+          // On near-black the fill is also perfectly good ink, so the two are the same value.
+          expect(p.accentInk, p.accent);
+        }
+      });
+
       test('$name: outcome colours are legible on the canvas', () {
         for (final c in [p.win, p.loss, p.warn]) {
           expect(contrast(c, p.canvas), greaterThan(3.0));

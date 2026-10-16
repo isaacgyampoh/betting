@@ -130,7 +130,7 @@ class _Body extends StatelessWidget {
         _BackBar(
           trailing: GcIconButton(
             icon: isFavourite ? Icons.star_rounded : Icons.star_outline_rounded,
-            colour: isFavourite ? gc(context).accent : null,
+            colour: isFavourite ? gc(context).accentInk : null,
             tooltip: isFavourite ? 'Unfollow' : 'Follow',
             onPressed: onToggleFavourite,
           ),

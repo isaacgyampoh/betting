@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repository.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
+import '../../ui/brand/gc_claw.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_chip.dart';
 import '../../ui/components/gc_slip_card.dart';
@@ -166,7 +167,7 @@ class _Intro extends StatelessWidget {
               color: gc(context).accent.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(GcRadius.lg),
             ),
-            child: Icon(Icons.auto_awesome, size: 22, color: gc(context).accentInk),
+            child: GcClawMark(size: 24, colour: gc(context).accentInk),
           ),
         ),
         const SizedBox(height: GcSpace.lg),

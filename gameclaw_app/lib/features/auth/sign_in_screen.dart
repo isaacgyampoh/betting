@@ -6,6 +6,7 @@ import '../../data/api_client.dart';
 import '../../data/providers.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
+import '../../ui/brand/gc_claw.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_input.dart';
 import '../../ui/components/gc_states.dart';
@@ -127,7 +128,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   GcSpace.xl,
                 ),
                 children: [
-                  Text('GAMECLAW', style: GcType.overline.copyWith(color: gc(context).accentInk)),
+                  Row(
+                    children: [
+                      GcClawMark(size: 15, colour: gc(context).accentInk),
+                      const SizedBox(width: GcSpace.sm),
+                      Text(
+                        'GAMECLAW',
+                        style: GcType.overline.copyWith(color: gc(context).accentInk),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: GcSpace.sm),
                   Text(_creating ? 'Create an account' : 'Welcome back', style: GcType.hero),
                   const SizedBox(height: GcSpace.md),

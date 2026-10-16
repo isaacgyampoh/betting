@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/router.dart';
+import 'ui/brand/gc_claw.dart';
+import 'theme/palette.dart';
 import 'data/appearance.dart';
 import 'data/providers.dart';
 import 'data/retry.dart';
@@ -53,6 +55,57 @@ class GameClawApp extends ConsumerWidget {
       darkTheme: gcTheme(brightness: Brightness.dark),
       themeMode: ref.watch(appearanceProvider).value ?? ThemeMode.system,
       routerConfig: ref.watch(routerProvider),
+      builder: (context, child) => _Launch(child: child ?? const SizedBox.shrink()),
+    );
+  }
+}
+
+/// The mark, struck once, over the app while it settles.
+///
+/// Deliberately not a splash screen in the usual sense. The app is live underneath from the first
+/// frame and nothing waits on this - it is a short overlay on a moment that would otherwise be an
+/// empty canvas while the first day of fixtures arrives. It is gone in about two thirds of a
+/// second, it never appears again, and a phone set to remove animations gets the mark without the
+/// strike and the same brief pause.
+///
+/// The colours come from the live palette rather than constants, so a cold start in light mode
+/// draws a deep olive claw on white and one in dark mode draws lime on near-black, matching the
+/// window behind it instead of flashing against it.
+class _Launch extends StatefulWidget {
+  const _Launch({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_Launch> createState() => _LaunchState();
+}
+
+class _LaunchState extends State<_Launch> {
+  bool _done = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        widget.child,
+        if (!_done)
+          AnimatedOpacity(
+            opacity: 1,
+            duration: GcMotion.quick,
+            child: ColoredBox(
+              color: gc(context).canvas,
+              child: Center(
+                child: GcLaunchMark(
+                  size: 96,
+                  colour: gc(context).accentInk,
+                  onDone: () {
+                    if (mounted) setState(() => _done = true);
+                  },
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

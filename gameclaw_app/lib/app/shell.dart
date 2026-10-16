@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../theme/palette.dart';
 import '../theme/tokens.dart';
+import '../ui/brand/gc_claw.dart';
 
 /// The bottom navigation, and the Android back button.
 ///
@@ -15,10 +16,12 @@ class GcShell extends StatelessWidget {
 
   final StatefulNavigationShell shell;
 
-  static const _destinations = <(IconData, IconData, String)>[
+  /// A null icon pair means the tab draws the GameClaw mark instead. Claw is the only one: it is
+  /// the product's own name, and a sparkle is what every AI feature shipped since 2023 uses.
+  static const _destinations = <(IconData?, IconData?, String)>[
     (Icons.bolt_outlined, Icons.bolt, 'Live'),
     (Icons.star_outline_rounded, Icons.star_rounded, 'Following'),
-    (Icons.auto_awesome_outlined, Icons.auto_awesome, 'Claw'),
+    (null, null, 'Claw'),
     (Icons.swap_horiz_rounded, Icons.swap_horiz_rounded, 'Convert'),
     (Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
   ];
@@ -62,7 +65,7 @@ class _NavBar extends StatelessWidget {
 
   final int index;
   final ValueChanged<int> onSelect;
-  final List<(IconData, IconData, String)> destinations;
+  final List<(IconData?, IconData?, String)> destinations;
 
   @override
   Widget build(BuildContext context) {
@@ -93,11 +96,20 @@ class _NavBar extends StatelessWidget {
                             duration: GcMotion.quick,
                             curve: GcMotion.emphasis,
                             scale: i == index ? 1.0 : 0.94,
-                            child: Icon(
-                              i == index ? destination.$2 : destination.$1,
-                              size: 22,
-                              color: i == index ? gc(context).accent : gc(context).inkFaint,
-                            ),
+                            child: destination.$1 == null
+                                ? GcClawMark(
+                                    size: 22,
+                                    colour: i == index
+                                        ? gc(context).accentInk
+                                        : gc(context).inkFaint,
+                                  )
+                                : Icon(
+                                    i == index ? destination.$2 : destination.$1,
+                                    size: 22,
+                                    color: i == index
+                                        ? gc(context).accentInk
+                                        : gc(context).inkFaint,
+                                  ),
                           ),
                           const SizedBox(height: GcSpace.xs),
                           Text(
@@ -105,7 +117,7 @@ class _NavBar extends StatelessWidget {
                             style: GcType.overline.copyWith(
                               fontSize: 9.5,
                               letterSpacing: 0.3,
-                              color: i == index ? gc(context).accent : gc(context).inkFaint,
+                              color: i == index ? gc(context).accentInk : gc(context).inkFaint,
                             ),
                           ),
                         ],

@@ -9,6 +9,7 @@ import '../../ui/components/gc_tabs.dart';
 import '../../data/appearance.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
+import '../../ui/brand/gc_claw.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_states.dart';
 
@@ -98,6 +99,8 @@ class ProfileScreen extends ConsumerWidget {
                 children: [
                   Row(
                     children: [
+                      GcClawMark(size: 14, colour: gc(context).accentInk),
+                      const SizedBox(width: GcSpace.sm),
                       Text('GameClaw', style: GcType.label),
                       const Spacer(),
                       Text(

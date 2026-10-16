@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../motion.dart';
+
 import '../../theme/palette.dart';
 
 /// The live indicator: a lime dot that breathes, beside the provider's own clock.
@@ -20,7 +22,20 @@ class _GcLiveDotState extends State<GcLiveDot> with SingleTickerProviderStateMix
   late final AnimationController _pulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1500),
-  )..repeat(reverse: true);
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // A dot that pulses for ever is the clearest thing on a scores page, and the first thing
+    // somebody with vestibular symptoms turns off. Still lime, still marking a live match.
+    if (gcMotionAllowed(context)) {
+      if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
+    } else {
+      _pulse.stop();
+      _pulse.value = 1;
+    }
+  }
 
   @override
   void dispose() {

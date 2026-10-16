@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The two brand colours Android itself needs, outside Flutter's reach: the window behind the app
-     before the engine has drawn, and the launcher icon's background layer. They are the same
-     values as GcColors.canvas and GcColors.accent in lib/theme/tokens.dart. -->
+<!-- The brand colours Android itself needs, outside Flutter's reach: the window behind the app
+     before the engine has drawn, and the launcher icon's background layer.
+
+     gc_canvas has a values-night twin. The app follows the system appearance, so a single dark
+     value here meant a light-mode phone showed a near-black window and then a white app on every
+     cold start - the same flash the dark value was added to remove, pointing the other way.
+
+     These match GcColors.canvas / GcPalette.light.canvas and GcColors.accent in
+     lib/theme/tokens.dart. gc_accent was #4C7DF0, a blue belonging to no part of this product,
+     which is what made the launcher icon look like a default. -->
 <resources>
-    <color name="gc_canvas">#FF0B0B0D</color>
-    <color name="gc_accent">#FF4C7DF0</color>
+    <color name="gc_canvas">#FFFFFFFF</color>
+    <color name="gc_accent">#FFCCFF2E</color>
+    <color name="gc_ink">#FF09090B</color>
 </resources>

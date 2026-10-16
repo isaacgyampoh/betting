@@ -98,7 +98,7 @@ class _StatusChip extends StatelessWidget {
       PickStatus.won => ('WON', gc(context).win),
       PickStatus.lost => ('LOST', gc(context).loss),
       PickStatus.voided => ('VOID', gc(context).inkFaint),
-      PickStatus.pending => ('RUNNING', gc(context).accent),
+      PickStatus.pending => ('RUNNING', gc(context).accentInk),
     };
     return GcStatusChip(label: label, colour: colour);
   }

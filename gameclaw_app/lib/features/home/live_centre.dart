@@ -8,6 +8,7 @@ import '../../data/repository.dart';
 import '../../domain/models.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
+import '../../ui/brand/gc_claw.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_crest.dart';
 import '../../ui/components/gc_chip.dart';
@@ -102,7 +103,7 @@ class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> {
             ),
             Expanded(
               child: RefreshIndicator(
-                color: gc(context).accent,
+                color: gc(context).accentInk,
                 backgroundColor: gc(context).surfaceRaised,
                 onRefresh: () => ref.refresh(matchDayProvider(_day).future),
                 child: request.when(
@@ -212,7 +213,17 @@ class _Header extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('GAMECLAW', style: GcType.overline.copyWith(color: gc(context).accentInk)),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GcClawMark(size: 13, colour: gc(context).accentInk),
+                        const SizedBox(width: 5),
+                        Text(
+                          'GAMECLAW',
+                          style: GcType.overline.copyWith(color: gc(context).accentInk),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: GcSpace.xs),
                     Text(_dayTitle(), style: GcType.display),
                   ],
@@ -517,7 +528,7 @@ class _CompetitionPickerState extends State<_CompetitionPicker> {
                       Icon(
                         on ? Icons.check_circle_rounded : Icons.circle_outlined,
                         size: 20,
-                        color: on ? gc(context).accent : gc(context).inkFaint,
+                        color: on ? gc(context).accentInk : gc(context).inkFaint,
                       ),
                     ],
                   ),

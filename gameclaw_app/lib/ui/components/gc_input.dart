@@ -69,7 +69,7 @@ class _GcTextFieldState extends State<GcTextField> {
       onFieldSubmitted: widget.onSubmitted,
       validator: widget.validator,
       style: GcType.body.copyWith(color: gc(context).ink),
-      cursorColor: gc(context).accent,
+      cursorColor: gc(context).accentInk,
       decoration: InputDecoration(
         labelText: widget.label,
         labelStyle: GcType.body.copyWith(color: gc(context).inkMuted),
