@@ -47,6 +47,48 @@ export function sampleDataAllowed(): boolean {
 }
 
 /**
+ * Bookmakers whose own servers refuse us, with the reason.
+ *
+ * Not the same thing as unfinished. MSport's integration works: the endpoints are right, the
+ * market mapping is right, and every one of them answers 200 from an ordinary connection. From
+ * the deployed Worker the identical request comes back 403 - repeatedly, on every endpoint,
+ * while SportyBet and Football.com answer the same Worker without complaint. That is MSport
+ * deciding not to serve this origin, not an outage and not a bug on our side.
+ *
+ * It stays listed here rather than being deleted or quietly left to fail, because the integration
+ * is finished and the block is theirs to lift. Getting it working again is an agreement with
+ * MSport - an allowlist, or an official integration - not something to engineer around. Working
+ * around a provider's own access control would be both a breach of their terms and a thing we
+ * would have to keep secret from them, which is a good sign it is the wrong move.
+ *
+ * Removing a slug from this map is all it takes to switch one back on.
+ */
+const REFUSED_BY_BOOKMAKER: Partial<Record<BookmakerSlug, string>> = {
+  msport: "MSport is not accepting requests from our servers at the moment.",
+};
+
+/**
+ * A bookmaker that is implemented but is turning us away.
+ *
+ * Reads as unavailable everywhere a bookmaker's capabilities are shown, and says why rather than
+ * implying we never built it. Code detection and market mapping still work, so a pasted MSport
+ * code is still recognised as an MSport code and named as one.
+ */
+function refusedByBookmaker(adapter: BookmakerAdapter, reason: string): BookmakerAdapter {
+  const refuse = async (): Promise<never> => {
+    throw new AppError("BOOKMAKER_NOT_CONNECTED", `${reason} Your code is fine - try another destination.`);
+  };
+  return {
+    ...adapter,
+    capabilities: { loadCode: false, createCode: false, events: false },
+    loadCode: refuse,
+    createCode: refuse,
+    searchEvent: refuse,
+    getEventMarkets: refuse,
+  };
+}
+
+/**
  * A bookmaker we cannot talk to yet. Code-format detection and market mapping still work — they are
  * pure functions and let us tell the user *which* bookmaker they pasted — but every request for real
  * data refuses instead of inventing it.
@@ -82,6 +124,8 @@ export function getAdapter(slug: BookmakerSlug): BookmakerAdapter {
     const mode = modeFor(slug);
     adapter = FACTORIES[slug](mode, latency !== undefined ? { latencyMs: Number(latency) } : {});
     if (mode === "mock" && !sampleDataAllowed()) adapter = notConnected(adapter);
+    const refusal = REFUSED_BY_BOOKMAKER[slug];
+    if (refusal) adapter = refusedByBookmaker(adapter, refusal);
     cache.set(slug, adapter);
   }
   return adapter;

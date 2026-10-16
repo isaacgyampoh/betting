@@ -104,7 +104,12 @@ describe("convert targets", () => {
     vi.stubEnv("PARIPESA_MODE", "live");
     const bookable = BOOKMAKER_SLUGS.filter((s) => getAdapter(s).capabilities.createCode);
     // Order follows BOOKMAKER_SLUGS, not the order they were connected in.
-    expect(bookable).toEqual(["sportybet", "msport", "footballcom"]);
+    //
+    // MSport is absent despite MSPORT_MODE=live above, and that is the point: its integration is
+    // finished and its endpoints answer 200 from an ordinary connection, but they return 403 to
+    // the deployed Worker, every time. It is listed in REFUSED_BY_BOOKMAKER until MSport lifts
+    // that, so it is never offered as somewhere a slip can actually be booked.
+    expect(bookable).toEqual(["sportybet", "footballcom"]);
     // And every bookmaker we can book at, we can also read from: a one-way conversion is useless.
     for (const slug of bookable) expect(getAdapter(slug).capabilities.loadCode, slug).toBe(true);
   });
