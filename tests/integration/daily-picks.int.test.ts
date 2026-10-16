@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi} from "vitest";
 import { db } from "@/lib/db";
 import { generateDailyPicks, getTodaysPicks, getTrackRecord, ghanaDate, settleDailyPicks } from "@/lib/services/daily-picks";
 import { createUser } from "./helpers";
+
+// Covers who may see a locked pick under the paid regime. Launch gives picks to anyone signed in
+// (lib/launch.ts), so the giveaway is switched off here to keep testing the lock itself.
+vi.mock("@/lib/launch", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/launch")>();
+  return { ...actual, everythingIsFree: () => false };
+});
+
 
 async function publish(opts: { date: string; target: number; totalOdds: number; status?: "PENDING" | "WON" | "LOST"; legs?: number }) {
   return db.dailyPick.create({

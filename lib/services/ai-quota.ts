@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { getActiveSubscription } from "@/lib/services/profile";
 import { planByCode } from "@/lib/services/plans";
+import { LAUNCH, everythingIsFree } from "@/lib/launch";
 import type { UserRole } from "@/lib/generated/prisma/enums";
 
 // Per-feature daily limits, read from the plans table so prices and limits change without a deploy.
@@ -54,8 +55,44 @@ const FREE_FALLBACK: PlanLimits = {
   dailyAnalyses: 0,
 };
 
+/** The allowance everyone gets while the launch giveaway is on. See lib/launch.ts. */
+const LAUNCH_LIMITS: PlanLimits = {
+  code: "launch",
+  name: "Launch",
+  ...LAUNCH.limits,
+  allowDeepAnalysis: LAUNCH.allowDeepAnalysis,
+  allowDailyPicks: LAUNCH.allowDailyPicks,
+};
+
+/** Takes whichever allowance is more generous, field by field. A subscriber is never made worse off. */
+function bestOf(a: PlanLimits, b: PlanLimits): PlanLimits {
+  const higher = (x: number, y: number) => (x < 0 || y < 0 ? -1 : Math.max(x, y));
+  return {
+    code: a.code,
+    name: a.name,
+    dailyAiRequests: higher(a.dailyAiRequests, b.dailyAiRequests),
+    dailyTokenLimit: higher(a.dailyTokenLimit, b.dailyTokenLimit),
+    dailyUploads: higher(a.dailyUploads, b.dailyUploads),
+    dailySlipBuilds: higher(a.dailySlipBuilds, b.dailySlipBuilds),
+    dailyAnalyses: higher(a.dailyAnalyses, b.dailyAnalyses),
+    allowDeepAnalysis: a.allowDeepAnalysis || b.allowDeepAnalysis,
+    allowDailyPicks: a.allowDailyPicks || b.allowDailyPicks,
+  };
+}
+
 async function planFor(userId: string, knownRole?: UserRole): Promise<{ limits: PlanLimits; subscribed: boolean }> {
   const subscription = await getActiveSubscription(userId, knownRole);
+
+  if (everythingIsFree()) {
+    // Somebody who already pays keeps anything their plan does better. Nobody is downgraded by a
+    // giveaway, and their subscription still reads as a subscription everywhere it is shown.
+    const paid = subscription?.plan as PlanLimits | undefined;
+    return {
+      limits: paid ? bestOf(paid, LAUNCH_LIMITS) : LAUNCH_LIMITS,
+      subscribed: !!subscription,
+    };
+  }
+
   if (subscription) return { limits: subscription.plan as PlanLimits, subscribed: true };
   const free = (await planByCode("free")) as PlanLimits | null;
   return { limits: free ?? FREE_FALLBACK, subscribed: false };
@@ -138,7 +175,12 @@ export async function requireFeature(userId: string, feature: Feature): Promise<
   const state = allowance.features[feature];
 
   if (feature === "analysis" && !allowance.allowDeepAnalysis) {
-    throw new AppError("PLAN_LIMIT_REACHED", "Match analysis is part of the Pro and VIP plans.");
+    throw new AppError(
+      "PLAN_LIMIT_REACHED",
+      everythingIsFree()
+        ? "Match analysis isn't available right now."
+        : "Match analysis is part of the Pro and VIP plans.",
+    );
   }
   if (state.limit === 0) {
     throw new AppError("PLAN_LIMIT_REACHED", `${FEATURE_NAMES[feature][0].toUpperCase()}${FEATURE_NAMES[feature].slice(1)} aren't part of your plan yet.`);
@@ -150,7 +192,9 @@ export async function requireFeature(userId: string, feature: Feature): Promise<
     throw new AppError(
       "PLAN_LIMIT_REACHED",
       allowance.kind === "trial"
-        ? `You've used today's free ${FEATURE_NAMES[feature]}. They reset at midnight (GMT), or pick a plan for more.`
+        ? everythingIsFree()
+          ? `You've used today's ${FEATURE_NAMES[feature]}. They reset at midnight (GMT).`
+          : `You've used today's free ${FEATURE_NAMES[feature]}. They reset at midnight (GMT), or pick a plan for more.`
         : `You've used today's ${FEATURE_NAMES[feature]} on the ${allowance.plan?.name} plan. They reset at midnight (GMT).`,
     );
   }

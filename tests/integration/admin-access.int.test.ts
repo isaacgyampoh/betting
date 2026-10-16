@@ -1,9 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi} from "vitest";
 import { db } from "@/lib/db";
 import { getActiveSubscription, getMe } from "@/lib/services/profile";
 import { getAiAllowance } from "@/lib/services/ai-quota";
 import { canSeePicks } from "@/lib/services/daily-picks";
 import { createUser } from "./helpers";
+
+// Covers who may see a locked pick under the paid regime. Launch gives picks to anyone signed in
+// (lib/launch.ts), so the giveaway is switched off here to keep testing the lock itself.
+vi.mock("@/lib/launch", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/launch")>();
+  return { ...actual, everythingIsFree: () => false };
+});
+
 
 // The operator needs every feature on the live site without paying themselves. That is a standing
 // grant of a paid tier, so these pin down that it reaches the admin and nobody else.

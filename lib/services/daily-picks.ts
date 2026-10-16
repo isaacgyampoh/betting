@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { everythingIsFree } from "@/lib/launch";
 import { logger } from "@/lib/logger";
 import { BOOKMAKER_SLUGS } from "@/lib/bookmakers/types";
 import { getAdapter } from "@/lib/bookmakers/registry";
@@ -68,6 +69,8 @@ function chanceInWords(probability: number): string {
 
 /** Picks are visible to plans whose row has allowDailyPicks set. */
 export async function canSeePicks(userId: string | null): Promise<boolean> {
+  // Free for launch: the legs are shown to anyone signed in. See lib/launch.ts.
+  if (everythingIsFree()) return !!userId;
   if (!userId) return false;
   const sub = await getActiveSubscription(userId);
   return sub?.plan.allowDailyPicks === true;
@@ -348,5 +351,7 @@ export async function settleDailyPicks(
 }
 
 export function assertPicksUnlocked(unlocked: boolean) {
+  // Free for launch, so there is nothing to unlock. See lib/launch.ts.
+  if (everythingIsFree()) return;
   if (!unlocked) throw new AppError("PLAN_LIMIT_REACHED", "Daily picks are part of the Weekly and Monthly plans.");
 }

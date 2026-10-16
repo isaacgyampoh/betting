@@ -3,6 +3,16 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
 import { createUser } from "./helpers";
 
+// These cover the paid regime: per-plan daily limits, locked features, upgrade wording. Launch is
+// currently giving all of it away (lib/launch.ts), so the giveaway is switched off here rather
+// than letting it quietly hide whether any of this still works. tests/services/launch-free.test.ts
+// and the "while everything is free" cases below cover the other side.
+vi.mock("@/lib/launch", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/launch")>();
+  return { ...actual, everythingIsFree: () => false };
+});
+
+
 // Scripted model: `respond` decides each reply (it can read earlier tool results); requests are recorded.
 const calls: Anthropic.MessageCreateParams[] = [];
 let respond: (params: Anthropic.MessageCreateParams, n: number) => Partial<Anthropic.Message>;
