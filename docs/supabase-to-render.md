@@ -218,6 +218,100 @@ the new base URL, verify, and keep Supabase untouched for the agreed verificatio
 
 ---
 
+## 8. The migration, as actually run
+
+Executed 2026-10-17 against the real Render account. Supabase untouched throughout and still
+serving production.
+
+### What was created
+
+| | | Cost |
+|---|---|---|
+| `gameclaw-db` | Render Postgres 17.11, Frankfurt, Basic-256mb, 15 GB disk | **$6/month** |
+
+Frankfurt rather than the Oregon one of the other projects in the workspace uses: the users are
+in Ghana and the database it replaces is in `eu-west-1`. The workspace already runs `zazi-web`
+and `zazi-api` in Frankfurt, so this is consistent with what is there.
+
+### The order that worked, and the two that did not
+
+`prisma migrate deploy` cannot replay `20260930000100_auth_rls` without something called
+`auth.users` to point at. So the sequence is: scaffold the stub, migrate, then remove the
+scaffolding and the coupling together.
+
+1. `psql -f tests/integration/supabase-stubs.sql`
+2. `prisma migrate deploy` — 16 migrations
+3. `psql -f prisma/cutover/001-leave-supabase.sql`
+4. `pg_restore --data-only` from the verified backup
+5. Backfill `identities` and `profiles.last_sign_in_at` from Supabase's `auth` schema
+
+**The data restore fails if run in one pass.** Two reasons, both worth knowing:
+
+- `bookmakers` and `plans` are seeded by migrations, with different ids from production's. The
+  restore collides on `bookmakers_slug_key` and `plans_code_key`. Production is the source of
+  truth, so those two tables are emptied first and restored from the dump.
+- `pg_restore`'s own table ordering put several children before their parents, so ten more tables
+  failed on foreign keys that were fine. Restoring parent-first fixes it:
+  `plans, bookmakers, teams, team_aliases, events, bookmaker_events, slips, selections,
+  code_cache, subscriptions, payments, daily_pick_legs, device_tokens`.
+
+**`DROP SCHEMA auth RESTRICT` does not mean what it looks like.** It refuses any schema that is
+not empty, including one holding only its own scaffolding, so it cannot express "drop this unless
+something outside still needs it". The cutover script checks for foreign keys into `auth`
+explicitly and then uses CASCADE, refusing loudly if it finds any.
+
+### Verification
+
+Row counts, every table:
+
+> **19 of 21 identical.** The two that differ are `usage_logs` (775 vs 771) and `stats_cache`
+> (522 vs 518), and both are accounted for: production is still live, and exactly 4 usage rows
+> and 6 cache rows were written *after* the backup was taken at 11:49. `usage_logs` had 771 rows
+> at backup time, which is what Render holds.
+
+Content, not just counts — md5 over the ordered rows of each table:
+
+| | |
+|---|---|
+| profile ids + emails | match |
+| slip ids + booking codes | match |
+| selection ids | match |
+| subscriptions, payments | match |
+| bookmakers, plans, teams, events | match |
+
+Identity: **7 Google identities and 12 of 13 last-sign-in times** carried across, matching
+Supabase exactly. The 13th profile has never signed in.
+
+### Running the application against it
+
+The dev server was pointed at the Render database and exercised:
+
+```
+/health          ok
+/matches         1668 fixtures, 32 leagues, signed out
+/competitions    171 countries
+/bookmakers      9 entries; SportyBet and Football.com still read/book/price
+/me, /slips      401 without a token
+/auth/google     rejects an unverifiable token
+/auth/refresh    rejects an unknown refresh token
+```
+
+**`sslmode=require` is mandatory.** Render refuses an unencrypted connection with
+`28000: SSL/TLS required`, and the connection string it hands out does not include the parameter,
+so Prisma connects in the clear and every query fails. The service's `DATABASE_URL` must carry
+it. This cost a confusing `database_unreachable` before it was found.
+
+### Access control
+
+Render denies every external address by default — the allow list starts empty, which is why the
+first connection attempt died with `SSL connection has been closed unexpectedly` rather than an
+auth error. One address is allow-listed at the moment, this machine, for the migration.
+
+**That entry must be removed once the API service is running**, because the service reaches the
+database over Render's private network and needs no public exposure at all.
+
+---
+
 ## 7. The blocker that outranks all of this
 
 **Google sign-in does not work on Android today.** The account chooser appears and token issuance
