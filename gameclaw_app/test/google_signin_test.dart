@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gameclaw_app/data/api_client.dart';
 import 'package:gameclaw_app/data/auth_client.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 /// Native Google sign-in: Google hands back an ID token and Supabase exchanges it for a session.
 /// Nothing opens a web view and nothing returns through a deep link, which removes the part of
@@ -45,6 +46,56 @@ void main() {
         throwsA(
           isA<UnknownFailure>().having((e) => e.message, 'message', contains('not configured')),
         ),
+      );
+    });
+  });
+
+  group('a cancellation and a failure are not the same thing', () {
+    // On the Pixel, picking an account returned canceled with "[16] Account reauth failed." while
+    // Google Play Services logged "Flow failed" and "Activity finished with error". The app showed
+    // nothing, because it believed the user had changed their mind. Somebody who taps a button,
+    // picks their account and lands back on the same screen in silence has been told nothing.
+    test('a bare cancellation stays silent', () async {
+      final client = AuthClient(config: configured());
+      await expectLater(
+        client.signInWithGoogle(
+          source: (_) =>
+              throw const GoogleSignInException(code: GoogleSignInExceptionCode.canceled),
+        ),
+        throwsA(isA<CancelledFailure>()),
+      );
+    });
+
+    test('a cancellation carrying a reason is reported, with the reason', () async {
+      final client = AuthClient(config: configured());
+      await expectLater(
+        client.signInWithGoogle(
+          source: (_) => throw const GoogleSignInException(
+            code: GoogleSignInExceptionCode.canceled,
+            description: '[16] Account reauth failed.',
+          ),
+        ),
+        throwsA(
+          isA<UnknownFailure>()
+              .having((e) => e.message, 'message', contains('Account reauth failed'))
+              .having((e) => e.message, 'message', contains('not registered with Google'))
+              // Google punctuates its own reasons, and the sentence after it supplies a stop of
+              // its own, which met on the device as "failed.. This usually means".
+              .having((e) => e.message, 'message', isNot(contains('..'))),
+        ),
+      );
+    });
+
+    test('whitespace is not a reason', () async {
+      final client = AuthClient(config: configured());
+      await expectLater(
+        client.signInWithGoogle(
+          source: (_) => throw const GoogleSignInException(
+            code: GoogleSignInExceptionCode.canceled,
+            description: '   ',
+          ),
+        ),
+        throwsA(isA<CancelledFailure>()),
       );
     });
   });

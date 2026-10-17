@@ -241,26 +241,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         ],
                       ),
                     ),
-                    if (_error != null) ...[
-                      const SizedBox(height: GcSpace.md),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.error_outline_rounded, size: 15, color: gc(context).loss),
-                          const SizedBox(width: GcSpace.sm),
-                          Expanded(
-                            child: Text(
-                              _error!,
-                              style: GcType.caption.copyWith(color: gc(context).loss),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (_notice != null) ...[
-                      const SizedBox(height: GcSpace.md),
-                      GcNote(_notice!, icon: Icons.mark_email_unread_outlined),
-                    ],
                     const SizedBox(height: GcSpace.xl),
                     GcButton(
                       label: _creating ? 'Create account' : 'Sign in',
@@ -277,6 +257,32 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         _notice = null;
                       }),
                     ),
+                  ],
+                  // Outside the email branch, because Google fails too.
+                  //
+                  // It was inside it, which meant a Google sign-in that failed could not say so:
+                  // the flow ran, Google Play Services logged "Flow failed. [16] Account reauth
+                  // failed", and the screen rendered nothing at all. An error that only one of
+                  // two sign-in paths can display is an error the other path silently swallows.
+                  if (_error != null) ...[
+                    const SizedBox(height: GcSpace.md),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.error_outline_rounded, size: 15, color: gc(context).loss),
+                        const SizedBox(width: GcSpace.sm),
+                        Expanded(
+                          child: Text(
+                            _error!,
+                            style: GcType.caption.copyWith(color: gc(context).loss),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (_notice != null) ...[
+                    const SizedBox(height: GcSpace.md),
+                    GcNote(_notice!, icon: Icons.mark_email_unread_outlined),
                   ],
                   const SizedBox(height: GcSpace.xl),
                   Text(

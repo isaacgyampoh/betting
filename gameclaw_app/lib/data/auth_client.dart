@@ -196,9 +196,23 @@ class AuthClient {
       idToken = await (source ?? _googleIdToken)(_config.googleServerClientId);
     } on GoogleSignInException catch (error) {
       throw switch (error.code) {
-        // Backing out of the account chooser is a decision, not a fault. Reporting it as an error
-        // puts a red message on screen for someone who simply changed their mind.
-        GoogleSignInExceptionCode.canceled => const CancelledFailure(),
+        // Backing out of the account chooser is a decision, not a fault, and gets no red message.
+        //
+        // But "canceled" is also what the plugin reports when Google itself abandons the flow,
+        // and those two must not be treated alike. A person dismissing the sheet produces a bare
+        // cancellation; a failure carries a reason. On this device, picking an account returned
+        // canceled with "[16] Account reauth failed." - Google Play Services' own logs said
+        // "Flow failed" and "Activity finished with error" - and the app showed nothing at all,
+        // because it believed the user had changed their mind. Somebody who taps a button, picks
+        // their account and is returned to the same screen in silence has been told nothing.
+        GoogleSignInExceptionCode.canceled when (error.description ?? '').trim().isEmpty =>
+          const CancelledFailure(),
+        GoogleSignInExceptionCode.canceled => UnknownFailure(
+          // Google's own reasons arrive punctuated ("[16] Account reauth failed.") and the
+          // sentence that follows supplies its own full stop, so the two met as "failed.. This".
+          'Google could not complete the sign-in: ${_trimStop(error.description)}. '
+          'This usually means this build is not registered with Google yet.',
+        ),
         GoogleSignInExceptionCode.interrupted ||
         GoogleSignInExceptionCode.providerConfigurationError => UnknownFailure(
           'Google sign-in is not set up for this app yet. ${error.description ?? ''}'.trim(),
@@ -222,6 +236,12 @@ class AuthClient {
     final session = AuthSession.fromAuthResponse(body);
     if (session == null) throw const UnknownFailure('Signed in, but no session came back.');
     return session;
+  }
+
+  /// A reason from Google with any trailing full stop removed, so it can be read into a sentence.
+  static String _trimStop(String? reason) {
+    final text = (reason ?? '').trim();
+    return text.endsWith('.') ? text.substring(0, text.length - 1) : text;
   }
 
   Future<SignUpResult> signUp({required String email, required String password}) async {
