@@ -199,6 +199,29 @@ final setMatchMutedProvider = Provider<Future<void> Function(int, bool)>((ref) {
   };
 });
 
+/// Changes which events a followed match should alert on.
+///
+/// Written here and pushed, like the follow itself. The server copy is what actually decides
+/// whether a notification is sent; this one is what lets the sheet open instantly and be changed
+/// with no signal.
+final setMatchAlertsProvider = Provider<Future<void> Function(int, AlertPrefs)>((ref) {
+  return (fixtureId, prefs) async {
+    await ref
+        .read(cacheDbProvider)
+        .setMatchAlerts(
+          fixtureId,
+          kickoff: prefs.kickoff,
+          goals: prefs.goals,
+          redCards: prefs.redCards,
+          halfTime: prefs.halfTime,
+          fullTime: prefs.fullTime,
+        );
+    await _quietly(
+      () => ref.read(followsClientProvider).set(FollowKind.fixture, fixtureId, alerts: prefs),
+    );
+  };
+});
+
 /// Pushes what this device follows to the server.
 ///
 /// Called after signing in, because follows made while signed out exist only here and the server
@@ -215,6 +238,15 @@ final syncFollowsProvider = Provider<Future<void> Function()>((ref) {
           match.fixtureId,
           label: match.label,
           muted: match.muted,
+          // Carried too. Syncing without them would push the follow and leave the server on its
+          // own defaults, quietly undoing anything chosen while signed out.
+          alerts: AlertPrefs(
+            kickoff: match.alertKickoff,
+            goals: match.alertGoals,
+            redCards: match.alertRedCards,
+            halfTime: match.alertHalfTime,
+            fullTime: match.alertFullTime,
+          ),
         );
       }
       for (final team in await db.favourites()) {

@@ -64,6 +64,23 @@ describe("following", () => {
     expect(after.label).toBe("Arsenal v Spurs");
   });
 
+  it("changing alerts does not wipe the label", async () => {
+    const user = await createUser();
+    await follow(user.id, "FIXTURE", 11, { label: "Valencia v Athletic Club" });
+    // The app sends alerts without a label when a toggle is flipped. Treating an absent label as
+    // "clear it" emptied the Following screen's rows on the server.
+    const after = await follow(user.id, "FIXTURE", 11, { alerts: { goals: false } });
+    expect(after.label).toBe("Valencia v Athletic Club");
+    expect(after.alerts.goals).toBe(false);
+  });
+
+  it("an explicit null does clear the label", async () => {
+    const user = await createUser();
+    await follow(user.id, "FIXTURE", 12, { label: "Something" });
+    const after = await follow(user.id, "FIXTURE", 12, { label: null });
+    expect(after.label).toBeNull();
+  });
+
   it("unfollowing something not followed is not an error", async () => {
     const user = await createUser();
     await expect(unfollow(user.id, "FIXTURE", 123456)).resolves.toBeUndefined();

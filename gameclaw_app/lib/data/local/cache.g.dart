@@ -18,9 +18,7 @@ class $CachedResponsesTable extends CachedResponses
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _payloadMeta = const VerificationMeta(
-    'payload',
-  );
+  static const VerificationMeta _payloadMeta = const VerificationMeta('payload');
   @override
   late final GeneratedColumn<String> payload = GeneratedColumn<String>(
     'payload',
@@ -29,9 +27,7 @@ class $CachedResponsesTable extends CachedResponses
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _fetchedAtMeta = const VerificationMeta(
-    'fetchedAt',
-  );
+  static const VerificationMeta _fetchedAtMeta = const VerificationMeta('fetchedAt');
   @override
   late final GeneratedColumn<DateTime> fetchedAt = GeneratedColumn<DateTime>(
     'fetched_at',
@@ -55,18 +51,12 @@ class $CachedResponsesTable extends CachedResponses
     final context = VerificationContext();
     final data = instance.toColumns(true);
     if (data.containsKey('key')) {
-      context.handle(
-        _keyMeta,
-        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
-      );
+      context.handle(_keyMeta, key.isAcceptableOrUnknown(data['key']!, _keyMeta));
     } else if (isInserting) {
       context.missing(_keyMeta);
     }
     if (data.containsKey('payload')) {
-      context.handle(
-        _payloadMeta,
-        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
-      );
+      context.handle(_payloadMeta, payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta));
     } else if (isInserting) {
       context.missing(_payloadMeta);
     }
@@ -87,10 +77,7 @@ class $CachedResponsesTable extends CachedResponses
   CachedResponse map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return CachedResponse(
-      key: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}key'],
-      )!,
+      key: attachedDatabase.typeMapping.read(DriftSqlType.string, data['${effectivePrefix}key'])!,
       payload: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}payload'],
@@ -115,11 +102,7 @@ class CachedResponse extends DataClass implements Insertable<CachedResponse> {
   /// The response body, exactly as received.
   final String payload;
   final DateTime fetchedAt;
-  const CachedResponse({
-    required this.key,
-    required this.payload,
-    required this.fetchedAt,
-  });
+  const CachedResponse({required this.key, required this.payload, required this.fetchedAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -137,10 +120,7 @@ class CachedResponse extends DataClass implements Insertable<CachedResponse> {
     );
   }
 
-  factory CachedResponse.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
+  factory CachedResponse.fromJson(Map<String, dynamic> json, {ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CachedResponse(
       key: serializer.fromJson<String>(json['key']),
@@ -158,11 +138,7 @@ class CachedResponse extends DataClass implements Insertable<CachedResponse> {
     };
   }
 
-  CachedResponse copyWith({
-    String? key,
-    String? payload,
-    DateTime? fetchedAt,
-  }) => CachedResponse(
+  CachedResponse copyWith({String? key, String? payload, DateTime? fetchedAt}) => CachedResponse(
     key: key ?? this.key,
     payload: payload ?? this.payload,
     fetchedAt: fetchedAt ?? this.fetchedAt,
@@ -297,9 +273,7 @@ class $FavouriteTeamsTable extends FavouriteTeams
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _logoUrlMeta = const VerificationMeta(
-    'logoUrl',
-  );
+  static const VerificationMeta _logoUrlMeta = const VerificationMeta('logoUrl');
   @override
   late final GeneratedColumn<String> logoUrl = GeneratedColumn<String>(
     'logo_url',
@@ -308,9 +282,7 @@ class $FavouriteTeamsTable extends FavouriteTeams
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _addedAtMeta = const VerificationMeta(
-    'addedAt',
-  );
+  static const VerificationMeta _addedAtMeta = const VerificationMeta('addedAt');
   @override
   late final GeneratedColumn<DateTime> addedAt = GeneratedColumn<DateTime>(
     'added_at',
@@ -334,30 +306,18 @@ class $FavouriteTeamsTable extends FavouriteTeams
     final context = VerificationContext();
     final data = instance.toColumns(true);
     if (data.containsKey('team_id')) {
-      context.handle(
-        _teamIdMeta,
-        teamId.isAcceptableOrUnknown(data['team_id']!, _teamIdMeta),
-      );
+      context.handle(_teamIdMeta, teamId.isAcceptableOrUnknown(data['team_id']!, _teamIdMeta));
     }
     if (data.containsKey('name')) {
-      context.handle(
-        _nameMeta,
-        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
-      );
+      context.handle(_nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
     } else if (isInserting) {
       context.missing(_nameMeta);
     }
     if (data.containsKey('logo_url')) {
-      context.handle(
-        _logoUrlMeta,
-        logoUrl.isAcceptableOrUnknown(data['logo_url']!, _logoUrlMeta),
-      );
+      context.handle(_logoUrlMeta, logoUrl.isAcceptableOrUnknown(data['logo_url']!, _logoUrlMeta));
     }
     if (data.containsKey('added_at')) {
-      context.handle(
-        _addedAtMeta,
-        addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta),
-      );
+      context.handle(_addedAtMeta, addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta));
     } else if (isInserting) {
       context.missing(_addedAtMeta);
     }
@@ -374,10 +334,7 @@ class $FavouriteTeamsTable extends FavouriteTeams
         DriftSqlType.int,
         data['${effectivePrefix}team_id'],
       )!,
-      name: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}name'],
-      )!,
+      name: attachedDatabase.typeMapping.read(DriftSqlType.string, data['${effectivePrefix}name'])!,
       logoUrl: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}logo_url'],
@@ -422,17 +379,12 @@ class FavouriteTeam extends DataClass implements Insertable<FavouriteTeam> {
     return FavouriteTeamsCompanion(
       teamId: Value(teamId),
       name: Value(name),
-      logoUrl: logoUrl == null && nullToAbsent
-          ? const Value.absent()
-          : Value(logoUrl),
+      logoUrl: logoUrl == null && nullToAbsent ? const Value.absent() : Value(logoUrl),
       addedAt: Value(addedAt),
     );
   }
 
-  factory FavouriteTeam.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
+  factory FavouriteTeam.fromJson(Map<String, dynamic> json, {ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return FavouriteTeam(
       teamId: serializer.fromJson<int>(json['teamId']),
@@ -577,9 +529,7 @@ class $FollowedMatchesTable extends FollowedMatches
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $FollowedMatchesTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _fixtureIdMeta = const VerificationMeta(
-    'fixtureId',
-  );
+  static const VerificationMeta _fixtureIdMeta = const VerificationMeta('fixtureId');
   @override
   late final GeneratedColumn<int> fixtureId = GeneratedColumn<int>(
     'fixture_id',
@@ -597,9 +547,7 @@ class $FollowedMatchesTable extends FollowedMatches
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _kickoffAtMeta = const VerificationMeta(
-    'kickoffAt',
-  );
+  static const VerificationMeta _kickoffAtMeta = const VerificationMeta('kickoffAt');
   @override
   late final GeneratedColumn<DateTime> kickoffAt = GeneratedColumn<DateTime>(
     'kickoff_at',
@@ -616,14 +564,65 @@ class $FollowedMatchesTable extends FollowedMatches
     false,
     type: DriftSqlType.bool,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("muted" IN (0, 1))',
-    ),
+    defaultConstraints: GeneratedColumn.constraintIsAlways('CHECK ("muted" IN (0, 1))'),
     defaultValue: const Constant(false),
   );
-  static const VerificationMeta _addedAtMeta = const VerificationMeta(
-    'addedAt',
+  static const VerificationMeta _alertKickoffMeta = const VerificationMeta('alertKickoff');
+  @override
+  late final GeneratedColumn<bool> alertKickoff = GeneratedColumn<bool>(
+    'alert_kickoff',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('CHECK ("alert_kickoff" IN (0, 1))'),
+    defaultValue: const Constant(true),
   );
+  static const VerificationMeta _alertGoalsMeta = const VerificationMeta('alertGoals');
+  @override
+  late final GeneratedColumn<bool> alertGoals = GeneratedColumn<bool>(
+    'alert_goals',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('CHECK ("alert_goals" IN (0, 1))'),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _alertRedCardsMeta = const VerificationMeta('alertRedCards');
+  @override
+  late final GeneratedColumn<bool> alertRedCards = GeneratedColumn<bool>(
+    'alert_red_cards',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('CHECK ("alert_red_cards" IN (0, 1))'),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _alertHalfTimeMeta = const VerificationMeta('alertHalfTime');
+  @override
+  late final GeneratedColumn<bool> alertHalfTime = GeneratedColumn<bool>(
+    'alert_half_time',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('CHECK ("alert_half_time" IN (0, 1))'),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _alertFullTimeMeta = const VerificationMeta('alertFullTime');
+  @override
+  late final GeneratedColumn<bool> alertFullTime = GeneratedColumn<bool>(
+    'alert_full_time',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('CHECK ("alert_full_time" IN (0, 1))'),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _addedAtMeta = const VerificationMeta('addedAt');
   @override
   late final GeneratedColumn<DateTime> addedAt = GeneratedColumn<DateTime>(
     'added_at',
@@ -638,6 +637,11 @@ class $FollowedMatchesTable extends FollowedMatches
     label,
     kickoffAt,
     muted,
+    alertKickoff,
+    alertGoals,
+    alertRedCards,
+    alertHalfTime,
+    alertFullTime,
     addedAt,
   ];
   @override
@@ -659,10 +663,7 @@ class $FollowedMatchesTable extends FollowedMatches
       );
     }
     if (data.containsKey('label')) {
-      context.handle(
-        _labelMeta,
-        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
-      );
+      context.handle(_labelMeta, label.isAcceptableOrUnknown(data['label']!, _labelMeta));
     } else if (isInserting) {
       context.missing(_labelMeta);
     }
@@ -673,16 +674,40 @@ class $FollowedMatchesTable extends FollowedMatches
       );
     }
     if (data.containsKey('muted')) {
+      context.handle(_mutedMeta, muted.isAcceptableOrUnknown(data['muted']!, _mutedMeta));
+    }
+    if (data.containsKey('alert_kickoff')) {
       context.handle(
-        _mutedMeta,
-        muted.isAcceptableOrUnknown(data['muted']!, _mutedMeta),
+        _alertKickoffMeta,
+        alertKickoff.isAcceptableOrUnknown(data['alert_kickoff']!, _alertKickoffMeta),
+      );
+    }
+    if (data.containsKey('alert_goals')) {
+      context.handle(
+        _alertGoalsMeta,
+        alertGoals.isAcceptableOrUnknown(data['alert_goals']!, _alertGoalsMeta),
+      );
+    }
+    if (data.containsKey('alert_red_cards')) {
+      context.handle(
+        _alertRedCardsMeta,
+        alertRedCards.isAcceptableOrUnknown(data['alert_red_cards']!, _alertRedCardsMeta),
+      );
+    }
+    if (data.containsKey('alert_half_time')) {
+      context.handle(
+        _alertHalfTimeMeta,
+        alertHalfTime.isAcceptableOrUnknown(data['alert_half_time']!, _alertHalfTimeMeta),
+      );
+    }
+    if (data.containsKey('alert_full_time')) {
+      context.handle(
+        _alertFullTimeMeta,
+        alertFullTime.isAcceptableOrUnknown(data['alert_full_time']!, _alertFullTimeMeta),
       );
     }
     if (data.containsKey('added_at')) {
-      context.handle(
-        _addedAtMeta,
-        addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta),
-      );
+      context.handle(_addedAtMeta, addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta));
     } else if (isInserting) {
       context.missing(_addedAtMeta);
     }
@@ -707,9 +732,26 @@ class $FollowedMatchesTable extends FollowedMatches
         DriftSqlType.dateTime,
         data['${effectivePrefix}kickoff_at'],
       ),
-      muted: attachedDatabase.typeMapping.read(
+      muted: attachedDatabase.typeMapping.read(DriftSqlType.bool, data['${effectivePrefix}muted'])!,
+      alertKickoff: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
-        data['${effectivePrefix}muted'],
+        data['${effectivePrefix}alert_kickoff'],
+      )!,
+      alertGoals: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}alert_goals'],
+      )!,
+      alertRedCards: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}alert_red_cards'],
+      )!,
+      alertHalfTime: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}alert_half_time'],
+      )!,
+      alertFullTime: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}alert_full_time'],
       )!,
       addedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -736,12 +778,29 @@ class FollowedMatch extends DataClass implements Insertable<FollowedMatch> {
 
   /// Silenced without unfollowing: it stays on the Following screen, it just says nothing.
   final bool muted;
+
+  /// Which events should produce an alert, mirrored from the server so the sheet opens
+  /// instantly and can be changed with no signal. The server copy is authoritative - it is what
+  /// actually decides whether a notification is sent - and `syncFollows` reconciles them.
+  ///
+  /// Half-time defaults off here for the same reason it does on the server: it is the one people
+  /// switch off first.
+  final bool alertKickoff;
+  final bool alertGoals;
+  final bool alertRedCards;
+  final bool alertHalfTime;
+  final bool alertFullTime;
   final DateTime addedAt;
   const FollowedMatch({
     required this.fixtureId,
     required this.label,
     this.kickoffAt,
     required this.muted,
+    required this.alertKickoff,
+    required this.alertGoals,
+    required this.alertRedCards,
+    required this.alertHalfTime,
+    required this.alertFullTime,
     required this.addedAt,
   });
   @override
@@ -753,6 +812,11 @@ class FollowedMatch extends DataClass implements Insertable<FollowedMatch> {
       map['kickoff_at'] = Variable<DateTime>(kickoffAt);
     }
     map['muted'] = Variable<bool>(muted);
+    map['alert_kickoff'] = Variable<bool>(alertKickoff);
+    map['alert_goals'] = Variable<bool>(alertGoals);
+    map['alert_red_cards'] = Variable<bool>(alertRedCards);
+    map['alert_half_time'] = Variable<bool>(alertHalfTime);
+    map['alert_full_time'] = Variable<bool>(alertFullTime);
     map['added_at'] = Variable<DateTime>(addedAt);
     return map;
   }
@@ -761,24 +825,29 @@ class FollowedMatch extends DataClass implements Insertable<FollowedMatch> {
     return FollowedMatchesCompanion(
       fixtureId: Value(fixtureId),
       label: Value(label),
-      kickoffAt: kickoffAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(kickoffAt),
+      kickoffAt: kickoffAt == null && nullToAbsent ? const Value.absent() : Value(kickoffAt),
       muted: Value(muted),
+      alertKickoff: Value(alertKickoff),
+      alertGoals: Value(alertGoals),
+      alertRedCards: Value(alertRedCards),
+      alertHalfTime: Value(alertHalfTime),
+      alertFullTime: Value(alertFullTime),
       addedAt: Value(addedAt),
     );
   }
 
-  factory FollowedMatch.fromJson(
-    Map<String, dynamic> json, {
-    ValueSerializer? serializer,
-  }) {
+  factory FollowedMatch.fromJson(Map<String, dynamic> json, {ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return FollowedMatch(
       fixtureId: serializer.fromJson<int>(json['fixtureId']),
       label: serializer.fromJson<String>(json['label']),
       kickoffAt: serializer.fromJson<DateTime?>(json['kickoffAt']),
       muted: serializer.fromJson<bool>(json['muted']),
+      alertKickoff: serializer.fromJson<bool>(json['alertKickoff']),
+      alertGoals: serializer.fromJson<bool>(json['alertGoals']),
+      alertRedCards: serializer.fromJson<bool>(json['alertRedCards']),
+      alertHalfTime: serializer.fromJson<bool>(json['alertHalfTime']),
+      alertFullTime: serializer.fromJson<bool>(json['alertFullTime']),
       addedAt: serializer.fromJson<DateTime>(json['addedAt']),
     );
   }
@@ -790,6 +859,11 @@ class FollowedMatch extends DataClass implements Insertable<FollowedMatch> {
       'label': serializer.toJson<String>(label),
       'kickoffAt': serializer.toJson<DateTime?>(kickoffAt),
       'muted': serializer.toJson<bool>(muted),
+      'alertKickoff': serializer.toJson<bool>(alertKickoff),
+      'alertGoals': serializer.toJson<bool>(alertGoals),
+      'alertRedCards': serializer.toJson<bool>(alertRedCards),
+      'alertHalfTime': serializer.toJson<bool>(alertHalfTime),
+      'alertFullTime': serializer.toJson<bool>(alertFullTime),
       'addedAt': serializer.toJson<DateTime>(addedAt),
     };
   }
@@ -799,12 +873,22 @@ class FollowedMatch extends DataClass implements Insertable<FollowedMatch> {
     String? label,
     Value<DateTime?> kickoffAt = const Value.absent(),
     bool? muted,
+    bool? alertKickoff,
+    bool? alertGoals,
+    bool? alertRedCards,
+    bool? alertHalfTime,
+    bool? alertFullTime,
     DateTime? addedAt,
   }) => FollowedMatch(
     fixtureId: fixtureId ?? this.fixtureId,
     label: label ?? this.label,
     kickoffAt: kickoffAt.present ? kickoffAt.value : this.kickoffAt,
     muted: muted ?? this.muted,
+    alertKickoff: alertKickoff ?? this.alertKickoff,
+    alertGoals: alertGoals ?? this.alertGoals,
+    alertRedCards: alertRedCards ?? this.alertRedCards,
+    alertHalfTime: alertHalfTime ?? this.alertHalfTime,
+    alertFullTime: alertFullTime ?? this.alertFullTime,
     addedAt: addedAt ?? this.addedAt,
   );
   FollowedMatch copyWithCompanion(FollowedMatchesCompanion data) {
@@ -813,6 +897,11 @@ class FollowedMatch extends DataClass implements Insertable<FollowedMatch> {
       label: data.label.present ? data.label.value : this.label,
       kickoffAt: data.kickoffAt.present ? data.kickoffAt.value : this.kickoffAt,
       muted: data.muted.present ? data.muted.value : this.muted,
+      alertKickoff: data.alertKickoff.present ? data.alertKickoff.value : this.alertKickoff,
+      alertGoals: data.alertGoals.present ? data.alertGoals.value : this.alertGoals,
+      alertRedCards: data.alertRedCards.present ? data.alertRedCards.value : this.alertRedCards,
+      alertHalfTime: data.alertHalfTime.present ? data.alertHalfTime.value : this.alertHalfTime,
+      alertFullTime: data.alertFullTime.present ? data.alertFullTime.value : this.alertFullTime,
       addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
     );
   }
@@ -824,13 +913,29 @@ class FollowedMatch extends DataClass implements Insertable<FollowedMatch> {
           ..write('label: $label, ')
           ..write('kickoffAt: $kickoffAt, ')
           ..write('muted: $muted, ')
+          ..write('alertKickoff: $alertKickoff, ')
+          ..write('alertGoals: $alertGoals, ')
+          ..write('alertRedCards: $alertRedCards, ')
+          ..write('alertHalfTime: $alertHalfTime, ')
+          ..write('alertFullTime: $alertFullTime, ')
           ..write('addedAt: $addedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(fixtureId, label, kickoffAt, muted, addedAt);
+  int get hashCode => Object.hash(
+    fixtureId,
+    label,
+    kickoffAt,
+    muted,
+    alertKickoff,
+    alertGoals,
+    alertRedCards,
+    alertHalfTime,
+    alertFullTime,
+    addedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -839,6 +944,11 @@ class FollowedMatch extends DataClass implements Insertable<FollowedMatch> {
           other.label == this.label &&
           other.kickoffAt == this.kickoffAt &&
           other.muted == this.muted &&
+          other.alertKickoff == this.alertKickoff &&
+          other.alertGoals == this.alertGoals &&
+          other.alertRedCards == this.alertRedCards &&
+          other.alertHalfTime == this.alertHalfTime &&
+          other.alertFullTime == this.alertFullTime &&
           other.addedAt == this.addedAt);
 }
 
@@ -847,12 +957,22 @@ class FollowedMatchesCompanion extends UpdateCompanion<FollowedMatch> {
   final Value<String> label;
   final Value<DateTime?> kickoffAt;
   final Value<bool> muted;
+  final Value<bool> alertKickoff;
+  final Value<bool> alertGoals;
+  final Value<bool> alertRedCards;
+  final Value<bool> alertHalfTime;
+  final Value<bool> alertFullTime;
   final Value<DateTime> addedAt;
   const FollowedMatchesCompanion({
     this.fixtureId = const Value.absent(),
     this.label = const Value.absent(),
     this.kickoffAt = const Value.absent(),
     this.muted = const Value.absent(),
+    this.alertKickoff = const Value.absent(),
+    this.alertGoals = const Value.absent(),
+    this.alertRedCards = const Value.absent(),
+    this.alertHalfTime = const Value.absent(),
+    this.alertFullTime = const Value.absent(),
     this.addedAt = const Value.absent(),
   });
   FollowedMatchesCompanion.insert({
@@ -860,6 +980,11 @@ class FollowedMatchesCompanion extends UpdateCompanion<FollowedMatch> {
     required String label,
     this.kickoffAt = const Value.absent(),
     this.muted = const Value.absent(),
+    this.alertKickoff = const Value.absent(),
+    this.alertGoals = const Value.absent(),
+    this.alertRedCards = const Value.absent(),
+    this.alertHalfTime = const Value.absent(),
+    this.alertFullTime = const Value.absent(),
     required DateTime addedAt,
   }) : label = Value(label),
        addedAt = Value(addedAt);
@@ -868,6 +993,11 @@ class FollowedMatchesCompanion extends UpdateCompanion<FollowedMatch> {
     Expression<String>? label,
     Expression<DateTime>? kickoffAt,
     Expression<bool>? muted,
+    Expression<bool>? alertKickoff,
+    Expression<bool>? alertGoals,
+    Expression<bool>? alertRedCards,
+    Expression<bool>? alertHalfTime,
+    Expression<bool>? alertFullTime,
     Expression<DateTime>? addedAt,
   }) {
     return RawValuesInsertable({
@@ -875,6 +1005,11 @@ class FollowedMatchesCompanion extends UpdateCompanion<FollowedMatch> {
       if (label != null) 'label': label,
       if (kickoffAt != null) 'kickoff_at': kickoffAt,
       if (muted != null) 'muted': muted,
+      if (alertKickoff != null) 'alert_kickoff': alertKickoff,
+      if (alertGoals != null) 'alert_goals': alertGoals,
+      if (alertRedCards != null) 'alert_red_cards': alertRedCards,
+      if (alertHalfTime != null) 'alert_half_time': alertHalfTime,
+      if (alertFullTime != null) 'alert_full_time': alertFullTime,
       if (addedAt != null) 'added_at': addedAt,
     });
   }
@@ -884,6 +1019,11 @@ class FollowedMatchesCompanion extends UpdateCompanion<FollowedMatch> {
     Value<String>? label,
     Value<DateTime?>? kickoffAt,
     Value<bool>? muted,
+    Value<bool>? alertKickoff,
+    Value<bool>? alertGoals,
+    Value<bool>? alertRedCards,
+    Value<bool>? alertHalfTime,
+    Value<bool>? alertFullTime,
     Value<DateTime>? addedAt,
   }) {
     return FollowedMatchesCompanion(
@@ -891,6 +1031,11 @@ class FollowedMatchesCompanion extends UpdateCompanion<FollowedMatch> {
       label: label ?? this.label,
       kickoffAt: kickoffAt ?? this.kickoffAt,
       muted: muted ?? this.muted,
+      alertKickoff: alertKickoff ?? this.alertKickoff,
+      alertGoals: alertGoals ?? this.alertGoals,
+      alertRedCards: alertRedCards ?? this.alertRedCards,
+      alertHalfTime: alertHalfTime ?? this.alertHalfTime,
+      alertFullTime: alertFullTime ?? this.alertFullTime,
       addedAt: addedAt ?? this.addedAt,
     );
   }
@@ -910,6 +1055,21 @@ class FollowedMatchesCompanion extends UpdateCompanion<FollowedMatch> {
     if (muted.present) {
       map['muted'] = Variable<bool>(muted.value);
     }
+    if (alertKickoff.present) {
+      map['alert_kickoff'] = Variable<bool>(alertKickoff.value);
+    }
+    if (alertGoals.present) {
+      map['alert_goals'] = Variable<bool>(alertGoals.value);
+    }
+    if (alertRedCards.present) {
+      map['alert_red_cards'] = Variable<bool>(alertRedCards.value);
+    }
+    if (alertHalfTime.present) {
+      map['alert_half_time'] = Variable<bool>(alertHalfTime.value);
+    }
+    if (alertFullTime.present) {
+      map['alert_full_time'] = Variable<bool>(alertFullTime.value);
+    }
     if (addedAt.present) {
       map['added_at'] = Variable<DateTime>(addedAt.value);
     }
@@ -923,6 +1083,11 @@ class FollowedMatchesCompanion extends UpdateCompanion<FollowedMatch> {
           ..write('label: $label, ')
           ..write('kickoffAt: $kickoffAt, ')
           ..write('muted: $muted, ')
+          ..write('alertKickoff: $alertKickoff, ')
+          ..write('alertGoals: $alertGoals, ')
+          ..write('alertRedCards: $alertRedCards, ')
+          ..write('alertHalfTime: $alertHalfTime, ')
+          ..write('alertFullTime: $alertFullTime, ')
           ..write('addedAt: $addedAt')
           ..write(')'))
         .toString();
@@ -932,13 +1097,9 @@ class FollowedMatchesCompanion extends UpdateCompanion<FollowedMatch> {
 abstract class _$CacheDb extends GeneratedDatabase {
   _$CacheDb(QueryExecutor e) : super(e);
   $CacheDbManager get managers => $CacheDbManager(this);
-  late final $CachedResponsesTable cachedResponses = $CachedResponsesTable(
-    this,
-  );
+  late final $CachedResponsesTable cachedResponses = $CachedResponsesTable(this);
   late final $FavouriteTeamsTable favouriteTeams = $FavouriteTeamsTable(this);
-  late final $FollowedMatchesTable followedMatches = $FollowedMatchesTable(
-    this,
-  );
+  late final $FollowedMatchesTable followedMatches = $FollowedMatchesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -965,8 +1126,7 @@ typedef $$CachedResponsesTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$CachedResponsesTableFilterComposer
-    extends Composer<_$CacheDb, $CachedResponsesTable> {
+class $$CachedResponsesTableFilterComposer extends Composer<_$CacheDb, $CachedResponsesTable> {
   $$CachedResponsesTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -974,24 +1134,17 @@ class $$CachedResponsesTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get key => $composableBuilder(
-    column: $table.key,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get payload => $composableBuilder(
-    column: $table.payload,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<String> get payload =>
+      $composableBuilder(column: $table.payload, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<DateTime> get fetchedAt => $composableBuilder(
-    column: $table.fetchedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<DateTime> get fetchedAt =>
+      $composableBuilder(column: $table.fetchedAt, builder: (column) => ColumnFilters(column));
 }
 
-class $$CachedResponsesTableOrderingComposer
-    extends Composer<_$CacheDb, $CachedResponsesTable> {
+class $$CachedResponsesTableOrderingComposer extends Composer<_$CacheDb, $CachedResponsesTable> {
   $$CachedResponsesTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -999,24 +1152,17 @@ class $$CachedResponsesTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get key => $composableBuilder(
-    column: $table.key,
-    builder: (column) => ColumnOrderings(column),
-  );
+  ColumnOrderings<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<String> get payload => $composableBuilder(
-    column: $table.payload,
-    builder: (column) => ColumnOrderings(column),
-  );
+  ColumnOrderings<String> get payload =>
+      $composableBuilder(column: $table.payload, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<DateTime> get fetchedAt => $composableBuilder(
-    column: $table.fetchedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
+  ColumnOrderings<DateTime> get fetchedAt =>
+      $composableBuilder(column: $table.fetchedAt, builder: (column) => ColumnOrderings(column));
 }
 
-class $$CachedResponsesTableAnnotationComposer
-    extends Composer<_$CacheDb, $CachedResponsesTable> {
+class $$CachedResponsesTableAnnotationComposer extends Composer<_$CacheDb, $CachedResponsesTable> {
   $$CachedResponsesTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -1045,10 +1191,7 @@ class $$CachedResponsesTableTableManager
           $$CachedResponsesTableAnnotationComposer,
           $$CachedResponsesTableCreateCompanionBuilder,
           $$CachedResponsesTableUpdateCompanionBuilder,
-          (
-            CachedResponse,
-            BaseReferences<_$CacheDb, $CachedResponsesTable, CachedResponse>,
-          ),
+          (CachedResponse, BaseReferences<_$CacheDb, $CachedResponsesTable, CachedResponse>),
           CachedResponse,
           PrefetchHooks Function()
         > {
@@ -1087,9 +1230,8 @@ class $$CachedResponsesTableTableManager
                 fetchedAt: fetchedAt,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) =>
+              p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -1105,10 +1247,7 @@ typedef $$CachedResponsesTableProcessedTableManager =
       $$CachedResponsesTableAnnotationComposer,
       $$CachedResponsesTableCreateCompanionBuilder,
       $$CachedResponsesTableUpdateCompanionBuilder,
-      (
-        CachedResponse,
-        BaseReferences<_$CacheDb, $CachedResponsesTable, CachedResponse>,
-      ),
+      (CachedResponse, BaseReferences<_$CacheDb, $CachedResponsesTable, CachedResponse>),
       CachedResponse,
       PrefetchHooks Function()
     >;
@@ -1127,8 +1266,7 @@ typedef $$FavouriteTeamsTableUpdateCompanionBuilder =
       Value<DateTime> addedAt,
     });
 
-class $$FavouriteTeamsTableFilterComposer
-    extends Composer<_$CacheDb, $FavouriteTeamsTable> {
+class $$FavouriteTeamsTableFilterComposer extends Composer<_$CacheDb, $FavouriteTeamsTable> {
   $$FavouriteTeamsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -1136,29 +1274,20 @@ class $$FavouriteTeamsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get teamId => $composableBuilder(
-    column: $table.teamId,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<int> get teamId =>
+      $composableBuilder(column: $table.teamId, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get name => $composableBuilder(
-    column: $table.name,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get logoUrl => $composableBuilder(
-    column: $table.logoUrl,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<String> get logoUrl =>
+      $composableBuilder(column: $table.logoUrl, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<DateTime> get addedAt => $composableBuilder(
-    column: $table.addedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<DateTime> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => ColumnFilters(column));
 }
 
-class $$FavouriteTeamsTableOrderingComposer
-    extends Composer<_$CacheDb, $FavouriteTeamsTable> {
+class $$FavouriteTeamsTableOrderingComposer extends Composer<_$CacheDb, $FavouriteTeamsTable> {
   $$FavouriteTeamsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -1166,29 +1295,20 @@ class $$FavouriteTeamsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get teamId => $composableBuilder(
-    column: $table.teamId,
-    builder: (column) => ColumnOrderings(column),
-  );
+  ColumnOrderings<int> get teamId =>
+      $composableBuilder(column: $table.teamId, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<String> get name => $composableBuilder(
-    column: $table.name,
-    builder: (column) => ColumnOrderings(column),
-  );
+  ColumnOrderings<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<String> get logoUrl => $composableBuilder(
-    column: $table.logoUrl,
-    builder: (column) => ColumnOrderings(column),
-  );
+  ColumnOrderings<String> get logoUrl =>
+      $composableBuilder(column: $table.logoUrl, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<DateTime> get addedAt => $composableBuilder(
-    column: $table.addedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
+  ColumnOrderings<DateTime> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => ColumnOrderings(column));
 }
 
-class $$FavouriteTeamsTableAnnotationComposer
-    extends Composer<_$CacheDb, $FavouriteTeamsTable> {
+class $$FavouriteTeamsTableAnnotationComposer extends Composer<_$CacheDb, $FavouriteTeamsTable> {
   $$FavouriteTeamsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -1220,10 +1340,7 @@ class $$FavouriteTeamsTableTableManager
           $$FavouriteTeamsTableAnnotationComposer,
           $$FavouriteTeamsTableCreateCompanionBuilder,
           $$FavouriteTeamsTableUpdateCompanionBuilder,
-          (
-            FavouriteTeam,
-            BaseReferences<_$CacheDb, $FavouriteTeamsTable, FavouriteTeam>,
-          ),
+          (FavouriteTeam, BaseReferences<_$CacheDb, $FavouriteTeamsTable, FavouriteTeam>),
           FavouriteTeam,
           PrefetchHooks Function()
         > {
@@ -1262,9 +1379,8 @@ class $$FavouriteTeamsTableTableManager
                 logoUrl: logoUrl,
                 addedAt: addedAt,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) =>
+              p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -1280,10 +1396,7 @@ typedef $$FavouriteTeamsTableProcessedTableManager =
       $$FavouriteTeamsTableAnnotationComposer,
       $$FavouriteTeamsTableCreateCompanionBuilder,
       $$FavouriteTeamsTableUpdateCompanionBuilder,
-      (
-        FavouriteTeam,
-        BaseReferences<_$CacheDb, $FavouriteTeamsTable, FavouriteTeam>,
-      ),
+      (FavouriteTeam, BaseReferences<_$CacheDb, $FavouriteTeamsTable, FavouriteTeam>),
       FavouriteTeam,
       PrefetchHooks Function()
     >;
@@ -1293,6 +1406,11 @@ typedef $$FollowedMatchesTableCreateCompanionBuilder =
       required String label,
       Value<DateTime?> kickoffAt,
       Value<bool> muted,
+      Value<bool> alertKickoff,
+      Value<bool> alertGoals,
+      Value<bool> alertRedCards,
+      Value<bool> alertHalfTime,
+      Value<bool> alertFullTime,
       required DateTime addedAt,
     });
 typedef $$FollowedMatchesTableUpdateCompanionBuilder =
@@ -1301,11 +1419,15 @@ typedef $$FollowedMatchesTableUpdateCompanionBuilder =
       Value<String> label,
       Value<DateTime?> kickoffAt,
       Value<bool> muted,
+      Value<bool> alertKickoff,
+      Value<bool> alertGoals,
+      Value<bool> alertRedCards,
+      Value<bool> alertHalfTime,
+      Value<bool> alertFullTime,
       Value<DateTime> addedAt,
     });
 
-class $$FollowedMatchesTableFilterComposer
-    extends Composer<_$CacheDb, $FollowedMatchesTable> {
+class $$FollowedMatchesTableFilterComposer extends Composer<_$CacheDb, $FollowedMatchesTable> {
   $$FollowedMatchesTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -1313,34 +1435,38 @@ class $$FollowedMatchesTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get fixtureId => $composableBuilder(
-    column: $table.fixtureId,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<int> get fixtureId =>
+      $composableBuilder(column: $table.fixtureId, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get label => $composableBuilder(
-    column: $table.label,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<DateTime> get kickoffAt => $composableBuilder(
-    column: $table.kickoffAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<DateTime> get kickoffAt =>
+      $composableBuilder(column: $table.kickoffAt, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<bool> get muted => $composableBuilder(
-    column: $table.muted,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<bool> get muted =>
+      $composableBuilder(column: $table.muted, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<DateTime> get addedAt => $composableBuilder(
-    column: $table.addedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnFilters<bool> get alertKickoff =>
+      $composableBuilder(column: $table.alertKickoff, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get alertGoals =>
+      $composableBuilder(column: $table.alertGoals, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get alertRedCards =>
+      $composableBuilder(column: $table.alertRedCards, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get alertHalfTime =>
+      $composableBuilder(column: $table.alertHalfTime, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get alertFullTime =>
+      $composableBuilder(column: $table.alertFullTime, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => ColumnFilters(column));
 }
 
-class $$FollowedMatchesTableOrderingComposer
-    extends Composer<_$CacheDb, $FollowedMatchesTable> {
+class $$FollowedMatchesTableOrderingComposer extends Composer<_$CacheDb, $FollowedMatchesTable> {
   $$FollowedMatchesTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -1348,34 +1474,44 @@ class $$FollowedMatchesTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get fixtureId => $composableBuilder(
-    column: $table.fixtureId,
+  ColumnOrderings<int> get fixtureId =>
+      $composableBuilder(column: $table.fixtureId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get kickoffAt =>
+      $composableBuilder(column: $table.kickoffAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get muted =>
+      $composableBuilder(column: $table.muted, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get alertKickoff =>
+      $composableBuilder(column: $table.alertKickoff, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get alertGoals =>
+      $composableBuilder(column: $table.alertGoals, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get alertRedCards => $composableBuilder(
+    column: $table.alertRedCards,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get label => $composableBuilder(
-    column: $table.label,
+  ColumnOrderings<bool> get alertHalfTime => $composableBuilder(
+    column: $table.alertHalfTime,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get kickoffAt => $composableBuilder(
-    column: $table.kickoffAt,
+  ColumnOrderings<bool> get alertFullTime => $composableBuilder(
+    column: $table.alertFullTime,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<bool> get muted => $composableBuilder(
-    column: $table.muted,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<DateTime> get addedAt => $composableBuilder(
-    column: $table.addedAt,
-    builder: (column) => ColumnOrderings(column),
-  );
+  ColumnOrderings<DateTime> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => ColumnOrderings(column));
 }
 
-class $$FollowedMatchesTableAnnotationComposer
-    extends Composer<_$CacheDb, $FollowedMatchesTable> {
+class $$FollowedMatchesTableAnnotationComposer extends Composer<_$CacheDb, $FollowedMatchesTable> {
   $$FollowedMatchesTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -1395,6 +1531,21 @@ class $$FollowedMatchesTableAnnotationComposer
   GeneratedColumn<bool> get muted =>
       $composableBuilder(column: $table.muted, builder: (column) => column);
 
+  GeneratedColumn<bool> get alertKickoff =>
+      $composableBuilder(column: $table.alertKickoff, builder: (column) => column);
+
+  GeneratedColumn<bool> get alertGoals =>
+      $composableBuilder(column: $table.alertGoals, builder: (column) => column);
+
+  GeneratedColumn<bool> get alertRedCards =>
+      $composableBuilder(column: $table.alertRedCards, builder: (column) => column);
+
+  GeneratedColumn<bool> get alertHalfTime =>
+      $composableBuilder(column: $table.alertHalfTime, builder: (column) => column);
+
+  GeneratedColumn<bool> get alertFullTime =>
+      $composableBuilder(column: $table.alertFullTime, builder: (column) => column);
+
   GeneratedColumn<DateTime> get addedAt =>
       $composableBuilder(column: $table.addedAt, builder: (column) => column);
 }
@@ -1410,10 +1561,7 @@ class $$FollowedMatchesTableTableManager
           $$FollowedMatchesTableAnnotationComposer,
           $$FollowedMatchesTableCreateCompanionBuilder,
           $$FollowedMatchesTableUpdateCompanionBuilder,
-          (
-            FollowedMatch,
-            BaseReferences<_$CacheDb, $FollowedMatchesTable, FollowedMatch>,
-          ),
+          (FollowedMatch, BaseReferences<_$CacheDb, $FollowedMatchesTable, FollowedMatch>),
           FollowedMatch,
           PrefetchHooks Function()
         > {
@@ -1434,12 +1582,22 @@ class $$FollowedMatchesTableTableManager
                 Value<String> label = const Value.absent(),
                 Value<DateTime?> kickoffAt = const Value.absent(),
                 Value<bool> muted = const Value.absent(),
+                Value<bool> alertKickoff = const Value.absent(),
+                Value<bool> alertGoals = const Value.absent(),
+                Value<bool> alertRedCards = const Value.absent(),
+                Value<bool> alertHalfTime = const Value.absent(),
+                Value<bool> alertFullTime = const Value.absent(),
                 Value<DateTime> addedAt = const Value.absent(),
               }) => FollowedMatchesCompanion(
                 fixtureId: fixtureId,
                 label: label,
                 kickoffAt: kickoffAt,
                 muted: muted,
+                alertKickoff: alertKickoff,
+                alertGoals: alertGoals,
+                alertRedCards: alertRedCards,
+                alertHalfTime: alertHalfTime,
+                alertFullTime: alertFullTime,
                 addedAt: addedAt,
               ),
           createCompanionCallback:
@@ -1448,17 +1606,26 @@ class $$FollowedMatchesTableTableManager
                 required String label,
                 Value<DateTime?> kickoffAt = const Value.absent(),
                 Value<bool> muted = const Value.absent(),
+                Value<bool> alertKickoff = const Value.absent(),
+                Value<bool> alertGoals = const Value.absent(),
+                Value<bool> alertRedCards = const Value.absent(),
+                Value<bool> alertHalfTime = const Value.absent(),
+                Value<bool> alertFullTime = const Value.absent(),
                 required DateTime addedAt,
               }) => FollowedMatchesCompanion.insert(
                 fixtureId: fixtureId,
                 label: label,
                 kickoffAt: kickoffAt,
                 muted: muted,
+                alertKickoff: alertKickoff,
+                alertGoals: alertGoals,
+                alertRedCards: alertRedCards,
+                alertHalfTime: alertHalfTime,
+                alertFullTime: alertFullTime,
                 addedAt: addedAt,
               ),
-          withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
-              .toList(),
+          withReferenceMapper: (p0) =>
+              p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -1474,10 +1641,7 @@ typedef $$FollowedMatchesTableProcessedTableManager =
       $$FollowedMatchesTableAnnotationComposer,
       $$FollowedMatchesTableCreateCompanionBuilder,
       $$FollowedMatchesTableUpdateCompanionBuilder,
-      (
-        FollowedMatch,
-        BaseReferences<_$CacheDb, $FollowedMatchesTable, FollowedMatch>,
-      ),
+      (FollowedMatch, BaseReferences<_$CacheDb, $FollowedMatchesTable, FollowedMatch>),
       FollowedMatch,
       PrefetchHooks Function()
     >;

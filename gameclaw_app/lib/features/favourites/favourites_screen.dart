@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/follows_client.dart';
 import '../../data/local/cache.dart';
 import '../../data/providers.dart';
 import '../../data/repository.dart';
@@ -122,7 +123,7 @@ class _Followed extends StatelessWidget {
             _MatchRow(
               match: match,
               onOpen: () => context.push('/following/match/${match.fixtureId}'),
-              onMute: () => ref.read(setMatchMutedProvider)(match.fixtureId, !match.muted),
+              onAlerts: () => _showAlertSheet(context, ref, match),
             ),
         ],
         if (teams.isNotEmpty)
@@ -179,11 +180,11 @@ class _TeamRow extends StatelessWidget {
 /// then stopped caring about mid-game is to silence it, not to unfollow and lose it from the
 /// list.
 class _MatchRow extends StatelessWidget {
-  const _MatchRow({required this.match, required this.onOpen, required this.onMute});
+  const _MatchRow({required this.match, required this.onOpen, required this.onAlerts});
 
   final FollowedMatch match;
   final VoidCallback onOpen;
-  final VoidCallback onMute;
+  final VoidCallback onAlerts;
 
   @override
   Widget build(BuildContext context) {
@@ -224,12 +225,141 @@ class _MatchRow extends StatelessWidget {
               icon: match.muted
                   ? Icons.notifications_off_outlined
                   : Icons.notifications_none_rounded,
-              tooltip: match.muted ? 'Unmute this match' : 'Mute this match',
-              onPressed: onMute,
+              tooltip: 'Alerts for this match',
+              onPressed: onAlerts,
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// What to be told about, for one match.
+///
+/// A sheet rather than a row of switches on the list: five choices and a mute is too much to put
+/// beside every match, and the useful default - tell me goals and the result - needs no visit
+/// here at all.
+Future<void> _showAlertSheet(BuildContext context, WidgetRef ref, FollowedMatch match) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: gc(context).surface,
+    showDragHandle: true,
+    builder: (sheetContext) => _AlertSheet(match: match, ref: ref),
+  );
+}
+
+class _AlertSheet extends StatefulWidget {
+  const _AlertSheet({required this.match, required this.ref});
+
+  final FollowedMatch match;
+  final WidgetRef ref;
+
+  @override
+  State<_AlertSheet> createState() => _AlertSheetState();
+}
+
+class _AlertSheetState extends State<_AlertSheet> {
+  late bool _muted = widget.match.muted;
+  late AlertPrefs _prefs = AlertPrefs(
+    kickoff: widget.match.alertKickoff,
+    goals: widget.match.alertGoals,
+    redCards: widget.match.alertRedCards,
+    halfTime: widget.match.alertHalfTime,
+    fullTime: widget.match.alertFullTime,
+  );
+
+  void _save(AlertPrefs next) {
+    setState(() => _prefs = next);
+    widget.ref.read(setMatchAlertsProvider)(widget.match.fixtureId, next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(GcSpace.gutter, 0, GcSpace.gutter, GcSpace.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.match.label, style: GcType.bodyStrong),
+            const SizedBox(height: GcSpace.xs),
+            Text('Tell me about', style: GcType.caption.copyWith(color: gc(context).inkFaint)),
+            const SizedBox(height: GcSpace.sm),
+            _Toggle(
+              label: 'Kick-off',
+              value: _prefs.kickoff,
+              enabled: !_muted,
+              onChanged: (v) => _save(_prefs.copyWith(kickoff: v)),
+            ),
+            _Toggle(
+              label: 'Goals',
+              value: _prefs.goals,
+              enabled: !_muted,
+              onChanged: (v) => _save(_prefs.copyWith(goals: v)),
+            ),
+            _Toggle(
+              label: 'Red cards',
+              value: _prefs.redCards,
+              enabled: !_muted,
+              onChanged: (v) => _save(_prefs.copyWith(redCards: v)),
+            ),
+            _Toggle(
+              label: 'Half time',
+              value: _prefs.halfTime,
+              enabled: !_muted,
+              onChanged: (v) => _save(_prefs.copyWith(halfTime: v)),
+            ),
+            _Toggle(
+              label: 'Full time',
+              value: _prefs.fullTime,
+              enabled: !_muted,
+              onChanged: (v) => _save(_prefs.copyWith(fullTime: v)),
+            ),
+            const Divider(height: GcSpace.xl),
+            // Separate from the five, because muting is "none of the above, for now" rather than
+            // a sixth kind of event. Unmuting brings back exactly what was chosen before.
+            _Toggle(
+              label: 'Mute this match',
+              value: _muted,
+              enabled: true,
+              onChanged: (v) {
+                setState(() => _muted = v);
+                widget.ref.read(setMatchMutedProvider)(widget.match.fixtureId, v);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Toggle extends StatelessWidget {
+  const _Toggle({
+    required this.label,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text(
+        label,
+        style: GcType.body.copyWith(color: enabled ? gc(context).ink : gc(context).inkFaint),
+      ),
+      value: value && enabled,
+      onChanged: enabled ? onChanged : null,
     );
   }
 }

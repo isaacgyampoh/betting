@@ -61,6 +61,7 @@ class FavouriteTeams extends Table {
 class FollowedMatches extends Table {
   IntColumn get fixtureId => integer()();
   TextColumn get label => text()();
+
   /// Named `At`, not `Utc`, because drift stores a DateTime as epoch seconds and hands it
   /// back with isUtc false - the instant is preserved exactly, but expressed in local time.
   /// Calling it Utc invited reading the wall-clock numbers as UTC, which is only harmless in a
@@ -69,6 +70,18 @@ class FollowedMatches extends Table {
 
   /// Silenced without unfollowing: it stays on the Following screen, it just says nothing.
   BoolColumn get muted => boolean().withDefault(const Constant(false))();
+
+  /// Which events should produce an alert, mirrored from the server so the sheet opens
+  /// instantly and can be changed with no signal. The server copy is authoritative - it is what
+  /// actually decides whether a notification is sent - and `syncFollows` reconciles them.
+  ///
+  /// Half-time defaults off here for the same reason it does on the server: it is the one people
+  /// switch off first.
+  BoolColumn get alertKickoff => boolean().withDefault(const Constant(true))();
+  BoolColumn get alertGoals => boolean().withDefault(const Constant(true))();
+  BoolColumn get alertRedCards => boolean().withDefault(const Constant(true))();
+  BoolColumn get alertHalfTime => boolean().withDefault(const Constant(false))();
+  BoolColumn get alertFullTime => boolean().withDefault(const Constant(true))();
   DateTimeColumn get addedAt => dateTime()();
 
   @override
@@ -83,7 +96,7 @@ class CacheDb extends _$CacheDb {
   CacheDb.memory() : super(NativeDatabase.memory());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   /// Without this, adding a table breaks every phone that already has the app.
   ///
@@ -99,6 +112,15 @@ class CacheDb extends _$CacheDb {
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
       if (from < 2) await m.createTable(followedMatches);
+      if (from < 3) {
+        // Added one at a time, and only the ones missing. addColumn is additive, so an existing
+        // row keeps its follow and simply gains the defaults.
+        await m.addColumn(followedMatches, followedMatches.alertKickoff);
+        await m.addColumn(followedMatches, followedMatches.alertGoals);
+        await m.addColumn(followedMatches, followedMatches.alertRedCards);
+        await m.addColumn(followedMatches, followedMatches.alertHalfTime);
+        await m.addColumn(followedMatches, followedMatches.alertFullTime);
+      }
     },
   );
 
@@ -115,19 +137,41 @@ class CacheDb extends _$CacheDb {
   Stream<List<FollowedMatch>> watchFollowedMatches() =>
       (select(followedMatches)..orderBy([(t) => OrderingTerm.asc(t.kickoffAt)])).watch();
 
+  /// Follows a match, or refreshes its label if it is already followed.
+  ///
+  /// A companion rather than the row class, so only the columns this sets are written: the alert
+  /// flags keep their values on a re-follow, and a column added later takes its default instead
+  /// of breaking this call. Writing the whole row would silently reset preferences every time a
+  /// label was refreshed.
   Future<void> followMatch(int fixtureId, String label, DateTime? kickoffAt) =>
       into(followedMatches).insertOnConflictUpdate(
-        FollowedMatch(
-          fixtureId: fixtureId,
+        FollowedMatchesCompanion.insert(
+          fixtureId: Value(fixtureId),
           label: label,
-          kickoffAt: kickoffAt,
-          muted: false,
+          kickoffAt: Value(kickoffAt),
           addedAt: DateTime.now().toUtc(),
         ),
       );
 
   Future<void> unfollowMatch(int fixtureId) =>
       (delete(followedMatches)..where((t) => t.fixtureId.equals(fixtureId))).go();
+
+  Future<void> setMatchAlerts(
+    int fixtureId, {
+    required bool kickoff,
+    required bool goals,
+    required bool redCards,
+    required bool halfTime,
+    required bool fullTime,
+  }) => (update(followedMatches)..where((t) => t.fixtureId.equals(fixtureId))).write(
+    FollowedMatchesCompanion(
+      alertKickoff: Value(kickoff),
+      alertGoals: Value(goals),
+      alertRedCards: Value(redCards),
+      alertHalfTime: Value(halfTime),
+      alertFullTime: Value(fullTime),
+    ),
+  );
 
   Future<void> setMatchMuted(int fixtureId, bool muted) =>
       (update(followedMatches)..where((t) => t.fixtureId.equals(fixtureId))).write(

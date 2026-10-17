@@ -45,7 +45,12 @@ export const POST = route(async (req) => {
   const body = await parseBody(req, followSchema);
 
   const row = await follow(user.id, body.kind, body.targetId, {
-    label: body.label ?? null,
+    // `body.label`, not `body.label ?? null`. The service distinguishes "no label given, leave
+    // it alone" (undefined) from "clear the label" (null), and collapsing the first into the
+    // second wiped the label of every follow whenever the app changed an alert - which it does
+    // without sending one. Found on the device: toggling goals off emptied "Valencia v Athletic
+    // Club" on the server.
+    label: body.label,
     alerts: body.alerts,
   });
   if (body.muted !== undefined) {

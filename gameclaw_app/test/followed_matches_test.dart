@@ -80,6 +80,39 @@ void main() {
     expect(seen.last, 2);
   });
 
+  test('alerts default to kickoff, goals, red cards and full time', () async {
+    await db.followMatch(1, 'A v B', null);
+    final row = (await db.allFollowedMatches()).single;
+    expect(row.alertKickoff, isTrue);
+    expect(row.alertGoals, isTrue);
+    expect(row.alertRedCards, isTrue);
+    expect(row.alertFullTime, isTrue);
+    // The one people switch off first.
+    expect(row.alertHalfTime, isFalse);
+  });
+
+  test('re-following refreshes the label without resetting alerts', () async {
+    await db.followMatch(1, 'A v B', null);
+    await db.setMatchAlerts(
+      1,
+      kickoff: false,
+      goals: false,
+      redCards: true,
+      halfTime: true,
+      fullTime: false,
+    );
+    // The app refreshes labels opportunistically. Writing the whole row would quietly undo what
+    // somebody chose to hear about, which is why the insert uses a partial companion.
+    await db.followMatch(1, 'Arsenal v Brentford', null);
+
+    final row = (await db.allFollowedMatches()).single;
+    expect(row.label, 'Arsenal v Brentford');
+    expect(row.alertKickoff, isFalse);
+    expect(row.alertGoals, isFalse);
+    expect(row.alertHalfTime, isTrue);
+    expect(row.alertFullTime, isFalse);
+  });
+
   test('ordering is by kickoff, so the next match is first', () async {
     await db.followMatch(1, 'Later', DateTime.utc(2026, 10, 18, 20));
     await db.followMatch(2, 'Sooner', DateTime.utc(2026, 10, 18, 12));
