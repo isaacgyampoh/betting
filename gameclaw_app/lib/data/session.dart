@@ -86,8 +86,12 @@ class SessionController extends AsyncNotifier<AuthSession?> {
     state = const AsyncData(null);
     await ref.read(secureStoreProvider).clear();
     if (current != null) {
-      // Tell Supabase too, so the refresh token cannot be used again from anywhere else.
-      await ref.read(authClientProvider).signOut(current.accessToken);
+      // Tell the server too, so the refresh token cannot be used again from anywhere else.
+      // Both tokens are passed because the two backends revoke by different ones; see
+      // AuthClient.signOut.
+      await ref
+          .read(authClientProvider)
+          .signOut(current.accessToken, refreshToken: current.refreshToken);
     }
   }
 }

@@ -16,16 +16,28 @@ import 'api_client.dart';
 /// shipped it in its bundle - so it is not a secret being leaked into an APK. The service key,
 /// which does grant everything, is not here and never will be.
 class SupabaseConfig {
-  const SupabaseConfig({required this.url, required this.anonKey}) : googleServerClientId = '';
+  const SupabaseConfig({required this.url, required this.anonKey})
+    : googleServerClientId = '',
+      authBase = '';
 
   const SupabaseConfig.withGoogle({
     required this.url,
     required this.anonKey,
     required this.googleServerClientId,
-  });
+  }) : authBase = '';
 
   static const _url = String.fromEnvironment('GC_SUPABASE_URL');
   static const _anonKey = String.fromEnvironment('GC_SUPABASE_ANON_KEY');
+
+  /// GameClaw's own auth endpoints, e.g. https://gameclaw-api.onrender.com/api/v1.
+  ///
+  /// When this is set the app signs in against GameClaw and Supabase is not involved at all.
+  /// Left empty, it falls back to Supabase, which is what every build did before the move and
+  /// what still works while the old backend is up.
+  ///
+  /// Two backends rather than one switch thrown at midnight: the Supabase path is the rollback,
+  /// and it costs one build flag to go back to it.
+  static const _authBase = String.fromEnvironment('GC_AUTH_BASE');
 
   /// The **Web** OAuth client id, not the Android one.
   ///
@@ -36,19 +48,31 @@ class SupabaseConfig {
   /// has to hand over. Supplying the Android id here produces a token Supabase rejects.
   static const _googleServerClientId = String.fromEnvironment('GC_GOOGLE_SERVER_CLIENT_ID');
 
-  factory SupabaseConfig.fromEnvironment() => const SupabaseConfig.withGoogle(
-    url: _url,
-    anonKey: _anonKey,
-    googleServerClientId: _googleServerClientId,
-  );
+  const SupabaseConfig.gameclaw({required this.authBase, required this.googleServerClientId})
+    : url = '',
+      anonKey = '';
+
+  factory SupabaseConfig.fromEnvironment() => _authBase.isNotEmpty
+      ? SupabaseConfig.gameclaw(authBase: _authBase, googleServerClientId: _googleServerClientId)
+      : const SupabaseConfig.withGoogle(
+          url: _url,
+          anonKey: _anonKey,
+          googleServerClientId: _googleServerClientId,
+        );
 
   final String url;
   final String anonKey;
   final String googleServerClientId;
 
+  /// Empty on a Supabase build.
+  final String authBase;
+
+  /// True when sign-in goes to GameClaw's own API rather than Supabase.
+  bool get isGameClaw => authBase.isNotEmpty;
+
   /// False in a build with no auth flags passed. The sign-in screen then says so plainly rather
   /// than offering a form that cannot work.
-  bool get isConfigured => url.isNotEmpty && anonKey.isNotEmpty;
+  bool get isConfigured => isGameClaw || (url.isNotEmpty && anonKey.isNotEmpty);
 
   /// Whether this build can offer Google at all. False is a configuration fact, not a failure,
   /// and the screen says which piece is missing rather than showing a button that dead-ends.
@@ -150,13 +174,16 @@ class AuthClient {
           dio ??
           Dio(
             BaseOptions(
-              baseUrl: '${config.url}/auth/v1',
+              baseUrl: config.isGameClaw ? '${config.authBase}/auth' : '${config.url}/auth/v1',
               connectTimeout: const Duration(seconds: 10),
               receiveTimeout: const Duration(seconds: 20),
               validateStatus: (_) => true,
               headers: {
-                'apikey': config.anonKey,
-                'authorization': 'Bearer ${config.anonKey}',
+                // Supabase wants its anon key on every call and identifies the project by it.
+                // GameClaw's own endpoints are public by design - they are how you *get* a
+                // token - so they need no key, and sending one would be noise.
+                if (!config.isGameClaw) 'apikey': config.anonKey,
+                if (!config.isGameClaw) 'authorization': 'Bearer ${config.anonKey}',
                 'content-type': 'application/json',
               },
             ),
@@ -229,10 +256,9 @@ class AuthClient {
       );
     }
 
-    final body = await _post('/token?grant_type=id_token', {
-      'provider': 'google',
-      'id_token': idToken,
-    });
+    final body = _config.isGameClaw
+        ? await _post('/google', {'id_token': idToken})
+        : await _post('/token?grant_type=id_token', {'provider': 'google', 'id_token': idToken});
     final session = AuthSession.fromAuthResponse(body);
     if (session == null) throw const UnknownFailure('Signed in, but no session came back.');
     return session;
@@ -251,20 +277,32 @@ class AuthClient {
   }
 
   Future<AuthSession> refresh(String refreshToken) async {
-    final body = await _post('/token?grant_type=refresh_token', {'refresh_token': refreshToken});
+    final body = _config.isGameClaw
+        ? await _post('/refresh', {'refresh_token': refreshToken})
+        : await _post('/token?grant_type=refresh_token', {'refresh_token': refreshToken});
     final session = AuthSession.fromAuthResponse(body);
     if (session == null) throw const UnauthorizedFailure();
     return session;
   }
 
-  /// Best effort. A sign-out that fails at Supabase still clears the session on this device, which
-  /// is what the user asked for and the part that matters on a shared phone.
-  Future<void> signOut(String accessToken) async {
+  /// Best effort. A sign-out that fails at the server still clears the session on this device,
+  /// which is what the user asked for and the part that matters on a shared phone.
+  ///
+  /// The two backends revoke different things. Supabase is told which session by the access
+  /// token in the header. GameClaw revokes the **refresh** token, because that is the one that
+  /// outlives the request - an access token expires within the hour on its own, and leaving the
+  /// refresh token alive would mean the session could be resumed after the user signed out.
+  Future<void> signOut(String accessToken, {String? refreshToken}) async {
     try {
-      await _dio.post<dynamic>(
-        '/logout',
-        options: Options(headers: {'authorization': 'Bearer $accessToken'}),
-      );
+      if (_config.isGameClaw) {
+        if (refreshToken == null || refreshToken.isEmpty) return;
+        await _dio.post<dynamic>('/logout', data: jsonEncode({'refresh_token': refreshToken}));
+      } else {
+        await _dio.post<dynamic>(
+          '/logout',
+          options: Options(headers: {'authorization': 'Bearer $accessToken'}),
+        );
+      }
     } on DioException {
       // Ignore.
     }
@@ -292,16 +330,25 @@ class AuthClient {
     final data = response.data;
     final json = data is Map<String, dynamic> ? data : const <String, dynamic>{};
 
-    if (status >= 200 && status < 300) return json;
+    if (status >= 200 && status < 300) {
+      // GameClaw wraps every success in {"data": …}; Supabase returns the token object bare.
+      final payload = json['data'];
+      return payload is Map<String, dynamic> ? payload : json;
+    }
 
     // Supabase words its own refusals well - "Invalid login credentials", "User already
     // registered" - and they are better than anything generic. Its newer shape is
     // { error_code, msg }; the older one is { error, error_description }.
+    // GameClaw: {"error": {"code", "message"}}. Supabase's newer shape is {error_code, msg} and
+    // its older one {error, error_description}. Both word their refusals better than anything
+    // generic this could substitute, so the server's wording is preferred wherever it exists.
+    final nested = json['error'];
     final message =
+        (nested is Map<String, dynamic> ? nested['message'] as String? : null) ??
         json['msg'] as String? ??
         json['error_description'] as String? ??
         json['message'] as String? ??
-        (json['error'] is String ? json['error'] as String : null);
+        (nested is String ? nested : null);
 
     if (status == 400 || status == 401 || status == 422) {
       throw ServerFailure(message ?? 'Those details were not accepted.', status: status);

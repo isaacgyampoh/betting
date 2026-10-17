@@ -267,6 +267,11 @@ class _FakeAuth implements AuthClient {
         : const SignUpResult(session: null, needsEmailConfirmation: true);
   }
 
+  String? revokedRefreshToken;
+
   @override
-  Future<void> signOut(String accessToken) async => signedOut = true;
+  Future<void> signOut(String accessToken, {String? refreshToken}) async {
+    signedOut = true;
+    revokedRefreshToken = refreshToken;
+  }
 }
