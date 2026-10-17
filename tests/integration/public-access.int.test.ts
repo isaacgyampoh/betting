@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { optionalAdult } from "@/lib/auth";
-import { enforceRateLimit, logUsage, meterPublicBrowse, PUBLIC_BROWSE_LIMIT } from "@/lib/services/usage";
+import { enforceRateLimit, meterPublicBrowse, PUBLIC_BROWSE_LIMIT } from "@/lib/services/usage";
 import { createUser } from "./helpers";
 
 /**
