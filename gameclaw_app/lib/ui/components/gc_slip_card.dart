@@ -299,11 +299,23 @@ class _SelectionRow extends StatelessWidget {
               ),
               if (onRemove != null) ...[
                 const SizedBox(width: GcSpace.xs),
-                GcIconButton(
-                  icon: Icons.close_rounded,
-                  colour: gc(context).inkFaint,
-                  tooltip: 'Remove ${selection.home} v ${selection.away}',
-                  onPressed: onRemove,
+                // The icon button carries a full 44dp touch target, which in a list this dense
+                // doubles the height of every row and pushes the market line away from the teams
+                // it belongs to. The target stays - it is what makes this tappable for everyone -
+                // and only the space it reserves is clipped back.
+                SizedBox(
+                  width: 28,
+                  height: 24,
+                  child: OverflowBox(
+                    maxWidth: GcSize.touch,
+                    maxHeight: GcSize.touch,
+                    child: GcIconButton(
+                      icon: Icons.close_rounded,
+                      colour: gc(context).inkFaint,
+                      tooltip: 'Remove ${selection.home} v ${selection.away}',
+                      onPressed: onRemove,
+                    ),
+                  ),
                 ),
               ],
             ],

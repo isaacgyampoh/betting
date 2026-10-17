@@ -14,6 +14,7 @@ class ConvertState {
     this.result,
     this.busy = false,
     this.error,
+    this.candidates = const [],
   });
 
   final ConvertStage stage;
@@ -29,12 +30,17 @@ class ConvertState {
   final bool busy;
   final ApiFailure? error;
 
+  /// Bookmakers a refusal named as possible sources of the pasted code. Empty unless the server
+  /// asked which one it was from.
+  final List<Bookmaker> candidates;
+
   ConvertState copyWith({
     ConvertStage? stage,
     Slip? source,
     Slip? result,
     bool? busy,
     ApiFailure? error,
+    List<Bookmaker>? candidates,
     bool clearError = false,
   }) => ConvertState(
     stage: stage ?? this.stage,
@@ -42,6 +48,7 @@ class ConvertState {
     result: result ?? this.result,
     busy: busy ?? this.busy,
     error: clearError ? null : (error ?? this.error),
+    candidates: clearError ? const [] : (candidates ?? this.candidates),
   );
 }
 
@@ -67,8 +74,29 @@ class ConvertController extends Notifier<ConvertState> {
     } on ApiFailure catch (failure) {
       // The server's own wording is better than anything here: it knows whether the code was
       // malformed, expired, for a bookmaker we cannot read, or simply not found.
-      state = state.copyWith(busy: false, error: failure);
+      //
+      // One of its refusals is a question. SportyBet and Football.com share a coupon namespace,
+      // so a code valid on both comes back asking which one it is from - and the candidates come
+      // with it. Carrying them through is what turns that from a dead end into a choice.
+      state = state.copyWith(busy: false, error: failure, candidates: _candidatesIn(failure));
     }
+  }
+
+  /// The bookmakers a refusal named as possible sources, if it named any.
+  List<Bookmaker> _candidatesIn(ApiFailure failure) {
+    if (failure is! ServerFailure || failure.code != 'AMBIGUOUS_BOOKMAKER') return const [];
+    final raw = failure.details?['candidates'];
+    if (raw is! List) return const [];
+    return [
+      for (final c in raw)
+        if (c is Map<String, dynamic>)
+          Bookmaker(
+            slug: c['slug'] as String? ?? '',
+            name: c['name'] as String? ?? '',
+            canLoad: true,
+            canBook: false,
+          ),
+    ];
   }
 
   Future<void> convert(String target) async {

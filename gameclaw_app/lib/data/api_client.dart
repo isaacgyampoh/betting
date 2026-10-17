@@ -77,9 +77,16 @@ class ForbiddenFailure extends ApiFailure {
 /// The server answered with a refusal and its own message, which is better than anything
 /// invented here - it knows why.
 class ServerFailure extends ApiFailure {
-  const ServerFailure(super.message, {required this.status, this.code});
+  const ServerFailure(super.message, {required this.status, this.code, this.details});
   final int status;
   final String? code;
+
+  /// Whatever the server attached to explain the refusal.
+  ///
+  /// Some refusals are questions. "That code works on more than one bookmaker. Which one is it
+  /// from?" arrives with the candidates in here - and without them the screen asks a question it
+  /// gives no way to answer, which is worse than not asking.
+  final Map<String, dynamic>? details;
 }
 
 class UnknownFailure extends ApiFailure {
@@ -205,6 +212,7 @@ class ApiClient {
         message ?? 'The server could not complete that request.',
         status: status,
         code: code,
+        details: error?['details'] as Map<String, dynamic>?,
       );
     }
 

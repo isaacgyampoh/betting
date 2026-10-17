@@ -140,6 +140,9 @@ class _ConvertScreenState extends ConsumerState<ConvertScreen> {
                   bookmakers: bookmakers,
                   onPaste: _paste,
                   onSubmit: () => ref.read(convertProvider.notifier).load(_code.text),
+                  candidates: state.candidates,
+                  onPickBookmaker: (slug) =>
+                      ref.read(convertProvider.notifier).load(_code.text, bookmaker: slug),
                 ),
                 ConvertStage.loaded => _Loaded(
                   slip: state.source!,
@@ -173,9 +176,11 @@ class _Entry extends StatelessWidget {
     required this.controller,
     required this.busy,
     required this.error,
+    required this.candidates,
     required this.bookmakers,
     required this.onPaste,
     required this.onSubmit,
+    required this.onPickBookmaker,
   });
 
   final TextEditingController controller;
@@ -184,6 +189,12 @@ class _Entry extends StatelessWidget {
   final AsyncValue<List<Bookmaker>> bookmakers;
   final VoidCallback onPaste;
   final VoidCallback onSubmit;
+
+  /// Answers "which bookmaker is this code from?" by re-reading it with one named.
+  final ValueChanged<String> onPickBookmaker;
+
+  /// The bookmakers the server named as possible sources. Empty unless it asked.
+  final List<Bookmaker> candidates;
 
   @override
   Widget build(BuildContext context) {
@@ -249,6 +260,26 @@ class _Entry extends StatelessWidget {
               ),
             ],
           ),
+          // SportyBet and Football.com share a coupon namespace, so a code valid on both comes
+          // back as a question. Asking it without offering the answer is worse than not asking:
+          // the user has no way to say which bookmaker theirs came from.
+          if (candidates.isNotEmpty) ...[
+            const SizedBox(height: GcSpace.md),
+            Wrap(
+              spacing: GcSpace.sm,
+              runSpacing: GcSpace.sm,
+              children: [
+                for (final b in candidates)
+                  GcButton(
+                    label: b.name,
+                    kind: GcButtonKind.secondary,
+                    size: GcButtonSize.small,
+                    expand: false,
+                    onPressed: busy ? null : () => onPickBookmaker(b.slug),
+                  ),
+              ],
+            ),
+          ],
         ],
         const SizedBox(height: GcSpace.xl),
         // What is genuinely connected, read from the server rather than listed hopefully. A
@@ -407,7 +438,12 @@ class _Result extends StatelessWidget {
   Widget build(BuildContext context) {
     final booked = result.code != null;
     final carried = result.selections.where((s) => s.status.isOk).length;
-    final lost = source.selectionCount - carried;
+
+    // Against what this slip still holds, not against the slip that was pasted. Subtracting from
+    // the source counted a selection the user removed themselves as one the bookmaker could not
+    // carry - "3 of 4 carried across, 1 could not be" after they had deliberately dropped the
+    // fourth. Blaming the conversion for the user's own edit is both wrong and alarming.
+    final lost = result.selections.length - carried;
 
     return Column(
       children: [
@@ -417,48 +453,53 @@ class _Result extends StatelessWidget {
             children: [
               // The headline is the truth of it. A slip that was built but not booked is not a
               // successful conversion, and saying so here is the whole point of the screen.
-              Container(
-                padding: const EdgeInsets.all(GcSpace.md),
-                decoration: BoxDecoration(
-                  color: (booked ? gc(context).win : gc(context).warn).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(GcRadius.md),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      booked ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
-                      size: 17,
-                      color: booked ? gc(context).win : gc(context).warn,
-                    ),
-                    const SizedBox(width: GcSpace.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            booked
-                                ? 'Booked on ${result.bookmakerName}'
-                                : 'Not booked on ${result.bookmakerName}',
-                            style: GcType.label.copyWith(
-                              color: booked ? gc(context).win : gc(context).warn,
-                            ),
-                          ),
-                          const SizedBox(height: GcSpace.xxs),
-                          Text(
-                            booked
-                                ? '$carried of ${source.selectionCount} selections carried across.'
-                                      '${lost > 0 ? ' $lost could not be.' : ''}'
-                                : 'The destination issued no booking code, so there is nothing to '
-                                      'enter at the counter.',
-                            style: GcType.caption,
-                          ),
-                        ],
+              // Only once a booking has actually been attempted. A draft has not failed to get a
+              // code - it has not asked for one yet, and the card below says so and offers the
+              // button. Showing "the destination issued no booking code" over a draft reports a
+              // failure that never happened.
+              if (booked)
+                Container(
+                  padding: const EdgeInsets.all(GcSpace.md),
+                  decoration: BoxDecoration(
+                    color: (booked ? gc(context).win : gc(context).warn).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(GcRadius.md),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        booked ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
+                        size: 17,
+                        color: booked ? gc(context).win : gc(context).warn,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: GcSpace.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              booked
+                                  ? 'Booked on ${result.bookmakerName}'
+                                  : 'Not booked on ${result.bookmakerName}',
+                              style: GcType.label.copyWith(
+                                color: booked ? gc(context).win : gc(context).warn,
+                              ),
+                            ),
+                            const SizedBox(height: GcSpace.xxs),
+                            Text(
+                              booked
+                                  ? '$carried of ${result.selections.length} selections carried across.'
+                                        '${lost > 0 ? ' $lost could not be.' : ''}'
+                                  : 'The destination issued no booking code, so there is nothing to '
+                                        'enter at the counter.',
+                              style: GcType.caption,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
               if (lost > 0) ...[
                 const SizedBox(height: GcSpace.md),
                 const GcNote(
