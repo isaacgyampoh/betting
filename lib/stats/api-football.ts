@@ -302,17 +302,47 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
   }
 
   /** A plan limit applies to a whole kind of query (e.g. every team's `last=` form), not one request. */
+  /**
+   * Capability markers, remembered in the isolate for a minute.
+   *
+   * Every section of a match centre asks whether its capability is plan-blocked, and the answer
+   * is almost always "no row". That is six database round trips per match centre, through
+   * Hyperdrive, to learn nothing - on a request whose warm total is about seven hundred
+   * milliseconds and whose cold total is dominated by exactly this kind of round trip.
+   *
+   * A minute is the right staleness to accept. A plan limit is a fact about the subscription,
+   * not about a fixture; it changes when the plan changes, which is roughly never, and the worst
+   * case is that a newly recorded limit takes up to a minute to be noticed.
+   */
+  const capabilityChecked = new Map<string, number>();
+  const CAPABILITY_MEMO_MS = 60_000;
+
   async function capabilityBlocked(capability: string): Promise<void> {
     const key = `capability:${capability}`;
+    const clearedAt = capabilityChecked.get(key);
+    if (clearedAt !== undefined && Date.now() - clearedAt < CAPABILITY_MEMO_MS) return;
+
     const hit = await db.statsCache.findUnique({ where: { key } });
-    const marker = hit?.payload as Record<string, unknown> | undefined;
-    if (!hit || hit.expiresAt <= new Date() || !marker || !(PLAN_LIMITED in marker)) return;
+    if (!hit) {
+      // Nothing recorded against this capability. Remember that, which is the common case.
+      capabilityChecked.set(key, Date.now());
+      return;
+    }
+    const marker = hit.payload as Record<string, unknown> | undefined;
+    if (hit.expiresAt <= new Date() || !marker || !(PLAN_LIMITED in marker)) {
+      // A row, but not a live limit. Also worth remembering: it is still "not blocked".
+      capabilityChecked.set(key, Date.now());
+      return;
+    }
     if (await planLimitStillApplies(key, marker, capability)) {
       throw new StatsPlanLimitError(capability, String(marker[PLAN_LIMITED]));
     }
+    capabilityChecked.set(key, Date.now());
   }
 
   async function rememberPlanLimit(key: string, endpoint: string, params: Params, message: string) {
+    // A limit was just recorded, so the memo that said "not blocked" is now wrong.
+    capabilityChecked.delete(key);
     const marker = { [PLAN_LIMITED]: message, [PLAN_AT]: await currentPlan() } as unknown as Prisma.InputJsonValue;
     const expiresAt = new Date(Date.now() + PLAN_LIMIT_TTL_MS);
     await writeCache(key, endpoint, params, marker as Prisma.InputJsonValue, expiresAt);
@@ -407,6 +437,20 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
       waiting.shift()?.();
     }
   }
+
+  /**
+   * How long a fixture's own panels are worth keeping.
+   *
+   * A finished match is finished: its timeline, its statistics and its line-ups cannot change
+   * again, ever. They were being cached for two minutes - the same as a game in play - so every
+   * visit to a result from yesterday re-fetched all three from the provider. Measured on the
+   * deployed Worker, a match centre opened twice in a row still cost five upstream calls the
+   * second time, and that was the reason.
+   *
+   * A day, not for ever, because a provider does sometimes correct a result after the fact.
+   */
+  const SETTLED_TTL_MS = 24 * 60 * 60_000;
+  const settledTtl = (settled: boolean, live: number) => (settled ? SETTLED_TTL_MS : live);
 
   async function fetchOnce<T>(endpoint: string, params: Params, ttlMs: number, capability?: string, attempt = 0): Promise<T[]> {
     if (capability) await capabilityBlocked(capability);
@@ -536,8 +580,8 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
      * Goals, cards and substitutions. Cached briefly while a match is live and for a day once it
      * is not: a finished timeline never changes, and a live one is the point of opening the page.
      */
-    async events(fixtureId, homeTeamId) {
-      const rows = await call<ApiEvent>("/fixtures/events", { fixture: fixtureId }, 2 * MIN, "fixtures-events");
+    async events(fixtureId, homeTeamId, settled = false) {
+      const rows = await call<ApiEvent>("/fixtures/events", { fixture: fixtureId }, settledTtl(settled, 2 * MIN), "fixtures-events");
       return rows
         .map((e) => toMatchEvent(e, homeTeamId))
         .sort((a, b) => a.minute - b.minute || (a.extra ?? 0) - (b.extra ?? 0));
@@ -549,16 +593,16 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
      * An empty array means the competition does not carry them. That is not an error, and it is
      * only distinguishable from "nothing has happened yet" via the coverage flag.
      */
-    async statistics(fixtureId, homeTeamId) {
-      const rows = await call<ApiStatistics>("/fixtures/statistics", { fixture: fixtureId }, 2 * MIN, "fixtures-statistics");
+    async statistics(fixtureId, homeTeamId, settled = false) {
+      const rows = await call<ApiStatistics>("/fixtures/statistics", { fixture: fixtureId }, settledTtl(settled, 2 * MIN), "fixtures-statistics");
       return homeFirst(rows.map(toTeamStatistics), homeTeamId);
     },
     /**
      * Line-ups. Published about an hour before kick-off and unchanged afterwards, so cached for
      * longer than the live panels.
      */
-    async lineups(fixtureId, homeTeamId) {
-      const rows = await call<ApiLineup>("/fixtures/lineups", { fixture: fixtureId }, 10 * MIN, "fixtures-lineups");
+    async lineups(fixtureId, homeTeamId, settled = false) {
+      const rows = await call<ApiLineup>("/fixtures/lineups", { fixture: fixtureId }, settledTtl(settled, 10 * MIN), "fixtures-lineups");
       return homeFirst(rows.map(toLineup), homeTeamId);
     },
     /** A team's own details. Clubs are renamed and rebuilt rarely, so this is cached for a day. */

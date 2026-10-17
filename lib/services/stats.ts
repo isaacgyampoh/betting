@@ -305,6 +305,7 @@ export async function getMatchDetail(
   const skip = async <T,>(empty: T) => empty;
 
   const { timeline: timelinePossible, lineups: lineupsPossible } = sectionsPossibleFor(match);
+  const settled = match.status === "FINISHED" || match.status === "CANCELLED";
 
   /**
    * Ask the competition what it carries before asking it for anything.
@@ -347,9 +348,11 @@ export async function getMatchDetail(
     want.has("form") ? section("form", () => provider.lastFixtures(match.away.id, FORM_GAMES), []) : skip([] as MatchSummary[]),
     want.has("h2h") ? section("h2h", () => provider.headToHead(match.home.id, match.away.id, H2H_GAMES), []) : skip([] as MatchSummary[]),
     wantStandings ? section("standings", () => provider.standings(match.league.id, match.league.season), null) : skip(null),
-    wantEvents ? section("events", () => provider.events(match.id, match.home.id), []) : skip([] as MatchEvent[]),
-    wantStats ? section("statistics", () => provider.statistics(match.id, match.home.id), []) : skip([] as TeamStatistics[]),
-    wantLineups ? section("lineups", () => provider.lineups(match.id, match.home.id), []) : skip([] as Lineup[]),
+    // `settled` is what lets a finished match's panels be cached for a day rather than two
+    // minutes. Nothing about a match that is over can change again.
+    wantEvents ? section("events", () => provider.events(match.id, match.home.id, settled), []) : skip([] as MatchEvent[]),
+    wantStats ? section("statistics", () => provider.statistics(match.id, match.home.id, settled), []) : skip([] as TeamStatistics[]),
+    wantLineups ? section("lineups", () => provider.lineups(match.id, match.home.id, settled), []) : skip([] as Lineup[]),
   ]);
 
   if (user && meter) {

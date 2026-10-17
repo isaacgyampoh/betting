@@ -203,13 +203,17 @@ export interface StatsProvider {
   headToHead(homeId: number, awayId: number, count: number): Promise<MatchSummary[]>;
   standings(leagueId: number, season: number): Promise<StandingRow[] | null>;
   /** Goals, cards and substitutions in order. Empty when the competition does not carry them. */
-  events(fixtureId: number, homeTeamId: number): Promise<MatchEvent[]>;
+  /**
+   * @param settled true once the match is over and its data cannot change again, which is what
+   *   lets it be cached for a day instead of two minutes.
+   */
+  events(fixtureId: number, homeTeamId: number, settled?: boolean): Promise<MatchEvent[]>;
   /** What this competition's season actually includes. Null when the provider does not say. */
   coverage(leagueId: number, season: number): Promise<LeagueCoverage | null>;
   /** Team statistics, home side first. Empty when the competition does not carry them. */
-  statistics(fixtureId: number, homeTeamId: number): Promise<TeamStatistics[]>;
+  statistics(fixtureId: number, homeTeamId: number, settled?: boolean): Promise<TeamStatistics[]>;
   /** Line-ups, home side first. Empty when the competition does not carry them. */
-  lineups(fixtureId: number, homeTeamId: number): Promise<Lineup[]>;
+  lineups(fixtureId: number, homeTeamId: number, settled?: boolean): Promise<Lineup[]>;
   /** A team's own details. Null when the provider does not know the id. */
   team(teamId: number): Promise<TeamProfile | null>;
   /** A team's next fixtures, soonest first. */
