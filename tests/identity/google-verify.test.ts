@@ -101,3 +101,43 @@ describe("verifying a Google ID token", () => {
     expect(id.email).toBe("unverified@gmail.com");
   });
 });
+
+/**
+ * Several accepted audiences at once.
+ *
+ * A client id is baked into every installed APK, so replacing the Web client - which happened
+ * here, the first one was deleted - would reject every build in the field the moment the server
+ * moved on. Listing both lets installed apps keep working while new ones use the new id.
+ */
+describe("accepting more than one audience", () => {
+  const NEW = "400646694915-new.apps.googleusercontent.com";
+
+  it("accepts a token for either configured client", async () => {
+    const { verifyGoogleIdToken } = await import("@/lib/identity/google");
+    const both = `${AUD},${NEW}`;
+
+    const forOld = await token({ sub: "1", email_verified: true });
+    expect((await verifyGoogleIdToken(forOld, both)).subject).toBe("1");
+
+    const forNew = await token({ sub: "2", email_verified: true }, { aud: NEW });
+    expect((await verifyGoogleIdToken(forNew, both)).subject).toBe("2");
+  });
+
+  it("still refuses an audience that is not on the list", async () => {
+    const { verifyGoogleIdToken } = await import("@/lib/identity/google");
+    const other = await token({ sub: "3" }, { aud: "someone-else.apps.googleusercontent.com" });
+    await expect(verifyGoogleIdToken(other, `${AUD},${NEW}`)).rejects.toThrow(/could not be verified/);
+  });
+
+  it("tolerates whitespace and trailing commas in the configuration", async () => {
+    const { verifyGoogleIdToken } = await import("@/lib/identity/google");
+    const t = await token({ sub: "4", email_verified: true });
+    expect((await verifyGoogleIdToken(t, ` ${AUD} , ${NEW} , `)).subject).toBe("4");
+  });
+
+  it("refuses everything when the list is empty or only separators", async () => {
+    const { verifyGoogleIdToken } = await import("@/lib/identity/google");
+    const t = await token({ sub: "5" });
+    await expect(verifyGoogleIdToken(t, " , , ")).rejects.toThrow(/not configured/);
+  });
+});

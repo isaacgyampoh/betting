@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { acceptedAudiences } from "@/lib/identity/google";
 import { AdminSignInButton } from "./sign-in-button";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,9 @@ export const dynamic = "force-dynamic";
  * privileged. Every refusal looks the same from out here.
  */
 export default function AdminSignIn() {
-  const clientId = env().GOOGLE_WEB_CLIENT_ID ?? "";
+  // The first of the accepted audiences. The server may accept several so that installed apps
+  // keep working across a client rotation, but a browser button is rendered for exactly one.
+  const clientId = acceptedAudiences(env().GOOGLE_WEB_CLIENT_ID ?? "")[0] ?? "";
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-zinc-950 px-4 text-zinc-100">

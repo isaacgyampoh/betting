@@ -39,11 +39,29 @@ export type GoogleIdentity = {
   picture: string | null;
 };
 
+/**
+ * The audiences this server will accept, from a comma-separated `GOOGLE_WEB_CLIENT_ID`.
+ *
+ * More than one, because a client id is baked into every installed APK. Replacing the Web client
+ * - which happens: this project's first one was deleted - would otherwise reject every build in
+ * the field the moment the server moved on. Listing the old id alongside the new one lets the
+ * installed apps keep working until they are updated.
+ *
+ * An empty list is a configuration error, not a permissive default; see below.
+ */
+export function acceptedAudiences(configured: string): string[] {
+  return configured
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
 export async function verifyGoogleIdToken(
   idToken: string,
   audience: string,
 ): Promise<GoogleIdentity> {
-  if (!audience) {
+  const audiences = acceptedAudiences(audience);
+  if (audiences.length === 0) {
     // Fail closed. Passing undefined to jwtVerify skips the audience check entirely, which would
     // turn a missing environment variable into an open door.
     throw new AppError("UNAUTHORIZED", "Google sign-in is not configured on this server.");
@@ -53,7 +71,7 @@ export async function verifyGoogleIdToken(
   try {
     ({ payload: claims } = await jwtVerify(idToken, GOOGLE_JWKS, {
       issuer: ISSUERS,
-      audience,
+      audience: audiences,
       clockTolerance: 60,
     }));
   } catch {
