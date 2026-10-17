@@ -57,13 +57,30 @@ crons, not Supabase.
 
 Nothing here is reversible once the last step runs, so the order matters.
 
-### A. Before anything can proceed
+### A. Before anything can proceed — **done 2026-10-17**
 
-- [ ] **Android OAuth client created** for `win.gameclaw.app` with the debug SHA-1, and the
-      release/Play App Signing fingerprints when those exist. This is the only blocker, and it
-      blocks everything below it. Diagnosis in `docs/release-signing.md` §5.
-- [ ] **A genuine Google sign-in succeeds on the Pixel** — the account chooser completes and the
-      app shows a signed-in profile. Not "the chooser appeared".
+- [x] **Android OAuth client created** for `win.gameclaw.app` with the debug SHA-1. The release
+      and Play App Signing fingerprints still need their own clients before shipping; see
+      `docs/release-signing.md` §5.
+- [x] **Web OAuth client recreated.** The old one had been *deleted*, which is what every
+      confusing error downstream was really about.
+- [x] **A genuine Google sign-in succeeded on the Pixel**, against
+      `https://gameclaw-api.onrender.com`, with Supabase not involved at all:
+
+      Signed in as nanagyams99@gmail.com
+      profile id    29dd0df2-03ec-4c01-9b9e-d237cd16b356   (the one migrated from Supabase)
+      role          ADMIN                                   (preserved)
+      slips         30                                      (preserved)
+      subscriptions 1                                       (preserved)
+      identity      google sub=114233277727945877413        (matched, not created)
+      profiles      13                                      (unchanged - it LINKED)
+
+      The account was **linked, not recreated**: the profile count stayed at 13 and the existing
+      slips, subscription and admin role are all still attached. That is the migration-critical
+      behaviour, and it is the thing that would have been silently wrong if matching had fallen
+      back to email or created a new row.
+
+- [x] Session survives a relaunch, and Claw - a protected feature - loads without a refusal.
 
 ### B. Move the app onto the new backend
 
