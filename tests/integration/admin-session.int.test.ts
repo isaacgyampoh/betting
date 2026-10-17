@@ -60,15 +60,31 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+/**
+ * A plain Request dressed as the NextRequest the route handler expects.
+ *
+ * Only `nextUrl` is added, because that is all these handlers read beyond the standard Request
+ * surface. Narrow on purpose: a fuller fake would start agreeing with code that is wrong.
+ */
+function asNextRequest(req: Request) {
+  Object.defineProperty(req, "nextUrl", {
+    value: new URL(req.url),
+    configurable: true,
+  });
+  return req as unknown as Parameters<
+    typeof import("@/app/api/v1/auth/admin-session/route").POST
+  >[0];
+}
+
 async function post(credential: string) {
   const { POST } = await import("@/app/api/v1/auth/admin-session/route");
-  const req = new Request("https://admin.gameclaw.win/api/v1/auth/admin-session", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ credential }),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }) as any;
-  req.nextUrl = new URL("https://admin.gameclaw.win/api/v1/auth/admin-session");
+  const req = asNextRequest(
+    new Request("https://admin.gameclaw.win/api/v1/auth/admin-session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ credential }),
+    }),
+  );
   return POST(req, { params: Promise.resolve({}) });
 }
 
@@ -202,11 +218,9 @@ describe("signing in to the dashboard from a browser", () => {
     expect(jar.get("gc_admin_session")).toBeDefined();
 
     const { DELETE } = await import("@/app/api/v1/auth/admin-session/route");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const req = new Request("https://admin.gameclaw.win/api/v1/auth/admin-session", {
-      method: "DELETE",
-    }) as any;
-    req.nextUrl = new URL("https://admin.gameclaw.win/api/v1/auth/admin-session");
+    const req = asNextRequest(
+      new Request("https://admin.gameclaw.win/api/v1/auth/admin-session", { method: "DELETE" }),
+    );
     await DELETE(req, { params: Promise.resolve({}) });
     expect(jar.get("gc_admin_session")).toBeUndefined();
   });
