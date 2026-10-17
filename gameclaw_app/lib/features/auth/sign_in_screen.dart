@@ -139,10 +139,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     ],
                   ),
                   const SizedBox(height: GcSpace.sm),
-                  Text(_creating ? 'Create an account' : 'Welcome back', style: GcType.hero),
+                  Text(
+                    google ? 'Sign in' : (_creating ? 'Create an account' : 'Welcome back'),
+                    style: GcType.hero,
+                  ),
                   const SizedBox(height: GcSpace.md),
                   Text(
-                    _creating
+                    google
+                        ? 'Live scores and the published record are open to everyone. Signing in '
+                              'is for Claw and for moving a slip between bookmakers.'
+                        : _creating
                         ? 'An account keeps your slips and your conversation with Claw across devices.'
                         : 'Live scores and the published record are open to everyone. '
                               'Signing in is for building slips.',
@@ -177,102 +183,101 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       onPressed: _busy ? null : _google,
                     ),
                     const SizedBox(height: GcSpace.lg),
-                    Row(
-                      children: [
-                        Expanded(child: Divider(color: gc(context).border)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: GcSpace.md),
-                          child: Text(
-                            'or',
-                            style: GcType.caption.copyWith(color: gc(context).inkFaint),
+                  ],
+                  // Email and password exist only while Google cannot be offered.
+                  //
+                  // Google is the one way in. Creating an account by email does not work anyway -
+                  // the project requires a confirmation message and its mailer refuses every
+                  // signup with over_email_send_rate_limit - so the form is a dead end wearing the
+                  // clothes of a working one. What stops it being deleted outright is that
+                  // deleting it today would leave no way to sign in at all, and take Claw and
+                  // slip conversion with it. The moment a Web client id reaches this build, this
+                  // disappears on its own.
+                  if (!google) ...[
+                    Form(
+                      key: _form,
+                      child: Column(
+                        children: [
+                          GcTextField(
+                            controller: _email,
+                            label: 'Email',
+                            icon: Icons.alternate_email_rounded,
+                            keyboardType: TextInputType.emailAddress,
+                            autofillHints: const [AutofillHints.email],
+                            textInputAction: TextInputAction.next,
+                            validator: (value) {
+                              final text = value?.trim() ?? '';
+                              // Deliberately loose. The server is the authority on whether an
+                              // address exists; this only catches the obvious slip before a round
+                              // trip.
+                              if (text.isEmpty) return 'Enter your email';
+                              if (!text.contains('@') || !text.contains('.')) {
+                                return "That doesn't look like an email";
+                              }
+                              return null;
+                            },
                           ),
-                        ),
-                        Expanded(child: Divider(color: gc(context).border)),
-                      ],
-                    ),
-                    const SizedBox(height: GcSpace.lg),
-                  ],
-                  Form(
-                    key: _form,
-                    child: Column(
-                      children: [
-                        GcTextField(
-                          controller: _email,
-                          label: 'Email',
-                          icon: Icons.alternate_email_rounded,
-                          keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.email],
-                          textInputAction: TextInputAction.next,
-                          validator: (value) {
-                            final text = value?.trim() ?? '';
-                            // Deliberately loose. The server is the authority on whether an
-                            // address exists; this only catches the obvious slip before a round
-                            // trip.
-                            if (text.isEmpty) return 'Enter your email';
-                            if (!text.contains('@') || !text.contains('.')) {
-                              return "That doesn't look like an email";
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: GcSpace.md),
-                        GcTextField(
-                          controller: _password,
-                          label: 'Password',
-                          icon: Icons.lock_outline_rounded,
-                          obscure: true,
-                          autofillHints: [
-                            _creating ? AutofillHints.newPassword : AutofillHints.password,
-                          ],
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _submit(),
-                          validator: (value) {
-                            if ((value ?? '').isEmpty) return 'Enter your password';
-                            // Only on sign-up. Refusing to let someone sign in because an existing
-                            // password is short is both useless and infuriating.
-                            if (_creating && value!.length < 8) return 'Use at least 8 characters';
-                            return null;
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: GcSpace.md),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.error_outline_rounded, size: 15, color: gc(context).loss),
-                        const SizedBox(width: GcSpace.sm),
-                        Expanded(
-                          child: Text(
-                            _error!,
-                            style: GcType.caption.copyWith(color: gc(context).loss),
+                          const SizedBox(height: GcSpace.md),
+                          GcTextField(
+                            controller: _password,
+                            label: 'Password',
+                            icon: Icons.lock_outline_rounded,
+                            obscure: true,
+                            autofillHints: [
+                              _creating ? AutofillHints.newPassword : AutofillHints.password,
+                            ],
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _submit(),
+                            validator: (value) {
+                              if ((value ?? '').isEmpty) return 'Enter your password';
+                              // Only on sign-up. Refusing to let someone sign in because an existing
+                              // password is short is both useless and infuriating.
+                              if (_creating && value!.length < 8) {
+                                return 'Use at least 8 characters';
+                              }
+                              return null;
+                            },
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: GcSpace.md),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.error_outline_rounded, size: 15, color: gc(context).loss),
+                          const SizedBox(width: GcSpace.sm),
+                          Expanded(
+                            child: Text(
+                              _error!,
+                              style: GcType.caption.copyWith(color: gc(context).loss),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (_notice != null) ...[
+                      const SizedBox(height: GcSpace.md),
+                      GcNote(_notice!, icon: Icons.mark_email_unread_outlined),
+                    ],
+                    const SizedBox(height: GcSpace.xl),
+                    GcButton(
+                      label: _creating ? 'Create account' : 'Sign in',
+                      size: GcButtonSize.large,
+                      onPressed: _submit,
+                    ),
+                    const SizedBox(height: GcSpace.sm),
+                    GcButton(
+                      label: _creating ? 'I already have an account' : 'Create an account',
+                      kind: GcButtonKind.ghost,
+                      onPressed: () => setState(() {
+                        _creating = !_creating;
+                        _error = null;
+                        _notice = null;
+                      }),
                     ),
                   ],
-                  if (_notice != null) ...[
-                    const SizedBox(height: GcSpace.md),
-                    GcNote(_notice!, icon: Icons.mark_email_unread_outlined),
-                  ],
-                  const SizedBox(height: GcSpace.xl),
-                  GcButton(
-                    label: _creating ? 'Create account' : 'Sign in',
-                    size: GcButtonSize.large,
-                    onPressed: _submit,
-                  ),
-                  const SizedBox(height: GcSpace.sm),
-                  GcButton(
-                    label: _creating ? 'I already have an account' : 'Create an account',
-                    kind: GcButtonKind.ghost,
-                    onPressed: () => setState(() {
-                      _creating = !_creating;
-                      _error = null;
-                      _notice = null;
-                    }),
-                  ),
                   const SizedBox(height: GcSpace.xl),
                   Text(
                     'You must be 18 or older to use GameClaw.',
