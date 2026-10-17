@@ -4,6 +4,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { publicEnv } from "@/lib/public-env";
 import { db } from "@/lib/db";
+import { readAccessToken } from "@/lib/identity/session";
 import { AppError } from "@/lib/errors";
 import type { ProfileModel } from "@/lib/generated/prisma/models";
 import type { UserRole } from "@/lib/generated/prisma/enums";
@@ -11,13 +12,27 @@ import type { UserRole } from "@/lib/generated/prisma/enums";
 export type AuthUser = { id: string; email: string | null };
 
 /**
- * Resolves the signed-in user from the Supabase session cookie (web) or an
- * `Authorization: Bearer <access_token>` header (mobile app, Telegram bot).
+ * Resolves the signed-in user from a bearer token, or the Supabase cookie on the website.
+ *
+ * Two token issuers are accepted during the move off Supabase, and the order matters:
+ *
+ *   1. **GameClaw's own access token.** Verified locally with our signing secret - no network
+ *      call, no third party. This is what every new session gets.
+ *   2. **Supabase**, as a fallback, so sessions issued before the cutover keep working rather
+ *      than signing everybody out the moment this deploys.
+ *
+ * Ours is tried first because it is the cheap one: a local HS256 verification against a token we
+ * issued, versus a call into the Supabase client. Once no Supabase-issued token can still be
+ * valid - their access tokens are short-lived, so that is hours rather than weeks after the
+ * Flutter app stops asking Supabase for them - the second branch and the whole dependency go.
  */
 export const getAuthUser = cache(async (authorization?: string | null): Promise<AuthUser | null> => {
   const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
 
   if (bearer) {
+    const own = await readAccessToken(bearer);
+    if (own) return { id: own.id, email: own.email };
+
     const supabase = createSupabaseClient(publicEnv.supabaseUrl, publicEnv.supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -99,6 +114,9 @@ type ProfileRow = {
   spend_note_pesewas: number | null;
   reminders_on: boolean;
   excluded_until: Date | null;
+  last_sign_in_at: Date | null;
+  suspended_at: Date | null;
+  suspended_reason: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -118,6 +136,9 @@ function fromRow(row: ProfileRow): ProfileModel {
     spendNotePesewas: row.spend_note_pesewas,
     remindersOn: row.reminders_on,
     excludedUntil: row.excluded_until,
+    lastSignInAt: row.last_sign_in_at,
+    suspendedAt: row.suspended_at,
+    suspendedReason: row.suspended_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

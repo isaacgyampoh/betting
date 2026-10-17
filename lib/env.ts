@@ -22,6 +22,20 @@ const serverSchema = z.object({
   PAYSTACK_SECRET_KEY: z.string().min(1).optional(),
   NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: z.string().min(1).optional(),
   CRON_SECRET: z.string().min(16).optional(),
+  /**
+   * Signs GameClaw's own access tokens, replacing Supabase's JWT secret.
+   *
+   * 32 characters is a floor, not a recommendation; generate 32 random bytes. A short secret on
+   * an HS256 token is brute-forceable offline by anybody holding one expired token, and the
+   * result is the ability to mint a session for any user, including an admin.
+   */
+  AUTH_JWT_SECRET: z.string().min(32).optional(),
+  /**
+   * The Google Web OAuth client id. Not a secret - it ships inside the Android APK - but it is
+   * the audience every ID token is checked against, so a wrong value rejects every sign-in and a
+   * missing one must reject rather than skip the check.
+   */
+  GOOGLE_WEB_CLIENT_ID: z.string().min(1).optional(),
   /** Web push (notifications when daily picks are ready). Generate with: npx web-push generate-vapid-keys */
   NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().min(1).optional(),
   VAPID_PUBLIC_KEY: z.string().min(1).optional(),

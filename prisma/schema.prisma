@@ -41,9 +41,17 @@ model Profile {
   remindersOn      Boolean   @default(false) @map("reminders_on")
   /// Self-exclusion: blocks sign-in features until this time passes. Cannot be shortened.
   excludedUntil    DateTime? @map("excluded_until") @db.Timestamptz
+  /// Set on every successful sign-in. Supabase kept this in auth.users, which we are leaving.
+  lastSignInAt     DateTime? @map("last_sign_in_at") @db.Timestamptz
+  /// An administrator has blocked this account. Sign-in and refresh both refuse while it is set.
+  suspendedAt      DateTime? @map("suspended_at") @db.Timestamptz
+  suspendedReason  String?   @map("suspended_reason")
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
+  identities      Identity[]
+  refreshTokens   RefreshToken[]
+  adminActions    AdminAudit[]       @relation("AdminActor")
   subscriptions   Subscription[]
   payments        Payment[]
   slips           Slip[]
@@ -407,6 +415,8 @@ model StatsCache {
 }
 
 enum UsageKind {
+  /// Sign-in and refresh. Metered so an unauthenticated endpoint still has a ceiling.
+  AUTH
   SLIP_LOAD
   SLIP_CONVERT
   SLIP_EDIT
@@ -540,15 +550,15 @@ model PushSubscription {
 /// and on re-registration the row is reassigned to whoever is signed in now. That is what stops a
 /// second user on a shared phone inheriting the first one's alerts.
 model DeviceToken {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
   /// The FCM registration token. Unique: one row per install, never one per sign-in.
-  token     String   @unique
-  platform  String   @default("android")
+  token     String    @unique
+  platform  String    @default("android")
   /// Set when a send is rejected as unregistered, so a dead token stops being retried.
   revokedAt DateTime? @map("revoked_at") @db.Timestamptz
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -571,4 +581,95 @@ model ReferralReward {
 
   @@unique([userId, referredUserId])
   @@map("referral_rewards")
+}
+
+/// A sign-in method belonging to a profile: Google today, room for others.
+///
+/// This is what replaces Supabase's auth.identities. The pair (provider, subject) is the stable
+/// identity - Google's `sub` never changes for an account, while an email address can - so the
+/// unique constraint is on that pair and matching is done on it. Email is stored for display and
+/// for linking an existing profile the first time, never as the identity itself.
+model Identity {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId  String   @map("profile_id") @db.Uuid
+  /// "google". Lowercase, from the issuer, not from the client.
+  provider   String
+  /// The provider's subject claim. Google's is a long numeric string.
+  subject    String
+  email      String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, subject])
+  @@index([profileId])
+  @@map("identities")
+}
+
+/// One issued refresh token.
+///
+/// Stored as a SHA-256 hash, never in the clear: a leaked database table should not hand anybody
+/// a working session. Rotated on every use, and the replaced row is kept rather than deleted so
+/// that presenting an already-used token can be detected - which is the signal that a token was
+/// stolen. When that happens the whole `familyId` is revoked at once, because there is no way to
+/// tell the thief's copy from the owner's.
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId String    @map("profile_id") @db.Uuid
+  /// SHA-256 of the opaque token, hex.
+  tokenHash String    @unique @map("token_hash")
+  /// Every token descended from one sign-in shares this. Reuse revokes the family.
+  familyId  String    @map("family_id") @db.Uuid
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  /// Set when rotated, revoked, or killed as part of a compromised family.
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  /// For the admin dashboard's device list. Truncated; never a full fingerprint.
+  userAgent String?   @map("user_agent")
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+/// Every administrative action that changes something, with who did it.
+///
+/// Append-only by convention: nothing in the application updates or deletes a row here. An audit
+/// trail that can be edited from the same dashboard it audits is not an audit trail.
+model AdminAudit {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorId   String   @map("actor_id") @db.Uuid
+  /// "user.suspend", "user.reactivate", "flag.set" - verb-last, grepable.
+  action    String
+  /// What was acted on: a profile id, a flag key.
+  target    String?
+  /// Before/after, or the reason given. Never credentials.
+  detail    Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  actor Profile @relation("AdminActor", fields: [actorId], references: [id])
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@map("admin_audit")
+}
+
+/// Application settings an administrator may change without a deploy.
+///
+/// Deliberately a key/value table rather than columns: the set of flags changes often and a
+/// migration per flag is friction that leads to flags living in code instead. Values are JSON so
+/// a flag can be a boolean, a number or a small object. Never holds a secret - the dashboard
+/// shows these in full, and anything that must not be shown belongs in a Worker secret.
+model AppSetting {
+  key         String   @id
+  value       Json
+  description String?
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  updatedBy   String?  @map("updated_by") @db.Uuid
+
+  @@map("app_settings")
 }
