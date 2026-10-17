@@ -101,3 +101,40 @@ Guess at payload shapes against a live service until something works. These are 
 endpoints belonging to someone else; a sequence of experiments against their production systems
 is both a breach of their terms and something we would have to keep from them, which is the
 clearest possible sign it is the wrong move. Every one of these is a conversation, not a puzzle.
+
+---
+
+## Who is actually licensed in Ghana
+
+From the Gaming Commission of Ghana's own register, read 2026-10-17:
+https://www.gamingcommission.gov.gh/licensed-operators/
+
+Thirty-two brands hold a sports betting licence. In the order they matter to us:
+
+| | Brand | Where we stand |
+|---|---|---|
+| Integrated | SPORTYBET, FOOTBALL.COM | Available, codes issued and read back |
+| Refusing us | MSPORT | 403 to our origin; allowlist request above |
+| 1xBet platform | 1XBET, 22BET, BETWINNER, **MELBET** | Booking unverified; one conversation covers all four |
+| Researched, no route | BETPAWA, BETWAY | No developer API published |
+| Not yet investigated | AFRILUCKBET, ALFABET, BANGBET, BC GAME, BETANO, BETBOOKER, BETFOX, BETIKA, BETKING, BINGOBETS, BOLTBET, DBET, GOLDBET, HEROBET, ILOTBET, KBET, KEEDBET, KITOBET, MULASPORT, MYBET.AFRICA, ODIBETS, PREMIER BET, SOCCABET | |
+
+Two things worth acting on:
+
+**MelBet is licensed here and runs the 1xBet platform.** It is not in our registry at all, and it
+belongs in the same conversation as 1xBet, 22Bet and Betwinner - one answer about the coupon API
+would cover four licensed Ghanaian brands rather than three. Adding the adapter is a few lines
+against the existing `createOnexClient`; it is deliberately not done yet, because booking does not
+work on that platform and shipping a fifth adapter that cannot book adds nothing but a row in a
+list.
+
+**PariPesa is not on the register.** We ship an adapter for it. It is a 1xBet white-label
+operating in other markets, so this is not a mistake exactly, but it is the only bookmaker we
+carry that no Ghanaian licence covers - and it is worth deciding whether it should be offered to
+Ghanaian users at all before any work goes into making it bookable. That is a business call, not
+a technical one.
+
+The twenty-three uninvestigated brands are the real expansion surface. The question for each is
+the same narrow one that settled betPawa and Betway: *is there an authorised way for a third party
+to create a booking code?* Most will answer no. The ones that answer yes are worth building, and
+Betano, Betika, BetKing, Premier Bet and Soccabet are the largest of them by presence here.
