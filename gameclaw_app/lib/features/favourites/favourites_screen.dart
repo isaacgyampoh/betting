@@ -186,51 +186,93 @@ class _MatchRow extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback onAlerts;
 
+  /// What a screen reader says for this row.
+  ///
+  /// The visual row carries its meaning in an icon colour and a muted text shade, neither of
+  /// which is spoken. Without this it reads as a label and a date with no indication that it is
+  /// followed at all, or that it has been silenced.
+  String _spoken() {
+    final when = match.kickoffAt == null
+        ? ''
+        : ', ${DateFormat('EEEE d MMMM, HH:mm').format(match.kickoffAt!)}';
+    return '${match.label}$when. ${match.muted ? 'Followed, alerts muted' : 'Followed'}.';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onOpen,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter, vertical: GcSpace.md),
-        child: Row(
-          children: [
-            Icon(
-              match.muted ? Icons.notifications_off_outlined : Icons.notifications_active_rounded,
-              size: 18,
-              color: match.muted ? gc(context).inkFaint : gc(context).accentInk,
-            ),
-            const SizedBox(width: GcSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    match.label,
-                    style: GcType.bodyStrong.copyWith(
-                      color: match.muted ? gc(context).inkMuted : gc(context).ink,
+    // The row and the alerts button are siblings, not nested. `excludeSemantics` drops every
+    // descendant node - checked, not assumed - so a Semantics wrapped around the button inside
+    // the excluded subtree would have made it unreachable to a screen reader while looking
+    // perfectly correct in the source.
+    return Row(
+      children: [
+        Expanded(
+          child: Semantics(
+            label: _spoken(),
+            button: true,
+            excludeSemantics: true,
+            child: InkWell(
+              onTap: onOpen,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  GcSpace.gutter,
+                  GcSpace.md,
+                  GcSpace.sm,
+                  GcSpace.md,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      match.muted
+                          ? Icons.notifications_off_outlined
+                          : Icons.notifications_active_rounded,
+                      size: 18,
+                      color: match.muted ? gc(context).inkFaint : gc(context).accentInk,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (match.kickoffAt != null)
-                    Text(
-                      // Already local; see the column's comment in cache.dart.
-                      DateFormat('EEE d MMM, HH:mm').format(match.kickoffAt!),
-                      style: GcType.caption.copyWith(color: gc(context).inkFaint),
+                    const SizedBox(width: GcSpace.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            match.label,
+                            style: GcType.bodyStrong.copyWith(
+                              color: match.muted ? gc(context).inkMuted : gc(context).ink,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (match.kickoffAt != null)
+                            Text(
+                              // Already local; see the column's comment in cache.dart.
+                              DateFormat('EEE d MMM, HH:mm').format(match.kickoffAt!),
+                              style: GcType.caption.copyWith(color: gc(context).inkFaint),
+                            ),
+                        ],
+                      ),
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
-            GcIconButton(
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(right: GcSpace.gutter - GcSpace.sm),
+          child: Semantics(
+            button: true,
+            label: 'Alerts for ${match.label}',
+            excludeSemantics: true,
+            child: GcIconButton(
               icon: match.muted
                   ? Icons.notifications_off_outlined
                   : Icons.notifications_none_rounded,
               tooltip: 'Alerts for this match',
               onPressed: onAlerts,
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -238,8 +280,7 @@ class _MatchRow extends StatelessWidget {
 /// What to be told about, for one match.
 ///
 /// A sheet rather than a row of switches on the list: five choices and a mute is too much to put
-/// beside every match, and the useful default - tell me goals and the result - needs no visit
-/// here at all.
+/// beside every match, and the useful default - goals and the result - needs no visit here at all.
 Future<void> _showAlertSheet(BuildContext context, WidgetRef ref, FollowedMatch match) {
   return showModalBottomSheet<void>(
     context: context,
