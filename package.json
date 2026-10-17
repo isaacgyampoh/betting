@@ -7,6 +7,7 @@
   },
   "packageManager": "pnpm@12.3.4",
   "scripts": {
+    "admin:grant": "tsx scripts/grant-admin.ts",
     "build": "next build",
     "cf:build": "node scripts/cf-build.mjs",
     "cf:build:api": "node scripts/cf-build.mjs --config wrangler.api.jsonc",

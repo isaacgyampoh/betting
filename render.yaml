@@ -1,0 +1,106 @@
+# Render blueprint for the GameClaw API and admin dashboard.
+#
+# Create everything from this file: Render dashboard -> New -> Blueprint -> pick this repo.
+# Render reads this, shows you exactly what it will create and what it costs, and you approve it
+# there. Nothing is created by running it locally.
+#
+# Deliberately NOT in here: the Cloudflare Workers, gameclaw.win, or anything touching the
+# marketing site. This file describes the API and its database and nothing else.
+#
+# Region is Frankfurt, not the Oregon the other projects in this workspace use. The users are in
+# Ghana and the database it replaces is in eu-west-1; Oregon would add a transatlantic round trip
+# to every query. The database and the service must share a region for private networking.
+
+databases:
+  - name: gameclaw-db
+    # $6/month. The free plan expires 30 days after creation, so it is not an option for a
+    # production database - it is a trial with a deletion date.
+    plan: basic-256mb
+    region: frankfurt
+    # Production is on 17.6 today. Matching the major version means the dump restores without
+    # a version jump in the middle of a migration.
+    postgresMajorVersion: "17"
+    databaseName: gameclaw
+    user: gameclaw
+
+services:
+  - type: web
+    name: gameclaw-api
+    runtime: node
+    # $7/month. The free plan spins down when idle, and the first request afterwards waits tens
+    # of seconds. The warm match centre is 0.65s; a cold start would be the slowest thing in the
+    # product by two orders of magnitude.
+    plan: starter
+    region: frankfurt
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile && pnpm prisma migrate deploy && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      # Wired by Render from the database above, so no credential is typed anywhere.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gameclaw-db
+          property: connectionString
+      - key: DIRECT_URL
+        fromDatabase:
+          name: gameclaw-db
+          property: connectionString
+
+      # Generated once by Render and never shown to anybody. This signs our own access tokens;
+      # see lib/identity/session.ts.
+      - key: AUTH_JWT_SECRET
+        generateValue: true
+
+      # Not a secret: it ships inside the APK. It is the audience every Google ID token is
+      # checked against, so it must match the client id the Flutter build was given.
+      - key: GOOGLE_WEB_CLIENT_ID
+        value: 400646694915-k5ikq1qt4mjcrctfpckebuq24qlbttqo.apps.googleusercontent.com
+
+      - key: NODE_VERSION
+        value: "24"
+      - key: STATS_MODE
+        value: auto
+      - key: SPORTYBET_MODE
+        value: live
+      - key: MSPORT_MODE
+        value: live
+      - key: FOOTBALLCOM_MODE
+        value: live
+      - key: BETWAY_MODE
+        value: mock
+      # Production never serves sample bookmaker data; an unconnected bookmaker refuses instead.
+      - key: ALLOW_SAMPLE_DATA
+        value: "0"
+
+      # Set by hand in the Render dashboard, not here. A blueprint is committed to the
+      # repository, so anything with a real value in it is a secret in version control.
+      #   API_FOOTBALL_KEY
+      #   ANTHROPIC_API_KEY
+      #   PAYSTACK_SECRET_KEY
+      #   IP_HASH_SALT
+      #   CRON_SECRET
+      #   FCM_SERVICE_ACCOUNT
+      # NEXT_PUBLIC_SITE_URL must be set to this service's own URL once Render has assigned it.
+      - key: API_FOOTBALL_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: IP_HASH_SALT
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: FCM_SERVICE_ACCOUNT
+        sync: false
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      # Still required by lib/env.ts while the Supabase fallback in lib/auth.ts is in place, so
+      # that sessions issued before the cutover keep working. Both go when that branch does.
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
