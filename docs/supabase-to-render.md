@@ -330,10 +330,69 @@ would be one line shorter and would quietly stop verifying anything, anywhere.
 
 Render denies every external address by default — the allow list starts empty, which is why the
 first connection attempt died with `SSL connection has been closed unexpectedly` rather than an
-auth error. One address is allow-listed at the moment, this machine, for the migration.
+auth error. One address was allow-listed during the migration, this machine.
 
-**That entry must be removed once the API service is running**, because the service reaches the
-database over Render's private network and needs no public exposure at all.
+**It has been removed.** The allow list is empty again, `psql` from outside now fails, and the
+service keeps answering because it reaches the database over Render's private network. That is
+the intended posture: the database is not addressable from the public internet at all.
+
+To work on it from a laptop again, add the address back for the duration and take it out after:
+
+```bash
+curl -X PATCH -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
+  -d '{"ipAllowList":[{"cidrBlock":"<your-ip>/32","description":"temporary"}]}' \
+  https://api.render.com/v1/postgres/dpg-db9n7d7btjjs73cbok6g-a
+```
+
+---
+
+## 9. Where it ended up
+
+| | |
+|---|---|
+| API | **https://gameclaw-api.onrender.com** — `status: ok` |
+| Admin dashboard | **https://gameclaw-api.onrender.com/admin** |
+| Database | `gameclaw-db`, Frankfurt, private, no public address |
+| Branch deployed | `render` — **not** `main`, see below |
+| Cost | $6 database + $7 service = **$13/month** |
+
+Verified against the live service:
+
+```
+/api/v1/health         ok, database reachable
+/api/v1/matches        1668 fixtures, 32 leagues, signed out
+/api/v1/competitions   171 countries
+/api/v1/bookmakers     9 entries; SportyBet and Football.com read, book and price
+/api/v1/matches/{id}   Everton v Chelsea, FINISHED
+/api/v1/me, /slips     401 without a token
+/auth/google           refuses an unverifiable token
+/auth/refresh          refuses an unknown refresh token
+/admin/*               every page redirects an anonymous visitor to sign-in
+```
+
+Verified against this same database but **not** on the live service: that an administrator gets
+in, and that a user whose token claims `ADMIN` does not. Both were exercised locally against the
+Render database with identical code. Proving them on the deployed service needs a real Google
+sign-in, which is still blocked — see §7.
+
+### Why the `render` branch and not `main`
+
+`.github/workflows/ci.yml` deploys to Cloudflare on every push to `main`, including
+`prisma migrate deploy` against **production Supabase** and a redeploy of the `gameclaw.win`
+Worker. Merging is therefore a deliberate decision about production, not a step in this
+migration. Supabase is untouched and remains the rollback.
+
+### Rollback
+
+Nothing has been cut over, so rollback is "do nothing": the Flutter app still talks to the
+Cloudflare Worker and Supabase, both running and unchanged. The Render services can be deleted
+without affecting anything users touch.
+
+Once the app is pointed at Render, rolling back means putting `GC_API_BASE` back to the Worker
+URL and rebuilding — plus accepting that sessions issued by Render will not be recognised by
+Supabase, so users sign in again. The verified backup at
+`~/gameclaw-backups/20261017-114921/gameclaw-full.dump` restores the Supabase state as of
+11:49 on 2026-10-17 if it is ever needed.
 
 ---
 
