@@ -1,25 +1,43 @@
+import { env } from "@/lib/env";
+import { AdminSignInButton } from "./sign-in-button";
+
 export const dynamic = "force-dynamic";
 
 /**
- * Where a non-admin lands.
+ * Where an administrator signs in.
  *
- * Deliberately not a login form. There is no password to type - administrators sign in through
- * the app with Google, and the role is granted out of band with scripts/grant-admin.ts. A form
- * here would be a second credential path into the most privileged part of the system, and the
- * one place worth having fewer of those is this one.
+ * Deliberately not a password form. There is no GameClaw password to type - administrators are
+ * Google accounts whose role was granted out of band by `scripts/grant-admin.ts` - and a password
+ * form here would be a second credential path into the most privileged part of the system.
  *
- * It says nothing about whether the visitor has an account, whether that account exists, or
- * whether it is privileged.
+ * It says nothing about whether a visitor has an account, whether one exists, or whether it is
+ * privileged. Every refusal looks the same from out here.
  */
 export default function AdminSignIn() {
+  const clientId = env().GOOGLE_WEB_CLIENT_ID ?? "";
+
   return (
     <div className="flex min-h-dvh items-center justify-center bg-zinc-950 px-4 text-zinc-100">
-      <div className="max-w-sm space-y-3 text-center">
+      <div className="w-full max-w-sm space-y-5 text-center">
         <div className="font-semibold tracking-tight text-[#CCFF2E]">GameClaw</div>
-        <h1 className="text-lg font-semibold">Not available</h1>
-        <p className="text-sm text-zinc-400">
-          This area needs an administrator account. Sign in through the GameClaw app with an
-          address that has been granted access.
+        <h1 className="text-lg font-semibold">Administrator sign-in</h1>
+
+        {clientId ? (
+          <>
+            <p className="text-sm text-zinc-400">
+              Continue with the Google account that has been granted access.
+            </p>
+            <AdminSignInButton clientId={clientId} />
+          </>
+        ) : (
+          <p className="text-sm text-zinc-400">
+            Sign-in is not configured on this server. The Google Web client id is missing.
+          </p>
+        )}
+
+        <p className="text-xs text-zinc-600">
+          Access is decided by the account&apos;s role in the database, not by anything this page
+          sends.
         </p>
       </div>
     </div>

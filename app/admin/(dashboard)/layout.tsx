@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAdmin } from "@/lib/identity/admin";
+import { AdminSignOut } from "./sign-out";
 
 /**
  * The guard for every admin page.
@@ -53,6 +54,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             ))}
           </nav>
           <span className="ml-auto truncate text-xs text-zinc-500">{admin.email}</span>
+          <AdminSignOut />
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
