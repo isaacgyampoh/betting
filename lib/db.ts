@@ -23,8 +23,42 @@ function cloudflareRequest(): CfRequest | null {
 // event per query; nothing reads it unless a test asks.
 export const queryCounter = { count: 0 };
 
+/**
+ * TLS settings for a connection string, where the URL alone cannot say it.
+ *
+ * Render's Postgres requires TLS and presents a **self-signed** certificate. Newer node-postgres
+ * reads `sslmode=require` as verify-full, so it refuses that certificate outright - the error is
+ * `Error opening a TLS connection: self-signed certificate`, which reaches the health endpoint as
+ * a bare `database_unreachable` and says nothing about the real cause. Putting
+ * `uselibpqcompat=true` in the URL does not help either, because PrismaPg hands the string to
+ * pg.Pool, which does not act on it.
+ *
+ * So the host decides, and only one host qualifies: Render's **internal** name, the bare
+ * `dpg-...` with no dots, reachable only from inside their private network. That endpoint is the
+ * self-signed one. Traffic to it is still encrypted; what is given up is proof of identity
+ * against a peer nothing outside the private network can even route to.
+ *
+ * Render's *external* hostname is deliberately excluded. It presents a certificate signed by a
+ * public CA - verified from this machine while migrating, with Prisma, over the public internet -
+ * so relaxing it there would discard a check that works. Supabase and every other host keep the
+ * default too. A blanket `rejectUnauthorized: false` would have been one line shorter and would
+ * have quietly stopped verifying anything, anywhere.
+ */
+export function sslFor(connectionString: string) {
+  let host = "";
+  try {
+    host = new URL(connectionString).hostname;
+  } catch {
+    return undefined;
+  }
+  // Bare internal name only: no dots, so it cannot be a public hostname.
+  const renderInternal = /^dpg-[a-z0-9-]+$/.test(host);
+  return renderInternal ? { rejectUnauthorized: false } : undefined;
+}
+
 function createClient(connectionString: string) {
-  const adapter = new PrismaPg({ connectionString, max: 3 });
+  const ssl = sslFor(connectionString);
+  const adapter = new PrismaPg({ connectionString, max: 3, ...(ssl ? { ssl } : {}) });
   if (process.env.DB_QUERY_LOG !== "1") return new PrismaClient({ adapter });
   const client = new PrismaClient({ adapter, log: [{ emit: "event", level: "query" }] });
   client.$on("query", () => {
