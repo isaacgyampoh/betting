@@ -150,6 +150,25 @@ Match Result
       expect(slip.selections, hasLength(1));
     });
 
+    test('reads a row where the price sits beside the pick', () {
+      // What layout-aware reading produces: a right-aligned price joined to the row it prices.
+      // Measured on the Pixel, where block-order text gave the last selection the first
+      // selection's odds and left two selections with no price at all.
+      final slip = parseSlip('''
+Bournemouth vs Sunderland
+Match Result
+Bournemouth  1.85
+Osasuna vs Racing Santander
+Both Teams To Score
+Yes  1.60
+''');
+      expect(slip.selections, hasLength(2));
+      expect(slip.selections[0].odds, 1.85);
+      expect(slip.selections[0].pick, 'Bournemouth');
+      expect(slip.selections[1].odds, 1.60);
+      expect(slip.selections[1].pick, 'Yes');
+    });
+
     test('reads a three-selection slip without merging the legs', () {
       final slip = parseSlip('''
 MSport

@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../data/providers.dart';
+import '../../domain/models.dart';
 import '../../data/repository.dart';
+import '../slip_scan/fixture_matcher.dart';
+import '../slip_scan/slip_parser.dart';
+import '../slip_scan/slip_review_screen.dart';
+import '../slip_scan/slip_scanner.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/brand/gc_claw.dart';
@@ -28,6 +35,124 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
     _composer.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  bool _scanning = false;
+
+  /// Reads a slip out of a photograph, then shows what it found for checking.
+  ///
+  /// Everything here happens on the device: the picture is recognised by ML Kit and matched
+  /// against fixtures the app already has. Nothing is uploaded, which is the right default for a
+  /// photograph of somebody's betting slip even before cost is considered.
+  Future<void> _scan(ImageSource source) async {
+    if (_scanning) return;
+    final scanner = SlipScanner();
+    String? path;
+    try {
+      setState(() => _scanning = true);
+      final picked = source == ImageSource.camera ? await scanner.capture() : await scanner.pick();
+      // Backing out of the picker is a decision, not a failure, and says nothing on screen.
+      if (picked == null) return;
+      path = picked.path;
+
+      final slip = await scanner.read(path);
+      if (!mounted) return;
+      if (slip == null) {
+        _toast('That image could not be read. A straighter, brighter photo usually works.');
+        await discardImage(path);
+        return;
+      }
+      if (slip.isEmpty) {
+        _toast('Nothing on that image looked like a betting slip.');
+        await discardImage(path);
+        return;
+      }
+
+      // Matched against the days a slip plausibly covers. Fixtures already fetched for the live
+      // centre are reused, so this usually costs nothing.
+      final candidates = await _candidateFixtures();
+      if (!mounted) return;
+      final matches = matchSlip(slip, candidates);
+
+      final confirmed = await Navigator.of(context).push<List<FixtureMatch>>(
+        MaterialPageRoute(
+          builder: (routeContext) => SlipReviewScreen(
+            imagePath: path!,
+            slip: slip,
+            matches: matches,
+            onConfirm: (result) => Navigator.pop(routeContext, result),
+            onRetake: () {
+              Navigator.pop(routeContext);
+              _scan(source);
+            },
+            onDiscard: () => Navigator.pop(routeContext),
+          ),
+        ),
+      );
+
+      if (confirmed != null && confirmed.isNotEmpty && mounted) {
+        _send(_describe(slip, confirmed));
+      }
+    } finally {
+      // The picker copies the chosen image into the app's cache, so an abandoned scan would
+      // leave a full-size photograph of a betting slip on disk.
+      await discardImage(path);
+      await scanner.dispose();
+      if (mounted) setState(() => _scanning = false);
+    }
+  }
+
+  /// Fixtures a slip might refer to: today and the next few days.
+  Future<List<Fixture>> _candidateFixtures() async {
+    final fixtures = <Fixture>[];
+    final today = DateTime.now().toUtc();
+    for (var offset = 0; offset < 4; offset++) {
+      final day = utcDay(today.add(Duration(days: offset)));
+      try {
+        final cached = await ref.read(matchDayProvider(day).future);
+        for (final group in cached.value.groups) {
+          fixtures.addAll(group.fixtures);
+        }
+      } catch (_) {
+        // One unreachable day should not stop the others; a smaller card simply means more
+        // selections come back as "no fixture matched", which the review screen shows plainly.
+      }
+    }
+    return fixtures;
+  }
+
+  /// Turns a reviewed slip into the message Claw receives.
+  ///
+  /// A booking code is said first and plainly, because loading the real slip from the bookmaker
+  /// is exact where reading an image is not.
+  String _describe(ParsedSlip slip, List<FixtureMatch> matches) {
+    final buffer = StringBuffer();
+    if (slip.bookingCode != null) {
+      buffer.writeln(
+        'I scanned a ${slip.bookmaker ?? ''} slip with booking code ${slip.bookingCode}.'
+            .replaceAll('  ', ' '),
+      );
+    } else {
+      buffer.writeln('I scanned a betting slip. Here is what it says:');
+    }
+    for (final match in matches) {
+      final fixture = match.fixture;
+      final name = fixture != null
+          ? '${fixture.home.name} v ${fixture.away.name}'
+          : '${match.parsed.home} v ${match.parsed.away}';
+      final market = match.parsed.market ?? 'market not readable';
+      final pick = match.parsed.pick ?? '';
+      final odds = match.parsed.odds?.toStringAsFixed(2) ?? 'odds not readable';
+      buffer.writeln(
+        '- $name, $market ${pick.isEmpty ? '' : '($pick)'} at $odds'.replaceAll('  ', ' '),
+      );
+    }
+    return buffer.toString().trim();
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _send(String text) async {
@@ -133,7 +258,12 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
                   ),
                 ),
               ),
-            _Composer(controller: _composer, enabled: !chat.sending, onSubmit: _send),
+            _Composer(
+              controller: _composer,
+              enabled: !chat.sending && !_scanning,
+              onSubmit: _send,
+              onScan: _scan,
+            ),
           ],
         ),
       ),
@@ -321,11 +451,19 @@ class _Thinking extends StatelessWidget {
 }
 
 class _Composer extends StatelessWidget {
-  const _Composer({required this.controller, required this.enabled, required this.onSubmit});
+  const _Composer({
+    required this.controller,
+    required this.enabled,
+    required this.onSubmit,
+    required this.onScan,
+  });
 
   final TextEditingController controller;
   final bool enabled;
   final ValueChanged<String> onSubmit;
+
+  /// Opens the camera or the gallery to read a slip from a picture.
+  final ValueChanged<ImageSource> onScan;
 
   @override
   Widget build(BuildContext context) {
@@ -339,6 +477,10 @@ class _Composer extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
+            // Attaching a picture sits beside the text field rather than inside the thread,
+            // because it is a way of asking rather than a different conversation.
+            _Attach(enabled: enabled, onScan: onScan),
+            const SizedBox(width: GcSpace.xs),
             Expanded(
               child: TextField(
                 controller: controller,
@@ -406,6 +548,62 @@ class _Send extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Camera and gallery, behind one button.
+///
+/// A sheet rather than two buttons in the composer: the bar is already narrow, and choosing a
+/// source is a decision made once per picture rather than something to keep on screen.
+class _Attach extends StatelessWidget {
+  const _Attach({required this.enabled, required this.onScan});
+
+  final bool enabled;
+  final ValueChanged<ImageSource> onScan;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Add a photo of a slip',
+      child: IconButton(
+        onPressed: enabled
+            ? () => showModalBottomSheet<void>(
+                context: context,
+                backgroundColor: gc(context).surface,
+                showDragHandle: true,
+                builder: (sheetContext) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.photo_camera_outlined),
+                        title: const Text('Take a photo'),
+                        subtitle: const Text('Point at a printed or on-screen slip'),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          onScan(ImageSource.camera);
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.photo_library_outlined),
+                        title: const Text('Choose a screenshot'),
+                        subtitle: const Text('From your gallery or files'),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          onScan(ImageSource.gallery);
+                        },
+                      ),
+                      const SizedBox(height: GcSpace.sm),
+                    ],
+                  ),
+                ),
+              )
+            : null,
+        icon: const Icon(Icons.add_a_photo_outlined, size: 20),
+        tooltip: 'Add a photo of a slip',
       ),
     );
   }

@@ -284,13 +284,20 @@ ParsedSlip parseSlip(String ocrText) {
     for (final line in current.skip(1)) {
       market ??= readMarket(line);
       odds ??= readOdds(line);
-      // A short line that is neither the market nor odds is most likely the pick itself.
+
+      // Reading by layout puts a right-aligned price on the same row as the thing it prices, so
+      // a line is often "Bournemouth  1.85". The pick is what is left once the price is taken
+      // off; without this the whole row is rejected as "contains odds" and the pick is lost.
+      final withoutOdds = line
+          .replaceAll(RegExp(r'\d{1,4}[.,]\d{1,3}'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
       if (pick == null &&
-          readMarket(line) == null &&
-          readOdds(line) == null &&
-          line.length <= 24 &&
-          readTeams(line) == null) {
-        pick = line;
+          withoutOdds.isNotEmpty &&
+          withoutOdds.length <= 24 &&
+          readMarket(withoutOdds) == null &&
+          readTeams(withoutOdds) == null) {
+        pick = withoutOdds;
       }
     }
 
