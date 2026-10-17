@@ -116,8 +116,24 @@ async function convertSelection(
  * finds the same market, books a new code, and keeps every game that couldn't be carried over
  * (with the reason) so nothing is silently dropped.
  */
-export async function convertSlip(opts: { user: AuthUser; source: ConvertSource; target: BookmakerSlug; ipHash: string | null }): Promise<SlipView> {
+export async function convertSlip(opts: {
+  user: AuthUser;
+  source: ConvertSource;
+  target: BookmakerSlug;
+  ipHash: string | null;
+  /**
+   * Whether to ask the bookmaker for a code, or stop at the draft.
+   *
+   * False does every expensive part - finding each game at the destination and reading that
+   * bookmaker's own price for the same market - and then stops. What comes back is a real,
+   * saved slip with no code, which is exactly what the user needs to decide with: how many of
+   * their selections this destination can actually carry, which ones it cannot, and why. Booking
+   * it afterwards is a second, explicit step that reuses this work rather than repeating it.
+   */
+  book?: boolean;
+}): Promise<SlipView> {
   const { user, target, ipHash } = opts;
+  const book = opts.book ?? true;
 
   const sourceSlip =
     "slipId" in opts.source
@@ -148,7 +164,7 @@ export async function convertSlip(opts: { user: AuthUser; source: ConvertSource;
     // so a refused booking returns the slip without a code and says so.
     let code: string | null = null;
     let expiresAt: Date | null = null;
-    if (ok.length > 0) {
+    if (book && ok.length > 0) {
       const created = await adapter
         .createCode(ok.map((d) => ({ eventExternalId: d.event.externalId!, market: d.market! })))
         .catch((err) => {

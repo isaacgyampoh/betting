@@ -25,10 +25,24 @@ import { bestMatch } from "@/lib/matching/similarity";
 //
 // Two things to know before touching this:
 //
-//  * Fixtures and odds are verified. **Booking is not**: the two coupon endpoints answer, and the
-//    event shape below comes from the platform's own serializer, but no code has been created and
-//    read back. Until that happens the adapters declare loadCode and createCode as unsupported, so
-//    nothing here reaches a user.
+//  * Fixtures and odds are verified against the live feed - 50 fixtures with real prices, checked
+//    on 2026-10-16.
+//  * **Booking does not work, and now we know how it fails.** A round trip was attempted against
+//    both 1xbet.com.gh and PariPesa on 2026-10-16, with two Bundesliga fixtures over an hour from
+//    kick-off and their own 1X2 prices:
+//      - 1xBet:   SaveCoupon returns Success=false, "Call failed, please try again later",
+//                 ErrorCode 161627.
+//      - PariPesa: SaveCoupon returns Success=true and a code, and GetCoupon then reads that code
+//                 back with **zero** events in it. The coupon is created empty.
+//    Both are platform-side refusals of the payload below, not transport errors. The guard in
+//    createCode did its job in both cases: it reads the code back before returning it, so nothing
+//    incomplete was ever handed to a user.
+//
+//    What this is not is a reason to start guessing at the payload shape. These are undocumented
+//    endpoints belonging to someone else, and the way to make booking work here is an authorised
+//    integration, not a sequence of experiments against their production service.
+//
+//    So loadCode and createCode stay declared unsupported, and nothing here reaches a user.
 //  * These bookmakers publish no per-outcome probability (SportyBet does), so offers carry
 //    `probability: null` and the AI slip builder will skip them. They are for loading and
 //    converting codes, not for building slips.

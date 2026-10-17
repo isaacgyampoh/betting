@@ -219,15 +219,53 @@ class SlipsRepository {
     return Slip.fromJson(json);
   }
 
-  /// Converts a loaded slip to another bookmaker.
+  /// Works out what a destination can carry, without booking anything.
   ///
-  /// The result is whatever the server actually managed to book. It may carry fewer usable
-  /// selections than the source and it may carry no code at all; both are reported as they are.
+  /// Every expensive part still happens - each game is found at the destination and its own price
+  /// read - and then it stops. What comes back is a real draft: how many selections that
+  /// bookmaker can take, which ones it cannot, and why. Nobody should have to commit to a move to
+  /// find out they were going to lose three legs.
   Future<Slip> convert({required String slipId, required String target}) async {
     final json = await _api.post<Map<String, dynamic>>(
       '/slips/convert',
-      body: {'slipId': slipId, 'target': target},
+      body: {'slipId': slipId, 'target': target, 'book': false},
+      receiveTimeout: const Duration(seconds: 70),
     );
     return Slip.fromJson(json);
+  }
+
+  /// Asks the bookmaker to issue a code for a draft that has already been converted.
+  ///
+  /// Books exactly the selections the draft holds - nothing is re-matched or re-priced - so "the
+  /// code is these selections" is a true statement rather than a hope. Booking the same draft
+  /// twice returns the code it already has rather than issuing a second one.
+  Future<Slip> book({required String slipId}) async {
+    final json = await _api.post<Map<String, dynamic>>(
+      '/slips/$slipId/book',
+      receiveTimeout: const Duration(seconds: 70),
+    );
+    return Slip.fromJson(json);
+  }
+
+  /// Removes selections from a slip, by position.
+  ///
+  /// The server re-books what is left. Positions are the user's own numbering, so removing leg 3
+  /// removes the one labelled 3 - not the third surviving one.
+  Future<Slip> removeSelections({required String slipId, required List<int> positions}) async {
+    // The edit endpoint answers with a list, because one of its operations splits a slip into
+    // several. Removing never does, so there is exactly one slip here - but it is a list, and
+    // reading it as an object silently produced a slip with no selections and no code.
+    final list = await _api.post<List<dynamic>>(
+      '/slips/$slipId/edit',
+      body: {
+        'op': {'type': 'remove', 'positions': positions},
+        'book': false,
+      },
+      receiveTimeout: const Duration(seconds: 70),
+    );
+    if (list.isEmpty) {
+      throw const UnknownFailure('That edit left nothing on the slip.');
+    }
+    return Slip.fromJson(list.first as Map<String, dynamic>);
   }
 }

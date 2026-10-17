@@ -19,13 +19,59 @@ export type BookmakerListing = {
    * told differently, because their code is fine.
    */
   refusedReason?: string | null;
+  /** Which of the four states below this bookmaker is in. */
+  status?: BookmakerStatus;
+  /** One sentence explaining that status, for any state that is not simply "available". */
+  statusNote?: string | null;
+  /** Where this bookmaker operates, as a hint rather than a promise. */
+  country?: string | null;
 };
+
+/**
+ * What a user can actually expect from a destination.
+ *
+ * Four states rather than a boolean, because "it does not work" covers four different situations
+ * and only one of them is ours to fix:
+ *
+ *   available  - a booking code has genuinely been issued and read back.
+ *   setup      - the integration exists and works, and needs configuration or authorisation that
+ *                is ours to supply.
+ *   unavailable- the integration is finished and the bookmaker itself is refusing us. Theirs to
+ *                lift, not ours to work around.
+ *   unsupported- no authorised integration route has been found. Research, not a bug.
+ */
+export const BOOKMAKER_STATUSES = ["available", "setup", "unavailable", "unsupported"] as const;
+export type BookmakerStatus = (typeof BOOKMAKER_STATUSES)[number];
 
 /**
  * Bookmakers that are enabled in the DB and have an adapter, each saying what it can really do.
  * The UI uses this so it never offers a conversion that is bound to fail: a bookmaker we cannot book
  * at is shown as coming soon rather than as a target.
  */
+/**
+ * Bookmakers whose integration is written and working but is waiting on something of ours.
+ *
+ * Separate from "no integration" because the difference is actionable: these need a decision or a
+ * credential, not research. The 1xBet-platform four read fixtures and prices correctly from the
+ * live feed; what has never worked is booking - 1xBet's SaveCoupon refuses with ErrorCode 161627
+ * and PariPesa's creates a coupon that reads back empty (checked 2026-10-16, see live/onex.ts).
+ * Until an authorised booking route exists they cannot be a destination, which is why they are
+ * here rather than available.
+ */
+const AWAITING_SETUP: Partial<Record<BookmakerSlug, string>> = {
+  "1xbet": "Reads fixtures and prices. Booking needs an authorised integration with 1xBet.",
+  "22bet": "Reads fixtures and prices. Booking needs an authorised integration with 22Bet.",
+  betwinner: "Reads fixtures and prices. Booking needs an authorised integration with Betwinner.",
+  paripesa: "Reads fixtures and prices. Booking needs an authorised integration with PariPesa.",
+};
+
+function statusOf(slug: BookmakerSlug, canLoad: boolean, canBook: boolean): BookmakerStatus {
+  if (canLoad && canBook) return "available";
+  if (REFUSED_BY_BOOKMAKER[slug]) return "unavailable";
+  if (AWAITING_SETUP[slug]) return "setup";
+  return "unsupported";
+}
+
 export async function listEnabledBookmakers(): Promise<BookmakerListing[]> {
   const rows = await db.bookmaker.findMany({ where: { isEnabled: true }, orderBy: { name: "asc" } });
   return rows
@@ -41,6 +87,9 @@ export async function listEnabledBookmakers(): Promise<BookmakerListing[]> {
         // own servers are turning us away is a different thing from one with no integration, and
         // the screen should not tell somebody holding a perfectly good code that it is unsupported.
         refusedReason: REFUSED_BY_BOOKMAKER[b.slug] ?? null,
+        status: statusOf(b.slug, capabilities.loadCode, capabilities.createCode),
+        statusNote: REFUSED_BY_BOOKMAKER[b.slug] ?? AWAITING_SETUP[b.slug] ?? null,
+        country: b.country ?? null,
       };
     });
 }

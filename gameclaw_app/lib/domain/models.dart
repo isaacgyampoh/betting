@@ -1153,6 +1153,34 @@ class SlipWarning {
 /// The two capabilities are independent and both matter to the user before they start: a
 /// bookmaker that can read a code but not issue one can be a source but never a destination, and
 /// offering it as a destination would end in a slip that was built and never booked.
+/// What a user can actually expect from a destination.
+///
+/// Four states rather than a boolean, because "it does not work" covers four situations and only
+/// one of them is ours to fix. Listing them together, as one undifferentiated "not yet", tells
+/// somebody holding a perfectly valid code to go looking for a problem at their end.
+enum BookmakerStatus {
+  /// A booking code has genuinely been issued here and read back.
+  available('available', 'Available'),
+
+  /// The integration works and is waiting on configuration or authorisation that is ours.
+  setup('setup', 'Setup required'),
+
+  /// Finished, and the bookmaker itself is refusing us. Theirs to lift, not ours to work around.
+  unavailable('unavailable', 'Unavailable'),
+
+  /// No authorised integration route has been found. Research, not a bug.
+  unsupported('unsupported', 'Not yet supported');
+
+  const BookmakerStatus(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static BookmakerStatus from(String? wire) => BookmakerStatus.values.firstWhere(
+    (s) => s.wire == wire,
+    orElse: () => BookmakerStatus.unsupported,
+  );
+}
+
 class Bookmaker {
   const Bookmaker({
     required this.slug,
@@ -1160,6 +1188,9 @@ class Bookmaker {
     required this.canLoad,
     required this.canBook,
     this.refusedReason,
+    this.status = BookmakerStatus.unsupported,
+    this.statusNote,
+    this.country,
   });
 
   final String slug;
@@ -1176,11 +1207,23 @@ class Bookmaker {
   /// code is perfectly good and the problem is not at their end.
   final String? refusedReason;
 
+  /// Which of the four states this destination is in.
+  final BookmakerStatus status;
+
+  /// One sentence explaining that status, for anything that is not simply available.
+  final String? statusNote;
+
+  /// Where it operates. A hint, not a promise of availability in the user's own country.
+  final String? country;
+
   factory Bookmaker.fromJson(Map<String, dynamic> json) => Bookmaker(
     slug: json['slug'] as String? ?? '',
     name: json['name'] as String? ?? '',
     canLoad: json['canLoad'] == true,
     refusedReason: json['refusedReason'] as String?,
+    status: BookmakerStatus.from(json['status'] as String?),
+    statusNote: json['statusNote'] as String?,
+    country: json['country'] as String?,
     canBook: json['canBook'] == true,
   );
 }

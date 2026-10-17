@@ -89,6 +89,41 @@ class ConvertController extends Notifier<ConvertState> {
   }
 
   /// Back to the loaded slip, keeping it, so another destination can be tried.
+  /// Asks the bookmaker to issue a code for the draft on screen.
+  ///
+  /// Nothing is re-matched or re-priced: it books exactly the selections the draft holds. A
+  /// refusal leaves the draft untouched, so the work that already succeeded is not thrown away
+  /// and the user can try again or pick another destination.
+  Future<void> book() async {
+    final draft = state.result;
+    if (draft == null || state.busy) return;
+    state = state.copyWith(busy: true, clearError: true);
+    try {
+      final booked = await ref.read(slipsRepositoryProvider).book(slipId: draft.id);
+      state = state.copyWith(stage: ConvertStage.converted, result: booked, busy: false);
+    } on ApiFailure catch (failure) {
+      state = state.copyWith(busy: false, error: failure);
+    }
+  }
+
+  /// Removes one selection from the draft, by its own position number.
+  ///
+  /// The user asked for this, so it happens; what must not happen is a selection disappearing
+  /// because it was inconvenient. Everything else on the slip is left exactly as it was.
+  Future<void> removeSelection(int position) async {
+    final draft = state.result;
+    if (draft == null || state.busy) return;
+    state = state.copyWith(busy: true, clearError: true);
+    try {
+      final edited = await ref
+          .read(slipsRepositoryProvider)
+          .removeSelections(slipId: draft.id, positions: [position]);
+      state = state.copyWith(stage: ConvertStage.converted, result: edited, busy: false);
+    } on ApiFailure catch (failure) {
+      state = state.copyWith(busy: false, error: failure);
+    }
+  }
+
   void tryAnother() {
     if (state.source == null) return;
     state = ConvertState(stage: ConvertStage.loaded, source: state.source);

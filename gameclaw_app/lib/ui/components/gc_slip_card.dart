@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../domain/models.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
+import 'gc_button.dart';
 import 'gc_chip.dart';
 import 'gc_states.dart';
 
@@ -21,13 +22,24 @@ import 'gc_states.dart';
 ///    A slip that quietly loses two legs between being read and being booked is worse than one
 ///    that says what it could not take across.
 class GcSlipCard extends StatelessWidget {
-  const GcSlipCard({super.key, required this.slip});
+  const GcSlipCard({super.key, required this.slip, this.onBook, this.onRemove, this.busy = false});
 
   final Slip slip;
+
+  /// Asks the bookmaker to issue a code for this draft. Absent where booking makes no sense -
+  /// a slip read from a code already has one.
+  final Future<void> Function()? onBook;
+
+  /// Removes one selection, by its own position number.
+  final Future<void> Function(int position)? onRemove;
+
+  /// A request is in flight; actions are disabled rather than re-entrant.
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
     final unsupported = slip.selections.where((s) => !s.status.isOk).length;
+    final carryable = slip.selections.length - unsupported;
 
     return Container(
       decoration: BoxDecoration(
@@ -111,6 +123,18 @@ class GcSlipCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: GcSpace.md),
             child: slip.code != null
                 ? _Code(code: slip.code!, expiresAt: slip.expiresAtUtc)
+                // A draft is a real, useful state and is named as one. The expensive half has
+                // already happened - every game found at this bookmaker and priced - and what is
+                // left is one write the bookmaker can refuse. Saying "no code" and stopping would
+                // throw that away and read like a failure.
+                : onBook != null
+                ? _Draft(
+                    carryable: carryable,
+                    total: slip.selections.length,
+                    bookmaker: slip.bookmakerName,
+                    busy: busy,
+                    onBook: onBook!,
+                  )
                 : const GcNote(
                     'Built, but not booked. The bookmaker issued no code for this slip.',
                     icon: Icons.info_outline_rounded,
@@ -122,7 +146,17 @@ class GcSlipCard extends StatelessWidget {
 
           for (final (i, selection) in slip.selections.indexed) ...[
             if (i > 0) const Divider(height: 1, indent: GcSpace.md, endIndent: GcSpace.md),
-            _SelectionRow(selection: selection),
+            _SelectionRow(
+              selection: selection,
+              // Three conditions, and the first is the one that matters: a slip the bookmaker
+              // has issued a code for is not editable, because the code *is* those selections and
+              // changing the list underneath it would make this card describe something the code
+              // does not say. Enforced here rather than only at the call site, so a future screen
+              // cannot get it wrong. Removing the last leg is a delete by another name.
+              onRemove: onRemove == null || busy || slip.code != null || slip.selections.length < 2
+                  ? null
+                  : () => onRemove!(selection.position),
+            ),
           ],
 
           if (unsupported > 0 || slip.warnings.isNotEmpty)
@@ -229,9 +263,12 @@ class _Code extends StatelessWidget {
 }
 
 class _SelectionRow extends StatelessWidget {
-  const _SelectionRow({required this.selection});
+  const _SelectionRow({required this.selection, this.onRemove});
 
   final Selection selection;
+
+  /// Null where the slip is not editable, or where this is the last remaining selection.
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -260,6 +297,15 @@ class _SelectionRow extends StatelessWidget {
                 selection.odds?.toStringAsFixed(2) ?? '–',
                 style: GcType.figure.copyWith(color: ok ? gc(context).ink : gc(context).inkFaint),
               ),
+              if (onRemove != null) ...[
+                const SizedBox(width: GcSpace.xs),
+                GcIconButton(
+                  icon: Icons.close_rounded,
+                  colour: gc(context).inkFaint,
+                  tooltip: 'Remove ${selection.home} v ${selection.away}',
+                  onPressed: onRemove,
+                ),
+              ],
             ],
           ),
           const SizedBox(height: GcSpace.xs),
@@ -302,6 +348,53 @@ class _SelectionRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A converted slip that has not been booked yet.
+///
+/// The distinction this draws is the whole reason conversion and booking are separate. Everything
+/// expensive has already happened: each game was found at this bookmaker and its own price read.
+/// What is left is a single write the bookmaker can refuse for its own reasons. So the card says
+/// what this destination can actually carry, and asks before anything is booked in the user's
+/// name - rather than committing them to a move and reporting afterwards that three legs were lost.
+class _Draft extends StatelessWidget {
+  const _Draft({
+    required this.carryable,
+    required this.total,
+    required this.bookmaker,
+    required this.busy,
+    required this.onBook,
+  });
+
+  final int carryable;
+  final int total;
+  final String bookmaker;
+  final bool busy;
+  final Future<void> Function() onBook;
+
+  @override
+  Widget build(BuildContext context) {
+    final all = carryable == total;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GcNote(
+          all
+              ? '$bookmaker can carry all $total. Nothing is booked yet.'
+              : '$bookmaker can carry $carryable of $total. Nothing is booked yet.',
+          icon: Icons.fact_check_outlined,
+        ),
+        const SizedBox(height: GcSpace.sm),
+        // GcButton keeps itself busy for as long as the future it is given takes to settle, so
+        // a double tap cannot book twice.
+        GcButton(
+          label: carryable == 0 ? 'Nothing to book' : 'Get the booking code',
+          icon: Icons.confirmation_number_outlined,
+          onPressed: carryable == 0 || busy ? null : onBook,
+        ),
+      ],
     );
   }
 }

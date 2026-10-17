@@ -152,7 +152,12 @@ class _ConvertScreenState extends ConsumerState<ConvertScreen> {
                 ConvertStage.converted => _Result(
                   source: state.source!,
                   result: state.result!,
+                  busy: state.busy,
+                  error: state.error,
                   onTryAnother: () => ref.read(convertProvider.notifier).tryAnother(),
+                  onBook: () => ref.read(convertProvider.notifier).book(),
+                  onRemove: (position) =>
+                      ref.read(convertProvider.notifier).removeSelection(position),
                 ),
               },
             ),
@@ -268,11 +273,13 @@ class _Support extends StatelessWidget {
   Widget build(BuildContext context) {
     final readable = all.where((b) => b.canLoad).toList();
     final bookable = all.where((b) => b.canBook).toList();
-    final unusable = all.where((b) => !b.canLoad && !b.canBook).toList();
-    // Two different reasons, listed apart. One has no integration; the other has a finished one
-    // and is refusing our servers, which is not the user's problem to solve or be blamed for.
-    final refused = unusable.where((b) => b.refusedReason != null).toList();
-    final unbuilt = unusable.where((b) => b.refusedReason == null).toList();
+    // Grouped by what a user can actually expect, not by a boolean. "It does not work" covers
+    // four situations and only one of them is ours to fix; lumping them together tells somebody
+    // holding a perfectly valid code to go hunting for a problem at their end.
+    final byStatus = <BookmakerStatus, List<Bookmaker>>{
+      for (final s in BookmakerStatus.values)
+        s: all.where((b) => b.status == s).toList(growable: false),
+    };
 
     Widget line(String label, List<Bookmaker> list, String whenEmpty) => Padding(
       padding: const EdgeInsets.only(bottom: GcSpace.sm),
@@ -300,20 +307,26 @@ class _Support extends StatelessWidget {
         const SizedBox(height: GcSpace.md),
         line('Can read', readable, 'none right now'),
         line('Can issue', bookable, 'none right now'),
-        if (unbuilt.isNotEmpty) line('Not yet', unbuilt, ''),
-        if (refused.isNotEmpty) line('Unavailable', refused, ''),
+        const SizedBox(height: GcSpace.md),
+        for (final status in BookmakerStatus.values)
+          if ((byStatus[status] ?? const []).isNotEmpty) ...[
+            line(status.label, byStatus[status]!, ''),
+          ],
         const SizedBox(height: GcSpace.sm),
-        Text(
-          'A bookmaker under "Not yet" has no authorised booking-code integration, so a code from '
-          'it cannot be read here.',
-          style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
-        ),
-        // The two reasons are not the same, and the difference matters to somebody holding a
-        // code that works perfectly well at the bookmaker that issued it.
-        for (final b in refused) ...[
+        // Each state gets its own sentence. The differences matter to somebody holding a code
+        // that works perfectly well at the bookmaker that issued it.
+        for (final b in all.where((b) => b.statusNote != null)) ...[
           const SizedBox(height: GcSpace.xs),
           Text(
-            b.refusedReason!,
+            '${b.name}: ${b.statusNote}',
+            style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
+          ),
+        ],
+        if ((byStatus[BookmakerStatus.unsupported] ?? const []).isNotEmpty) ...[
+          const SizedBox(height: GcSpace.xs),
+          Text(
+            'A bookmaker under "Not yet supported" has no authorised booking-code integration we '
+            'have found, so a code from it cannot be read here.',
             style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
           ),
         ],
@@ -372,11 +385,23 @@ class _Loaded extends StatelessWidget {
 
 /// The outcome, stated precisely.
 class _Result extends StatelessWidget {
-  const _Result({required this.source, required this.result, required this.onTryAnother});
+  const _Result({
+    required this.source,
+    required this.result,
+    required this.busy,
+    required this.error,
+    required this.onTryAnother,
+    required this.onBook,
+    required this.onRemove,
+  });
 
   final Slip source;
   final Slip result;
+  final bool busy;
+  final Object? error;
   final VoidCallback onTryAnother;
+  final Future<void> Function() onBook;
+  final Future<void> Function(int position) onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -449,7 +474,19 @@ class _Result extends StatelessWidget {
                 style: GcType.overline.copyWith(color: gc(context).inkFaint),
               ),
               const SizedBox(height: GcSpace.md),
-              GcSlipCard(slip: result),
+              // Editable only while it is still a draft. Once the bookmaker has issued a code,
+              // the code is those selections - changing the list underneath it would make the
+              // card describe something the code does not say.
+              GcSlipCard(
+                slip: result,
+                busy: busy,
+                onBook: result.code == null ? onBook : null,
+                onRemove: result.code == null ? onRemove : null,
+              ),
+              if (error != null) ...[
+                const SizedBox(height: GcSpace.md),
+                Text('$error', style: GcType.caption.copyWith(color: gc(context).loss)),
+              ],
             ],
           ),
         ),
