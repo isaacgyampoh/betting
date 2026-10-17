@@ -1,8 +1,8 @@
 import { requireAdmin } from "@/lib/identity/admin";
-import { db } from "@/lib/db";
 import { connectedBookmakers } from "@/lib/bookmakers/registry";
 import { readiness } from "@/lib/readiness";
 import { canSendPush } from "@/lib/services/fcm";
+import { serviceHealth } from "@/lib/services/admin";
 import { Panel, Pill, When } from "../_components";
 
 export const dynamic = "force-dynamic";
@@ -16,37 +16,18 @@ export const dynamic = "force-dynamic";
 export default async function HealthPage() {
   await requireAdmin();
   const r = readiness();
-
-  const started = Date.now();
-  let dbUp = true;
-  try {
-    await db.$queryRaw`SELECT 1`;
-  } catch {
-    dbUp = false;
-  }
-  const dbMs = Date.now() - started;
-
-  const [cacheRows, freshRows, recentErrors, lastUsage] = await db.$transaction([
-    db.statsCache.count(),
-    db.statsCache.count({ where: { expiresAt: { gt: new Date() } } }),
-    db.usageLog.count({
-      where: { success: false, createdAt: { gte: new Date(Date.now() - 24 * 3600_000) } },
-    }),
-    db.usageLog.count({ where: { createdAt: { gte: new Date(Date.now() - 3600_000) } } }),
-  ]);
-
+  const h = await serviceHealth();
   const bookmakers = connectedBookmakers();
-  const devices = await db.deviceToken.count({ where: { revokedAt: null } });
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel title="Database">
         <dl className="space-y-1.5 text-sm">
           <Row label="Reachable">
-            {dbUp ? <Pill state="ok">yes, {dbMs}ms</Pill> : <Pill state="bad">no</Pill>}
+            {h.database.up ? <Pill state="ok">yes, {h.database.ms}ms</Pill> : <Pill state="bad">no</Pill>}
           </Row>
           <Row label="Cached provider rows">
-            <span className="text-zinc-300">{freshRows} fresh of {cacheRows}</span>
+            <span className="text-zinc-300">{h.cache.fresh} fresh of {h.cache.total}</span>
           </Row>
         </dl>
       </Panel>
@@ -57,13 +38,13 @@ export default async function HealthPage() {
             {r.features.liveStats ? <Pill state="ok">configured</Pill> : <Pill state="bad">no provider key</Pill>}
           </Row>
           <Row label="Requests in the last hour">
-            <span className="tabular-nums text-zinc-300">{lastUsage}</span>
+            <span className="tabular-nums text-zinc-300">{h.usage.lastHour}</span>
           </Row>
           <Row label="Failed in the last 24h">
-            {recentErrors === 0 ? (
+            {h.usage.failedDay === 0 ? (
               <Pill state="ok">none</Pill>
             ) : (
-              <Pill state="warn">{recentErrors}</Pill>
+              <Pill state="warn">{h.usage.failedDay}</Pill>
             )}
           </Row>
         </dl>
@@ -106,13 +87,13 @@ export default async function HealthPage() {
             )}
           </Row>
           <Row label="Registered devices">
-            <span className="tabular-nums text-zinc-300">{devices}</span>
+            <span className="tabular-nums text-zinc-300">{h.devices}</span>
           </Row>
           <Row label="AI">{r.features.ai ? <Pill state="ok">configured</Pill> : <Pill state="idle">off</Pill>}</Row>
           <Row label="Payments">
             {r.features.payments ? <Pill state="ok">configured</Pill> : <Pill state="idle">off</Pill>}
           </Row>
-          <Row label="Checked"><When value={new Date()} /></Row>
+          <Row label="Checked"><When value={h.checkedAt} /></Row>
         </dl>
       </Panel>
     </div>

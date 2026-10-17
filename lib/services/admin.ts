@@ -273,3 +273,46 @@ export async function setSetting(actorId: string, key: string, value: unknown, d
   });
   await audit(actorId, "setting.set", key, { from: before?.value ?? null, to: value });
 }
+
+export type ServiceHealth = {
+  database: { up: boolean; ms: number };
+  cache: { total: number; fresh: number };
+  usage: { lastHour: number; failedDay: number };
+  devices: number;
+  checkedAt: Date;
+};
+
+/**
+ * Everything the health page reports, gathered here rather than in the page.
+ *
+ * Two reasons. A page that issues its own queries drifts away from the service layer that every
+ * other page uses; and the lint rule that forbids impure calls during render is right that
+ * `Date.now()` belongs outside a component. The page became a renderer of this result.
+ */
+export async function serviceHealth(): Promise<ServiceHealth> {
+  const started = Date.now();
+  let up = true;
+  try {
+    await db.$queryRaw`SELECT 1`;
+  } catch {
+    up = false;
+  }
+  const ms = Date.now() - started;
+
+  const now = Date.now();
+  const [total, fresh, failedDay, lastHour, devices] = await db.$transaction([
+    db.statsCache.count(),
+    db.statsCache.count({ where: { expiresAt: { gt: new Date(now) } } }),
+    db.usageLog.count({ where: { success: false, createdAt: { gte: new Date(now - 86_400_000) } } }),
+    db.usageLog.count({ where: { createdAt: { gte: new Date(now - 3_600_000) } } }),
+    db.deviceToken.count({ where: { revokedAt: null } }),
+  ]);
+
+  return {
+    database: { up, ms },
+    cache: { total, fresh },
+    usage: { lastHour, failedDay },
+    devices,
+    checkedAt: new Date(now),
+  };
+}
