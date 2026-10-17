@@ -18,7 +18,9 @@ class $CachedResponsesTable extends CachedResponses
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _payloadMeta = const VerificationMeta('payload');
+  static const VerificationMeta _payloadMeta = const VerificationMeta(
+    'payload',
+  );
   @override
   late final GeneratedColumn<String> payload = GeneratedColumn<String>(
     'payload',
@@ -27,7 +29,9 @@ class $CachedResponsesTable extends CachedResponses
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _fetchedAtMeta = const VerificationMeta('fetchedAt');
+  static const VerificationMeta _fetchedAtMeta = const VerificationMeta(
+    'fetchedAt',
+  );
   @override
   late final GeneratedColumn<DateTime> fetchedAt = GeneratedColumn<DateTime>(
     'fetched_at',
@@ -51,12 +55,18 @@ class $CachedResponsesTable extends CachedResponses
     final context = VerificationContext();
     final data = instance.toColumns(true);
     if (data.containsKey('key')) {
-      context.handle(_keyMeta, key.isAcceptableOrUnknown(data['key']!, _keyMeta));
+      context.handle(
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
+      );
     } else if (isInserting) {
       context.missing(_keyMeta);
     }
     if (data.containsKey('payload')) {
-      context.handle(_payloadMeta, payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta));
+      context.handle(
+        _payloadMeta,
+        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
+      );
     } else if (isInserting) {
       context.missing(_payloadMeta);
     }
@@ -77,7 +87,10 @@ class $CachedResponsesTable extends CachedResponses
   CachedResponse map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return CachedResponse(
-      key: attachedDatabase.typeMapping.read(DriftSqlType.string, data['${effectivePrefix}key'])!,
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key'],
+      )!,
       payload: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}payload'],
@@ -102,7 +115,11 @@ class CachedResponse extends DataClass implements Insertable<CachedResponse> {
   /// The response body, exactly as received.
   final String payload;
   final DateTime fetchedAt;
-  const CachedResponse({required this.key, required this.payload, required this.fetchedAt});
+  const CachedResponse({
+    required this.key,
+    required this.payload,
+    required this.fetchedAt,
+  });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -120,7 +137,10 @@ class CachedResponse extends DataClass implements Insertable<CachedResponse> {
     );
   }
 
-  factory CachedResponse.fromJson(Map<String, dynamic> json, {ValueSerializer? serializer}) {
+  factory CachedResponse.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return CachedResponse(
       key: serializer.fromJson<String>(json['key']),
@@ -138,7 +158,11 @@ class CachedResponse extends DataClass implements Insertable<CachedResponse> {
     };
   }
 
-  CachedResponse copyWith({String? key, String? payload, DateTime? fetchedAt}) => CachedResponse(
+  CachedResponse copyWith({
+    String? key,
+    String? payload,
+    DateTime? fetchedAt,
+  }) => CachedResponse(
     key: key ?? this.key,
     payload: payload ?? this.payload,
     fetchedAt: fetchedAt ?? this.fetchedAt,
@@ -273,7 +297,9 @@ class $FavouriteTeamsTable extends FavouriteTeams
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _logoUrlMeta = const VerificationMeta('logoUrl');
+  static const VerificationMeta _logoUrlMeta = const VerificationMeta(
+    'logoUrl',
+  );
   @override
   late final GeneratedColumn<String> logoUrl = GeneratedColumn<String>(
     'logo_url',
@@ -282,7 +308,9 @@ class $FavouriteTeamsTable extends FavouriteTeams
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _addedAtMeta = const VerificationMeta('addedAt');
+  static const VerificationMeta _addedAtMeta = const VerificationMeta(
+    'addedAt',
+  );
   @override
   late final GeneratedColumn<DateTime> addedAt = GeneratedColumn<DateTime>(
     'added_at',
@@ -306,18 +334,30 @@ class $FavouriteTeamsTable extends FavouriteTeams
     final context = VerificationContext();
     final data = instance.toColumns(true);
     if (data.containsKey('team_id')) {
-      context.handle(_teamIdMeta, teamId.isAcceptableOrUnknown(data['team_id']!, _teamIdMeta));
+      context.handle(
+        _teamIdMeta,
+        teamId.isAcceptableOrUnknown(data['team_id']!, _teamIdMeta),
+      );
     }
     if (data.containsKey('name')) {
-      context.handle(_nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
     } else if (isInserting) {
       context.missing(_nameMeta);
     }
     if (data.containsKey('logo_url')) {
-      context.handle(_logoUrlMeta, logoUrl.isAcceptableOrUnknown(data['logo_url']!, _logoUrlMeta));
+      context.handle(
+        _logoUrlMeta,
+        logoUrl.isAcceptableOrUnknown(data['logo_url']!, _logoUrlMeta),
+      );
     }
     if (data.containsKey('added_at')) {
-      context.handle(_addedAtMeta, addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta));
+      context.handle(
+        _addedAtMeta,
+        addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta),
+      );
     } else if (isInserting) {
       context.missing(_addedAtMeta);
     }
@@ -334,7 +374,10 @@ class $FavouriteTeamsTable extends FavouriteTeams
         DriftSqlType.int,
         data['${effectivePrefix}team_id'],
       )!,
-      name: attachedDatabase.typeMapping.read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
       logoUrl: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}logo_url'],
@@ -379,12 +422,17 @@ class FavouriteTeam extends DataClass implements Insertable<FavouriteTeam> {
     return FavouriteTeamsCompanion(
       teamId: Value(teamId),
       name: Value(name),
-      logoUrl: logoUrl == null && nullToAbsent ? const Value.absent() : Value(logoUrl),
+      logoUrl: logoUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(logoUrl),
       addedAt: Value(addedAt),
     );
   }
 
-  factory FavouriteTeam.fromJson(Map<String, dynamic> json, {ValueSerializer? serializer}) {
+  factory FavouriteTeam.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return FavouriteTeam(
       teamId: serializer.fromJson<int>(json['teamId']),
@@ -523,16 +571,383 @@ class FavouriteTeamsCompanion extends UpdateCompanion<FavouriteTeam> {
   }
 }
 
+class $FollowedMatchesTable extends FollowedMatches
+    with TableInfo<$FollowedMatchesTable, FollowedMatch> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FollowedMatchesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _fixtureIdMeta = const VerificationMeta(
+    'fixtureId',
+  );
+  @override
+  late final GeneratedColumn<int> fixtureId = GeneratedColumn<int>(
+    'fixture_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _kickoffAtMeta = const VerificationMeta(
+    'kickoffAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> kickoffAt = GeneratedColumn<DateTime>(
+    'kickoff_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _mutedMeta = const VerificationMeta('muted');
+  @override
+  late final GeneratedColumn<bool> muted = GeneratedColumn<bool>(
+    'muted',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("muted" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _addedAtMeta = const VerificationMeta(
+    'addedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> addedAt = GeneratedColumn<DateTime>(
+    'added_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    fixtureId,
+    label,
+    kickoffAt,
+    muted,
+    addedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'followed_matches';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FollowedMatch> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('fixture_id')) {
+      context.handle(
+        _fixtureIdMeta,
+        fixtureId.isAcceptableOrUnknown(data['fixture_id']!, _fixtureIdMeta),
+      );
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('kickoff_at')) {
+      context.handle(
+        _kickoffAtMeta,
+        kickoffAt.isAcceptableOrUnknown(data['kickoff_at']!, _kickoffAtMeta),
+      );
+    }
+    if (data.containsKey('muted')) {
+      context.handle(
+        _mutedMeta,
+        muted.isAcceptableOrUnknown(data['muted']!, _mutedMeta),
+      );
+    }
+    if (data.containsKey('added_at')) {
+      context.handle(
+        _addedAtMeta,
+        addedAt.isAcceptableOrUnknown(data['added_at']!, _addedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_addedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {fixtureId};
+  @override
+  FollowedMatch map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FollowedMatch(
+      fixtureId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}fixture_id'],
+      )!,
+      label: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}label'],
+      )!,
+      kickoffAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}kickoff_at'],
+      ),
+      muted: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}muted'],
+      )!,
+      addedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}added_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FollowedMatchesTable createAlias(String alias) {
+    return $FollowedMatchesTable(attachedDatabase, alias);
+  }
+}
+
+class FollowedMatch extends DataClass implements Insertable<FollowedMatch> {
+  final int fixtureId;
+  final String label;
+
+  /// Named `At`, not `Utc`, because drift stores a DateTime as epoch seconds and hands it
+  /// back with isUtc false - the instant is preserved exactly, but expressed in local time.
+  /// Calling it Utc invited reading the wall-clock numbers as UTC, which is only harmless in a
+  /// UTC+0 timezone and this is not only shipped in one.
+  final DateTime? kickoffAt;
+
+  /// Silenced without unfollowing: it stays on the Following screen, it just says nothing.
+  final bool muted;
+  final DateTime addedAt;
+  const FollowedMatch({
+    required this.fixtureId,
+    required this.label,
+    this.kickoffAt,
+    required this.muted,
+    required this.addedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['fixture_id'] = Variable<int>(fixtureId);
+    map['label'] = Variable<String>(label);
+    if (!nullToAbsent || kickoffAt != null) {
+      map['kickoff_at'] = Variable<DateTime>(kickoffAt);
+    }
+    map['muted'] = Variable<bool>(muted);
+    map['added_at'] = Variable<DateTime>(addedAt);
+    return map;
+  }
+
+  FollowedMatchesCompanion toCompanion(bool nullToAbsent) {
+    return FollowedMatchesCompanion(
+      fixtureId: Value(fixtureId),
+      label: Value(label),
+      kickoffAt: kickoffAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(kickoffAt),
+      muted: Value(muted),
+      addedAt: Value(addedAt),
+    );
+  }
+
+  factory FollowedMatch.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FollowedMatch(
+      fixtureId: serializer.fromJson<int>(json['fixtureId']),
+      label: serializer.fromJson<String>(json['label']),
+      kickoffAt: serializer.fromJson<DateTime?>(json['kickoffAt']),
+      muted: serializer.fromJson<bool>(json['muted']),
+      addedAt: serializer.fromJson<DateTime>(json['addedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'fixtureId': serializer.toJson<int>(fixtureId),
+      'label': serializer.toJson<String>(label),
+      'kickoffAt': serializer.toJson<DateTime?>(kickoffAt),
+      'muted': serializer.toJson<bool>(muted),
+      'addedAt': serializer.toJson<DateTime>(addedAt),
+    };
+  }
+
+  FollowedMatch copyWith({
+    int? fixtureId,
+    String? label,
+    Value<DateTime?> kickoffAt = const Value.absent(),
+    bool? muted,
+    DateTime? addedAt,
+  }) => FollowedMatch(
+    fixtureId: fixtureId ?? this.fixtureId,
+    label: label ?? this.label,
+    kickoffAt: kickoffAt.present ? kickoffAt.value : this.kickoffAt,
+    muted: muted ?? this.muted,
+    addedAt: addedAt ?? this.addedAt,
+  );
+  FollowedMatch copyWithCompanion(FollowedMatchesCompanion data) {
+    return FollowedMatch(
+      fixtureId: data.fixtureId.present ? data.fixtureId.value : this.fixtureId,
+      label: data.label.present ? data.label.value : this.label,
+      kickoffAt: data.kickoffAt.present ? data.kickoffAt.value : this.kickoffAt,
+      muted: data.muted.present ? data.muted.value : this.muted,
+      addedAt: data.addedAt.present ? data.addedAt.value : this.addedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FollowedMatch(')
+          ..write('fixtureId: $fixtureId, ')
+          ..write('label: $label, ')
+          ..write('kickoffAt: $kickoffAt, ')
+          ..write('muted: $muted, ')
+          ..write('addedAt: $addedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(fixtureId, label, kickoffAt, muted, addedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FollowedMatch &&
+          other.fixtureId == this.fixtureId &&
+          other.label == this.label &&
+          other.kickoffAt == this.kickoffAt &&
+          other.muted == this.muted &&
+          other.addedAt == this.addedAt);
+}
+
+class FollowedMatchesCompanion extends UpdateCompanion<FollowedMatch> {
+  final Value<int> fixtureId;
+  final Value<String> label;
+  final Value<DateTime?> kickoffAt;
+  final Value<bool> muted;
+  final Value<DateTime> addedAt;
+  const FollowedMatchesCompanion({
+    this.fixtureId = const Value.absent(),
+    this.label = const Value.absent(),
+    this.kickoffAt = const Value.absent(),
+    this.muted = const Value.absent(),
+    this.addedAt = const Value.absent(),
+  });
+  FollowedMatchesCompanion.insert({
+    this.fixtureId = const Value.absent(),
+    required String label,
+    this.kickoffAt = const Value.absent(),
+    this.muted = const Value.absent(),
+    required DateTime addedAt,
+  }) : label = Value(label),
+       addedAt = Value(addedAt);
+  static Insertable<FollowedMatch> custom({
+    Expression<int>? fixtureId,
+    Expression<String>? label,
+    Expression<DateTime>? kickoffAt,
+    Expression<bool>? muted,
+    Expression<DateTime>? addedAt,
+  }) {
+    return RawValuesInsertable({
+      if (fixtureId != null) 'fixture_id': fixtureId,
+      if (label != null) 'label': label,
+      if (kickoffAt != null) 'kickoff_at': kickoffAt,
+      if (muted != null) 'muted': muted,
+      if (addedAt != null) 'added_at': addedAt,
+    });
+  }
+
+  FollowedMatchesCompanion copyWith({
+    Value<int>? fixtureId,
+    Value<String>? label,
+    Value<DateTime?>? kickoffAt,
+    Value<bool>? muted,
+    Value<DateTime>? addedAt,
+  }) {
+    return FollowedMatchesCompanion(
+      fixtureId: fixtureId ?? this.fixtureId,
+      label: label ?? this.label,
+      kickoffAt: kickoffAt ?? this.kickoffAt,
+      muted: muted ?? this.muted,
+      addedAt: addedAt ?? this.addedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (fixtureId.present) {
+      map['fixture_id'] = Variable<int>(fixtureId.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (kickoffAt.present) {
+      map['kickoff_at'] = Variable<DateTime>(kickoffAt.value);
+    }
+    if (muted.present) {
+      map['muted'] = Variable<bool>(muted.value);
+    }
+    if (addedAt.present) {
+      map['added_at'] = Variable<DateTime>(addedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FollowedMatchesCompanion(')
+          ..write('fixtureId: $fixtureId, ')
+          ..write('label: $label, ')
+          ..write('kickoffAt: $kickoffAt, ')
+          ..write('muted: $muted, ')
+          ..write('addedAt: $addedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$CacheDb extends GeneratedDatabase {
   _$CacheDb(QueryExecutor e) : super(e);
   $CacheDbManager get managers => $CacheDbManager(this);
-  late final $CachedResponsesTable cachedResponses = $CachedResponsesTable(this);
+  late final $CachedResponsesTable cachedResponses = $CachedResponsesTable(
+    this,
+  );
   late final $FavouriteTeamsTable favouriteTeams = $FavouriteTeamsTable(this);
+  late final $FollowedMatchesTable followedMatches = $FollowedMatchesTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [cachedResponses, favouriteTeams];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    cachedResponses,
+    favouriteTeams,
+    followedMatches,
+  ];
 }
 
 typedef $$CachedResponsesTableCreateCompanionBuilder =
@@ -550,7 +965,8 @@ typedef $$CachedResponsesTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
-class $$CachedResponsesTableFilterComposer extends Composer<_$CacheDb, $CachedResponsesTable> {
+class $$CachedResponsesTableFilterComposer
+    extends Composer<_$CacheDb, $CachedResponsesTable> {
   $$CachedResponsesTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -558,17 +974,24 @@ class $$CachedResponsesTableFilterComposer extends Composer<_$CacheDb, $CachedRe
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get key =>
-      $composableBuilder(column: $table.key, builder: (column) => ColumnFilters(column));
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnFilters(column),
+  );
 
-  ColumnFilters<String> get payload =>
-      $composableBuilder(column: $table.payload, builder: (column) => ColumnFilters(column));
+  ColumnFilters<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnFilters(column),
+  );
 
-  ColumnFilters<DateTime> get fetchedAt =>
-      $composableBuilder(column: $table.fetchedAt, builder: (column) => ColumnFilters(column));
+  ColumnFilters<DateTime> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
-class $$CachedResponsesTableOrderingComposer extends Composer<_$CacheDb, $CachedResponsesTable> {
+class $$CachedResponsesTableOrderingComposer
+    extends Composer<_$CacheDb, $CachedResponsesTable> {
   $$CachedResponsesTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -576,17 +999,24 @@ class $$CachedResponsesTableOrderingComposer extends Composer<_$CacheDb, $Cached
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get key =>
-      $composableBuilder(column: $table.key, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnOrderings(column),
+  );
 
-  ColumnOrderings<String> get payload =>
-      $composableBuilder(column: $table.payload, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnOrderings(column),
+  );
 
-  ColumnOrderings<DateTime> get fetchedAt =>
-      $composableBuilder(column: $table.fetchedAt, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<DateTime> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
-class $$CachedResponsesTableAnnotationComposer extends Composer<_$CacheDb, $CachedResponsesTable> {
+class $$CachedResponsesTableAnnotationComposer
+    extends Composer<_$CacheDb, $CachedResponsesTable> {
   $$CachedResponsesTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -615,7 +1045,10 @@ class $$CachedResponsesTableTableManager
           $$CachedResponsesTableAnnotationComposer,
           $$CachedResponsesTableCreateCompanionBuilder,
           $$CachedResponsesTableUpdateCompanionBuilder,
-          (CachedResponse, BaseReferences<_$CacheDb, $CachedResponsesTable, CachedResponse>),
+          (
+            CachedResponse,
+            BaseReferences<_$CacheDb, $CachedResponsesTable, CachedResponse>,
+          ),
           CachedResponse,
           PrefetchHooks Function()
         > {
@@ -654,8 +1087,9 @@ class $$CachedResponsesTableTableManager
                 fetchedAt: fetchedAt,
                 rowid: rowid,
               ),
-          withReferenceMapper: (p0) =>
-              p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -671,7 +1105,10 @@ typedef $$CachedResponsesTableProcessedTableManager =
       $$CachedResponsesTableAnnotationComposer,
       $$CachedResponsesTableCreateCompanionBuilder,
       $$CachedResponsesTableUpdateCompanionBuilder,
-      (CachedResponse, BaseReferences<_$CacheDb, $CachedResponsesTable, CachedResponse>),
+      (
+        CachedResponse,
+        BaseReferences<_$CacheDb, $CachedResponsesTable, CachedResponse>,
+      ),
       CachedResponse,
       PrefetchHooks Function()
     >;
@@ -690,7 +1127,8 @@ typedef $$FavouriteTeamsTableUpdateCompanionBuilder =
       Value<DateTime> addedAt,
     });
 
-class $$FavouriteTeamsTableFilterComposer extends Composer<_$CacheDb, $FavouriteTeamsTable> {
+class $$FavouriteTeamsTableFilterComposer
+    extends Composer<_$CacheDb, $FavouriteTeamsTable> {
   $$FavouriteTeamsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -698,20 +1136,29 @@ class $$FavouriteTeamsTableFilterComposer extends Composer<_$CacheDb, $Favourite
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<int> get teamId =>
-      $composableBuilder(column: $table.teamId, builder: (column) => ColumnFilters(column));
+  ColumnFilters<int> get teamId => $composableBuilder(
+    column: $table.teamId,
+    builder: (column) => ColumnFilters(column),
+  );
 
-  ColumnFilters<String> get name =>
-      $composableBuilder(column: $table.name, builder: (column) => ColumnFilters(column));
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
 
-  ColumnFilters<String> get logoUrl =>
-      $composableBuilder(column: $table.logoUrl, builder: (column) => ColumnFilters(column));
+  ColumnFilters<String> get logoUrl => $composableBuilder(
+    column: $table.logoUrl,
+    builder: (column) => ColumnFilters(column),
+  );
 
-  ColumnFilters<DateTime> get addedAt =>
-      $composableBuilder(column: $table.addedAt, builder: (column) => ColumnFilters(column));
+  ColumnFilters<DateTime> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnFilters(column),
+  );
 }
 
-class $$FavouriteTeamsTableOrderingComposer extends Composer<_$CacheDb, $FavouriteTeamsTable> {
+class $$FavouriteTeamsTableOrderingComposer
+    extends Composer<_$CacheDb, $FavouriteTeamsTable> {
   $$FavouriteTeamsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -719,20 +1166,29 @@ class $$FavouriteTeamsTableOrderingComposer extends Composer<_$CacheDb, $Favouri
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<int> get teamId =>
-      $composableBuilder(column: $table.teamId, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<int> get teamId => $composableBuilder(
+    column: $table.teamId,
+    builder: (column) => ColumnOrderings(column),
+  );
 
-  ColumnOrderings<String> get name =>
-      $composableBuilder(column: $table.name, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
 
-  ColumnOrderings<String> get logoUrl =>
-      $composableBuilder(column: $table.logoUrl, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<String> get logoUrl => $composableBuilder(
+    column: $table.logoUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
 
-  ColumnOrderings<DateTime> get addedAt =>
-      $composableBuilder(column: $table.addedAt, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<DateTime> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
-class $$FavouriteTeamsTableAnnotationComposer extends Composer<_$CacheDb, $FavouriteTeamsTable> {
+class $$FavouriteTeamsTableAnnotationComposer
+    extends Composer<_$CacheDb, $FavouriteTeamsTable> {
   $$FavouriteTeamsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -764,7 +1220,10 @@ class $$FavouriteTeamsTableTableManager
           $$FavouriteTeamsTableAnnotationComposer,
           $$FavouriteTeamsTableCreateCompanionBuilder,
           $$FavouriteTeamsTableUpdateCompanionBuilder,
-          (FavouriteTeam, BaseReferences<_$CacheDb, $FavouriteTeamsTable, FavouriteTeam>),
+          (
+            FavouriteTeam,
+            BaseReferences<_$CacheDb, $FavouriteTeamsTable, FavouriteTeam>,
+          ),
           FavouriteTeam,
           PrefetchHooks Function()
         > {
@@ -803,8 +1262,9 @@ class $$FavouriteTeamsTableTableManager
                 logoUrl: logoUrl,
                 addedAt: addedAt,
               ),
-          withReferenceMapper: (p0) =>
-              p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
           prefetchHooksCallback: null,
         ),
       );
@@ -820,8 +1280,205 @@ typedef $$FavouriteTeamsTableProcessedTableManager =
       $$FavouriteTeamsTableAnnotationComposer,
       $$FavouriteTeamsTableCreateCompanionBuilder,
       $$FavouriteTeamsTableUpdateCompanionBuilder,
-      (FavouriteTeam, BaseReferences<_$CacheDb, $FavouriteTeamsTable, FavouriteTeam>),
+      (
+        FavouriteTeam,
+        BaseReferences<_$CacheDb, $FavouriteTeamsTable, FavouriteTeam>,
+      ),
       FavouriteTeam,
+      PrefetchHooks Function()
+    >;
+typedef $$FollowedMatchesTableCreateCompanionBuilder =
+    FollowedMatchesCompanion Function({
+      Value<int> fixtureId,
+      required String label,
+      Value<DateTime?> kickoffAt,
+      Value<bool> muted,
+      required DateTime addedAt,
+    });
+typedef $$FollowedMatchesTableUpdateCompanionBuilder =
+    FollowedMatchesCompanion Function({
+      Value<int> fixtureId,
+      Value<String> label,
+      Value<DateTime?> kickoffAt,
+      Value<bool> muted,
+      Value<DateTime> addedAt,
+    });
+
+class $$FollowedMatchesTableFilterComposer
+    extends Composer<_$CacheDb, $FollowedMatchesTable> {
+  $$FollowedMatchesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get fixtureId => $composableBuilder(
+    column: $table.fixtureId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get kickoffAt => $composableBuilder(
+    column: $table.kickoffAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get muted => $composableBuilder(
+    column: $table.muted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FollowedMatchesTableOrderingComposer
+    extends Composer<_$CacheDb, $FollowedMatchesTable> {
+  $$FollowedMatchesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get fixtureId => $composableBuilder(
+    column: $table.fixtureId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get kickoffAt => $composableBuilder(
+    column: $table.kickoffAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get muted => $composableBuilder(
+    column: $table.muted,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get addedAt => $composableBuilder(
+    column: $table.addedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FollowedMatchesTableAnnotationComposer
+    extends Composer<_$CacheDb, $FollowedMatchesTable> {
+  $$FollowedMatchesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get fixtureId =>
+      $composableBuilder(column: $table.fixtureId, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get kickoffAt =>
+      $composableBuilder(column: $table.kickoffAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get muted =>
+      $composableBuilder(column: $table.muted, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get addedAt =>
+      $composableBuilder(column: $table.addedAt, builder: (column) => column);
+}
+
+class $$FollowedMatchesTableTableManager
+    extends
+        RootTableManager<
+          _$CacheDb,
+          $FollowedMatchesTable,
+          FollowedMatch,
+          $$FollowedMatchesTableFilterComposer,
+          $$FollowedMatchesTableOrderingComposer,
+          $$FollowedMatchesTableAnnotationComposer,
+          $$FollowedMatchesTableCreateCompanionBuilder,
+          $$FollowedMatchesTableUpdateCompanionBuilder,
+          (
+            FollowedMatch,
+            BaseReferences<_$CacheDb, $FollowedMatchesTable, FollowedMatch>,
+          ),
+          FollowedMatch,
+          PrefetchHooks Function()
+        > {
+  $$FollowedMatchesTableTableManager(_$CacheDb db, $FollowedMatchesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FollowedMatchesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FollowedMatchesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FollowedMatchesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> fixtureId = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<DateTime?> kickoffAt = const Value.absent(),
+                Value<bool> muted = const Value.absent(),
+                Value<DateTime> addedAt = const Value.absent(),
+              }) => FollowedMatchesCompanion(
+                fixtureId: fixtureId,
+                label: label,
+                kickoffAt: kickoffAt,
+                muted: muted,
+                addedAt: addedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> fixtureId = const Value.absent(),
+                required String label,
+                Value<DateTime?> kickoffAt = const Value.absent(),
+                Value<bool> muted = const Value.absent(),
+                required DateTime addedAt,
+              }) => FollowedMatchesCompanion.insert(
+                fixtureId: fixtureId,
+                label: label,
+                kickoffAt: kickoffAt,
+                muted: muted,
+                addedAt: addedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FollowedMatchesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$CacheDb,
+      $FollowedMatchesTable,
+      FollowedMatch,
+      $$FollowedMatchesTableFilterComposer,
+      $$FollowedMatchesTableOrderingComposer,
+      $$FollowedMatchesTableAnnotationComposer,
+      $$FollowedMatchesTableCreateCompanionBuilder,
+      $$FollowedMatchesTableUpdateCompanionBuilder,
+      (
+        FollowedMatch,
+        BaseReferences<_$CacheDb, $FollowedMatchesTable, FollowedMatch>,
+      ),
+      FollowedMatch,
       PrefetchHooks Function()
     >;
 
@@ -832,4 +1489,6 @@ class $CacheDbManager {
       $$CachedResponsesTableTableManager(_db, _db.cachedResponses);
   $$FavouriteTeamsTableTableManager get favouriteTeams =>
       $$FavouriteTeamsTableTableManager(_db, _db.favouriteTeams);
+  $$FollowedMatchesTableTableManager get followedMatches =>
+      $$FollowedMatchesTableTableManager(_db, _db.followedMatches);
 }

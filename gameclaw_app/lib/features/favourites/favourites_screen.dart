@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -25,6 +26,7 @@ class FavouritesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final teams = ref.watch(favouriteTeamsProvider);
+    final matches = ref.watch(followedMatchesProvider).value ?? const <FollowedMatch>[];
     final today = utcDay(DateTime.now());
     final day = ref.watch(matchDayProvider(today));
 
@@ -43,17 +45,17 @@ class FavouritesScreen extends ConsumerWidget {
                 loading: () => const GcFixtureSkeleton(rows: 3),
                 error: (error, _) =>
                     GcError(error: error, onRetry: () => ref.invalidate(favouriteTeamsProvider)),
-                data: (rows) => rows.isEmpty
+                data: (rows) => rows.isEmpty && matches.isEmpty
                     ? GcEmpty(
-                        icon: Icons.star_outline_rounded,
-                        title: 'No teams followed yet',
+                        icon: Icons.notifications_none_rounded,
+                        title: 'Nothing followed yet',
                         note:
-                            'Tap the star beside any match to follow a team. '
-                            'Their fixtures then appear here and can be filtered on the live centre.',
+                            'The bell on a match follows that one game. The star follows a team, '
+                            'and every game they play turns up here.',
                         actionLabel: 'Find matches',
                         onAction: () => context.go('/home'),
                       )
-                    : _Followed(teams: rows, day: day, ref: ref),
+                    : _Followed(teams: rows, matches: matches, day: day, ref: ref),
               ),
             ),
           ],
@@ -64,9 +66,15 @@ class FavouritesScreen extends ConsumerWidget {
 }
 
 class _Followed extends StatelessWidget {
-  const _Followed({required this.teams, required this.day, required this.ref});
+  const _Followed({
+    required this.teams,
+    required this.matches,
+    required this.day,
+    required this.ref,
+  });
 
   final List<FavouriteTeam> teams;
+  final List<FollowedMatch> matches;
   final AsyncValue<Cached<MatchDay>> day;
   final WidgetRef ref;
 
@@ -105,7 +113,20 @@ class _Followed extends StatelessWidget {
             child: GcNote('None of your teams play today.', icon: Icons.event_busy_rounded),
           ),
         ],
-        GcSectionHeader(title: '${teams.length} ${teams.length == 1 ? 'team' : 'teams'}'),
+        // Matches first, and under their own heading. Following one game and following a team
+        // are different intentions, and a single undifferentiated list made the app look as
+        // though it could only do the second - which until now it could.
+        if (matches.isNotEmpty) ...[
+          GcSectionHeader(title: '${matches.length} ${matches.length == 1 ? 'match' : 'matches'}'),
+          for (final match in matches)
+            _MatchRow(
+              match: match,
+              onOpen: () => context.push('/following/match/${match.fixtureId}'),
+              onMute: () => ref.read(setMatchMutedProvider)(match.fixtureId, !match.muted),
+            ),
+        ],
+        if (teams.isNotEmpty)
+          GcSectionHeader(title: '${teams.length} ${teams.length == 1 ? 'team' : 'teams'}'),
         for (final team in teams)
           _TeamRow(
             team: team,
@@ -147,6 +168,67 @@ class _TeamRow extends StatelessWidget {
             onPressed: onRemove,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One followed match.
+///
+/// Carries its own mute control, because the useful thing to do with a match you followed and
+/// then stopped caring about mid-game is to silence it, not to unfollow and lose it from the
+/// list.
+class _MatchRow extends StatelessWidget {
+  const _MatchRow({required this.match, required this.onOpen, required this.onMute});
+
+  final FollowedMatch match;
+  final VoidCallback onOpen;
+  final VoidCallback onMute;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onOpen,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter, vertical: GcSpace.md),
+        child: Row(
+          children: [
+            Icon(
+              match.muted ? Icons.notifications_off_outlined : Icons.notifications_active_rounded,
+              size: 18,
+              color: match.muted ? gc(context).inkFaint : gc(context).accentInk,
+            ),
+            const SizedBox(width: GcSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    match.label,
+                    style: GcType.bodyStrong.copyWith(
+                      color: match.muted ? gc(context).inkMuted : gc(context).ink,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (match.kickoffAt != null)
+                    Text(
+                      // Already local; see the column's comment in cache.dart.
+                      DateFormat('EEE d MMM, HH:mm').format(match.kickoffAt!),
+                      style: GcType.caption.copyWith(color: gc(context).inkFaint),
+                    ),
+                ],
+              ),
+            ),
+            GcIconButton(
+              icon: match.muted
+                  ? Icons.notifications_off_outlined
+                  : Icons.notifications_none_rounded,
+              tooltip: match.muted ? 'Unmute this match' : 'Mute this match',
+              onPressed: onMute,
+            ),
+          ],
+        ),
       ),
     );
   }

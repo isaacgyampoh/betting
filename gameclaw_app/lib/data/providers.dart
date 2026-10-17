@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/models.dart';
 import 'api_client.dart';
+import 'follows_client.dart';
 import 'local/cache.dart';
 import 'repository.dart';
 import 'push.dart';
@@ -143,6 +144,99 @@ final toggleFavouriteProvider = Provider<Future<void> Function(Team)>((ref) {
     }
   };
 });
+
+final followsClientProvider = Provider<FollowsClient>(
+  (ref) => FollowsClient(ref.watch(apiClientProvider)),
+);
+
+/// Matches the user follows, from the device.
+///
+/// The device is the source for rendering: the Following screen has to work offline and before
+/// any request returns. The server is told separately, because it is what makes an alert
+/// possible at all - it has to know who cares about which match.
+final followedMatchesProvider = StreamProvider<List<FollowedMatch>>(
+  (ref) => ref.watch(cacheDbProvider).watchFollowedMatches(),
+);
+
+final followedMatchIdsProvider = StreamProvider<Set<int>>((ref) {
+  return ref
+      .watch(cacheDbProvider)
+      .watchFollowedMatches()
+      .map((rows) => {for (final row in rows) row.fixtureId});
+});
+
+/// Follows or unfollows one match.
+///
+/// Written locally first and then pushed, so the star lights up immediately and keeps working
+/// with no signal. A failed push is swallowed: the follow is real on this device either way, and
+/// an error toast for a star tap would be noise. What it costs is that the server can be behind,
+/// which `syncFollowsProvider` settles on the next sign-in.
+final toggleFollowedMatchProvider = Provider<Future<void> Function(Fixture)>((ref) {
+  return (fixture) async {
+    final db = ref.read(cacheDbProvider);
+    final following = ref.read(followedMatchIdsProvider).value ?? const <int>{};
+    final label = '${fixture.home.name} v ${fixture.away.name}';
+
+    if (following.contains(fixture.id)) {
+      await db.unfollowMatch(fixture.id);
+      await _quietly(() => ref.read(followsClientProvider).remove(FollowKind.fixture, fixture.id));
+    } else {
+      await db.followMatch(fixture.id, label, fixture.kickoffUtc);
+      await _quietly(
+        () => ref.read(followsClientProvider).set(FollowKind.fixture, fixture.id, label: label),
+      );
+    }
+  };
+});
+
+/// Silences a followed match without unfollowing it.
+final setMatchMutedProvider = Provider<Future<void> Function(int, bool)>((ref) {
+  return (fixtureId, muted) async {
+    await ref.read(cacheDbProvider).setMatchMuted(fixtureId, muted);
+    await _quietly(
+      () => ref.read(followsClientProvider).set(FollowKind.fixture, fixtureId, muted: muted),
+    );
+  };
+});
+
+/// Pushes what this device follows to the server.
+///
+/// Called after signing in, because follows made while signed out exist only here and the server
+/// would otherwise never learn about them - which is the difference between getting an alert and
+/// not. Teams go too: the server needs both to work out who to tell about a goal.
+final syncFollowsProvider = Provider<Future<void> Function()>((ref) {
+  return () async {
+    final db = ref.read(cacheDbProvider);
+    final client = ref.read(followsClientProvider);
+    await _quietly(() async {
+      for (final match in await db.allFollowedMatches()) {
+        await client.set(
+          FollowKind.fixture,
+          match.fixtureId,
+          label: match.label,
+          muted: match.muted,
+        );
+      }
+      for (final team in await db.favourites()) {
+        await client.set(FollowKind.team, team.teamId, label: team.name);
+      }
+    });
+  };
+});
+
+/// Runs something and ignores a failure.
+///
+/// Only ever wrapped around telling the server about a follow. The follow itself is already
+/// written on the device, so the user's action succeeded; a red message because a background
+/// sync failed would be reporting our problem as theirs. The cost is that the server can lag,
+/// which the next sync settles.
+Future<void> _quietly(Future<void> Function() action) async {
+  try {
+    await action();
+  } on Object {
+    // Deliberate.
+  }
+}
 
 /// Signs out, and forgets everything read for that account.
 final signOutProvider = Provider<Future<void> Function()>((ref) {

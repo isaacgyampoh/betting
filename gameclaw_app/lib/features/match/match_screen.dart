@@ -44,6 +44,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen> {
   Widget build(BuildContext context) {
     final request = ref.watch(matchDetailProvider(widget.match));
     final favourites = ref.watch(favouriteIdsProvider).value ?? const <int>{};
+    final followedMatches = ref.watch(followedMatchIdsProvider).value ?? const <int>{};
 
     return Scaffold(
       body: SafeArea(
@@ -68,6 +69,8 @@ class _MatchScreenState extends ConsumerState<MatchScreen> {
             onTab: (i) => setState(() => _tab = i),
             favourites: favourites,
             onToggleFavourite: (team) => ref.read(toggleFavouriteProvider)(team),
+            followingMatch: followedMatches.contains(widget.match.id),
+            onToggleFollowMatch: (fixture) => ref.read(toggleFollowedMatchProvider)(fixture),
             onRefresh: () => ref.refresh(matchDetailProvider(widget.match).future),
           ),
         ),
@@ -133,6 +136,8 @@ class _Detail extends StatelessWidget {
     required this.onTab,
     required this.favourites,
     required this.onToggleFavourite,
+    required this.followingMatch,
+    required this.onToggleFollowMatch,
     required this.onRefresh,
   });
 
@@ -141,6 +146,10 @@ class _Detail extends StatelessWidget {
   final ValueChanged<int> onTab;
   final Set<int> favourites;
   final ValueChanged<Team> onToggleFavourite;
+
+  /// Following this one match, which is a different thing from following either side.
+  final bool followingMatch;
+  final ValueChanged<Fixture> onToggleFollowMatch;
   final Future<void> Function() onRefresh;
 
   /// Only the tabs with something behind them.
@@ -170,6 +179,18 @@ class _Detail extends StatelessWidget {
         _BackBar(
           trailing: Row(
             children: [
+              // Two different follows, and the icons say which is which. The bell is this
+              // match: alerts for this game and then nothing. The star is the team: every game
+              // it plays, indefinitely. They were one control before, a star that quietly
+              // followed the home side from a screen about a fixture, which is neither.
+              GcIconButton(
+                icon: followingMatch
+                    ? Icons.notifications_active_rounded
+                    : Icons.notifications_none_rounded,
+                colour: followingMatch ? gc(context).accent : null,
+                tooltip: followingMatch ? 'Following this match' : 'Follow this match',
+                onPressed: () => onToggleFollowMatch(detail.fixture),
+              ),
               GcIconButton(
                 icon: favourites.contains(detail.fixture.home.id)
                     ? Icons.star_rounded

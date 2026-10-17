@@ -33,10 +33,13 @@ class CachedResponses extends Table {
 
 /// Teams the user follows.
 ///
-/// On the device, not the server. Following a team is a preference about this phone, it needs no
-/// account, and it must keep working offline - which is the whole point of a favourites list on a
-/// commute. The name and crest are stored alongside the id so the favourites screen can render
-/// without first fetching a day of fixtures to look them up.
+/// Held here as well as on the server, not instead of it. The local copy is what makes the
+/// favourites screen render offline and before any request returns - the whole point of a
+/// favourites list on a commute - and the name and crest are stored alongside the id so it needs
+/// no fixture fetch to say who is who.
+///
+/// The server copy is what makes a notification possible at all: it has to know who cares about
+/// what. This used to be device-only, which is why no alert could ever have been sent.
 class FavouriteTeams extends Table {
   IntColumn get teamId => integer()();
   TextColumn get name => text()();
@@ -47,7 +50,32 @@ class FavouriteTeams extends Table {
   Set<Column> get primaryKey => {teamId};
 }
 
-@DriftDatabase(tables: [CachedResponses, FavouriteTeams])
+/// Matches the user follows, as opposed to teams.
+///
+/// A separate table rather than a `kind` column on the one above, because the two carry different
+/// things: a team has a crest and a lasting name, a fixture has two sides, a kickoff and an
+/// expiry. Following Arsenal is open-ended; following one match stops mattering once it ends.
+// Named explicitly: drift derives the row class by stripping the plural, which turns
+// FollowedMatches into "FollowedMatche".
+@DataClassName('FollowedMatch')
+class FollowedMatches extends Table {
+  IntColumn get fixtureId => integer()();
+  TextColumn get label => text()();
+  /// Named `At`, not `Utc`, because drift stores a DateTime as epoch seconds and hands it
+  /// back with isUtc false - the instant is preserved exactly, but expressed in local time.
+  /// Calling it Utc invited reading the wall-clock numbers as UTC, which is only harmless in a
+  /// UTC+0 timezone and this is not only shipped in one.
+  DateTimeColumn get kickoffAt => dateTime().nullable()();
+
+  /// Silenced without unfollowing: it stays on the Following screen, it just says nothing.
+  BoolColumn get muted => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get addedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {fixtureId};
+}
+
+@DriftDatabase(tables: [CachedResponses, FavouriteTeams, FollowedMatches])
 class CacheDb extends _$CacheDb {
   CacheDb() : super(_open());
 
@@ -55,7 +83,24 @@ class CacheDb extends _$CacheDb {
   CacheDb.memory() : super(NativeDatabase.memory());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  /// Without this, adding a table breaks every phone that already has the app.
+  ///
+  /// Drift creates the schema on a fresh install and does nothing on an upgrade unless told to,
+  /// so an existing install would open a version-1 database, find no `followed_matches`, and
+  /// throw on the first read. There was no strategy here at all because there had never been a
+  /// second version.
+  ///
+  /// Only the new table is created. Nothing drops or rewrites what is already there: the cache
+  /// and the existing favourites survive the upgrade untouched.
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 2) await m.createTable(followedMatches);
+    },
+  );
 
   Future<CachedResponse?> read(String key) =>
       (select(cachedResponses)..where((row) => row.key.equals(key))).getSingleOrNull();
@@ -63,6 +108,31 @@ class CacheDb extends _$CacheDb {
   Future<void> write(String key, String payload, DateTime fetchedAt) => into(
     cachedResponses,
   ).insertOnConflictUpdate(CachedResponse(key: key, payload: payload, fetchedAt: fetchedAt));
+
+  Future<List<FollowedMatch>> allFollowedMatches() =>
+      (select(followedMatches)..orderBy([(t) => OrderingTerm.asc(t.kickoffAt)])).get();
+
+  Stream<List<FollowedMatch>> watchFollowedMatches() =>
+      (select(followedMatches)..orderBy([(t) => OrderingTerm.asc(t.kickoffAt)])).watch();
+
+  Future<void> followMatch(int fixtureId, String label, DateTime? kickoffAt) =>
+      into(followedMatches).insertOnConflictUpdate(
+        FollowedMatch(
+          fixtureId: fixtureId,
+          label: label,
+          kickoffAt: kickoffAt,
+          muted: false,
+          addedAt: DateTime.now().toUtc(),
+        ),
+      );
+
+  Future<void> unfollowMatch(int fixtureId) =>
+      (delete(followedMatches)..where((t) => t.fixtureId.equals(fixtureId))).go();
+
+  Future<void> setMatchMuted(int fixtureId, bool muted) =>
+      (update(followedMatches)..where((t) => t.fixtureId.equals(fixtureId))).write(
+        FollowedMatchesCompanion(muted: Value(muted)),
+      );
 
   Future<List<FavouriteTeam>> favourites() =>
       (select(favouriteTeams)..orderBy([(t) => OrderingTerm.asc(t.name)])).get();
