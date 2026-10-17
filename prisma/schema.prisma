@@ -51,6 +51,7 @@ model Profile {
 
   identities      Identity[]
   refreshTokens   RefreshToken[]
+  follows         Follow[]
   adminActions    AdminAudit[]       @relation("AdminActor")
   subscriptions   Subscription[]
   payments        Payment[]
@@ -672,4 +673,51 @@ model AppSetting {
   updatedBy   String?  @map("updated_by") @db.Uuid
 
   @@map("app_settings")
+}
+
+/// What a follow points at. A match and a team are different things to the user and to the
+/// alerting: following Arsenal means every Arsenal game, following one fixture means that game
+/// and nothing else.
+enum FollowKind {
+  FIXTURE
+  TEAM
+  COMPETITION
+}
+
+/// One thing a user follows.
+///
+/// Server-side, not on the device. Following used to live in the app's local database, which
+/// meant the server had no idea what anybody cared about - so it could not have sent a
+/// notification even with working credentials, and a reinstall lost the lot.
+model Follow {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId String     @map("profile_id") @db.Uuid
+  kind      FollowKind
+  /// The provider's fixture id, team id or league id, depending on `kind`.
+  targetId  Int        @map("target_id")
+  /// Denormalised so the Following screen renders without fetching a day of fixtures to find out
+  /// what the user is even following. Refreshed opportunistically, never authoritative.
+  label     String?
+  /// Silenced without unfollowing. Null means alerts are on.
+  mutedAt   DateTime?  @map("muted_at") @db.Timestamptz
+
+  /// Which events produce an alert. Columns rather than a joined table: five booleans do not
+  /// earn their own row, and the alerting path reads them on every goal.
+  ///
+  /// Half-time is off by default. It is the one people switch off first, and a notification
+  /// somebody did not want is worse than one they have to turn on.
+  alertKickoff  Boolean @default(true) @map("alert_kickoff")
+  alertGoals    Boolean @default(true) @map("alert_goals")
+  alertRedCards Boolean @default(true) @map("alert_red_cards")
+  alertHalfTime Boolean @default(false) @map("alert_half_time")
+  alertFullTime Boolean @default(true) @map("alert_full_time")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  /// One follow per thing per person. Following twice is following once.
+  @@unique([profileId, kind, targetId])
+  @@index([kind, targetId])
+  @@map("follows")
 }
