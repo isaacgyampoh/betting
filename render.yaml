@@ -33,7 +33,11 @@ services:
     plan: starter
     region: frankfurt
     branch: main
-    buildCommand: pnpm install --frozen-lockfile && pnpm prisma migrate deploy && pnpm build
+    # db:generate explicitly, not as a side effect of postinstall. With a warm pnpm store the
+    # install is a no-op and its scripts are skipped, so lib/generated/prisma never appears and
+    # the build dies on module-not-found - which only happens on the second deploy onward, when
+    # there is a cache to reuse.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm db:generate && pnpm build
     startCommand: pnpm start
     healthCheckPath: /api/v1/health
     envVars:
