@@ -142,3 +142,43 @@ adb pull "$(adb shell pm path win.gameclaw.app | head -1 | tr -d '\r' | sed 's/p
 
 On 2026-10-17 that returned `1b33669cb0801a8550897686e4b75312d38e74ec`, which is the debug
 keystore's fingerprint - so the fingerprint was right and the client was simply absent.
+
+### Finding out what a client id actually is, without console access
+
+Google's own authorization endpoint will tell you, and it needs no credentials. Ask for an
+authorization it will refuse, and read *how* it refuses:
+
+```bash
+curl -sL "https://accounts.google.com/o/oauth2/v2/auth\
+?client_id=<ID>.apps.googleusercontent.com\
+&redirect_uri=https%3A%2F%2Fexample.com&response_type=code&scope=openid"
+```
+
+| What comes back | What it means |
+|---|---|
+| `Error 401: invalid_client` — "OAuth client was not found" | no such client |
+| `Error 401: deleted_client` — "OAuth client was deleted" | it existed and is gone |
+| `Error 400: redirect_uri_mismatch` | the client **exists**; this redirect is not registered on it |
+
+To tell an Android client from a Web one, ask again with that client's own custom scheme as the
+redirect: `com.googleusercontent.apps.<ID>:/oauth2redirect`. An Android client makes Google name
+the package in the refusal — "**win.gameclaw.app**'s request is invalid" — where a Web client
+shows the project's consent-screen name instead.
+
+### What this turned up on 2026-10-17
+
+| Client id | Google's verdict |
+|---|---|
+| `400646694915-k5ikq1…` — **compiled into every build so far** | `deleted_client` |
+| `400646694915-uso8a1…` | exists, and names `win.gameclaw.app` — the **Android** client |
+
+So the Web client had been **deleted**, and what replaced it was an Android client. That is two
+different failures in sequence, which is why fixing the first did not fix the sign-in:
+
+1. No Android client → `UNREGISTERED_ON_API_CONSOLE`, before any consent screen.
+2. Android client present, Web client deleted → consent screen appears, then
+   **`[28444] Developer console is not set up correctly`**.
+
+`serverClientId` must be a **Web** client - it is the audience the ID token is addressed to, and
+an Android client cannot serve as one. Both must exist: the Android client is how Google decides
+the caller is really this app; the Web client is who the token is for.
