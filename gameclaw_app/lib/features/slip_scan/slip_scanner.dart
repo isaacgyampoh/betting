@@ -25,15 +25,11 @@ class SlipScanner {
   /// operation off the edge of an OutOfMemory.
   static const _maxEdge = 2000.0;
 
-  /// The camera, or null if the user backed out.
-  Future<XFile?> capture() => _picker.pickImage(
-    source: ImageSource.camera,
-    maxWidth: _maxEdge,
-    maxHeight: _maxEdge,
-    imageQuality: 92,
-  );
-
   /// The gallery, or null if the user backed out.
+  ///
+  /// Gallery only, deliberately. A photograph of a screen is the worst input OCR can get - moire,
+  /// glare, keystone, a reflection of the room - where a screenshot is exactly the pixels the
+  /// bookmaker drew. Offering a camera invites the bad path and then looks unreliable.
   Future<XFile?> pick() => _picker.pickImage(
     source: ImageSource.gallery,
     maxWidth: _maxEdge,

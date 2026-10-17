@@ -134,6 +134,43 @@ void main() {
     });
   });
 
+  /// Searching by hand, for the cases the matcher cannot settle.
+  ///
+  /// The picker ranks with the same similarity the matcher uses, so the top of the list is what
+  /// the matcher thought was closest - just without the threshold that rejected it.
+  group('ranking for the manual picker', () {
+    final card = [
+      fixture(1, 'Manchester United', 'Newcastle'),
+      fixture(2, 'Manchester City', 'Brighton'),
+      fixture(3, 'Real Madrid', 'Barcelona'),
+    ];
+
+    test('a mangled name still ranks the right game first', () {
+      // Exactly the input the matcher refuses: close enough to find, not close enough to trust.
+      final ranked =
+          card
+              .map((f) => (f, similarity('Mancheter Utd Newcastle', '${f.home.name} ${f.away.name}')))
+              .toList()
+            ..sort((a, b) => b.$2.compareTo(a.$2));
+      expect(ranked.first.$1.id, 1);
+    });
+
+    test('searching one side is enough to surface the fixture', () {
+      final ranked =
+          card
+              .map(
+                (f) => (
+                  f,
+                  [similarity('Barcelona', f.home.name), similarity('Barcelona', f.away.name)]
+                      .reduce((a, b) => a > b ? a : b),
+                ),
+              )
+              .toList()
+            ..sort((a, b) => b.$2.compareTo(a.$2));
+      expect(ranked.first.$1.id, 3);
+    });
+  });
+
   test('a whole slip is matched selection by selection', () {
     final card = [fixture(1, 'Arsenal', 'Chelsea'), fixture(2, 'Real Madrid', 'Barcelona')];
     final slip = parseSlip('''

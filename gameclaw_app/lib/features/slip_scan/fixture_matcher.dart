@@ -20,12 +20,33 @@ import 'slip_parser.dart';
 /// comparison.
 String normaliseTeam(String name) {
   const accents = {
-    'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a', 'ã': 'a', 'å': 'a',
-    'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e',
-    'í': 'i', 'ì': 'i', 'ï': 'i', 'î': 'i',
-    'ó': 'o', 'ò': 'o', 'ö': 'o', 'ô': 'o', 'õ': 'o',
-    'ú': 'u', 'ù': 'u', 'ü': 'u', 'û': 'u',
-    'ñ': 'n', 'ç': 'c', 'ø': 'o', 'ß': 'ss',
+    'á': 'a',
+    'à': 'a',
+    'ä': 'a',
+    'â': 'a',
+    'ã': 'a',
+    'å': 'a',
+    'é': 'e',
+    'è': 'e',
+    'ë': 'e',
+    'ê': 'e',
+    'í': 'i',
+    'ì': 'i',
+    'ï': 'i',
+    'î': 'i',
+    'ó': 'o',
+    'ò': 'o',
+    'ö': 'o',
+    'ô': 'o',
+    'õ': 'o',
+    'ú': 'u',
+    'ù': 'u',
+    'ü': 'u',
+    'û': 'u',
+    'ñ': 'n',
+    'ç': 'c',
+    'ø': 'o',
+    'ß': 'ss',
   };
   var text = name.toLowerCase();
   accents.forEach((from, to) => text = text.replaceAll(from, to));
@@ -38,8 +59,27 @@ String normaliseTeam(String name) {
   // Club-type words and the abbreviations slips use. Dropped from both sides, so their presence
   // or absence never decides a match.
   const noise = {
-    'fc', 'cf', 'sc', 'ac', 'afc', 'cd', 'sv', 'fk', 'bk', 'if', 'ff', 'sk',
-    'club', 'de', 'the', 'team', 'united', 'utd', 'city', 'town', 'athletic',
+    'fc',
+    'cf',
+    'sc',
+    'ac',
+    'afc',
+    'cd',
+    'sv',
+    'fk',
+    'bk',
+    'if',
+    'ff',
+    'sk',
+    'club',
+    'de',
+    'the',
+    'team',
+    'united',
+    'utd',
+    'city',
+    'town',
+    'athletic',
   };
   final words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
   // Single letters are punctuation left over from an abbreviation, never a club name.
@@ -63,7 +103,8 @@ double similarity(String a, String b) {
   final leftWords = left.split(' ').toSet();
   final rightWords = right.split(' ').toSet();
   final shared = leftWords.intersection(rightWords).length;
-  final overlap = shared / (leftWords.length > rightWords.length ? leftWords.length : rightWords.length);
+  final overlap =
+      shared / (leftWords.length > rightWords.length ? leftWords.length : rightWords.length);
 
   // Trigram similarity, which survives a transposed or dropped letter inside a word.
   Set<String> grams(String s) {

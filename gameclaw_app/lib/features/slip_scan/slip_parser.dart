@@ -83,12 +83,7 @@ class ParsedSelection {
 
 /// Everything read from one image.
 class ParsedSlip {
-  const ParsedSlip({
-    required this.selections,
-    this.bookmaker,
-    this.bookingCode,
-    this.totalOdds,
-  });
+  const ParsedSlip({required this.selections, this.bookmaker, this.bookingCode, this.totalOdds});
 
   final List<ParsedSelection> selections;
 
@@ -127,7 +122,15 @@ const _bookmakers = <String, List<String>>{
 const _markets = <String, List<String>>{
   '1X2': ['1x2', 'match result', 'full time result', 'ft result', 'winner', '3-way'],
   'Double Chance': ['double chance', 'dc'],
-  'Over/Under': ['over/under', 'o/u', 'total goals', 'goals over', 'goals under', 'over ', 'under '],
+  'Over/Under': [
+    'over/under',
+    'o/u',
+    'total goals',
+    'goals over',
+    'goals under',
+    'over ',
+    'under ',
+  ],
   'Both Teams To Score': ['both teams to score', 'btts', 'gg/ng', 'gg', 'goal/goal'],
   'Draw No Bet': ['draw no bet', 'dnb'],
   'Handicap': ['handicap', 'ah ', 'asian handicap'],
@@ -143,9 +146,27 @@ bool _isNoise(String line) {
   final l = line.toLowerCase().trim();
   if (l.isEmpty) return true;
   const noise = [
-    'bet slip', 'betslip', 'total odds', 'total stake', 'potential win', 'possible win',
-    'stake', 'share', 'book', 'booking', 'place bet', 'remove', 'delete', 'edit',
-    'cash out', 'cashout', 'terms', 'accept', 'odds change', 'tax', 'bonus',
+    'bet slip',
+    'betslip',
+    'total odds',
+    'total stake',
+    'potential win',
+    'possible win',
+    'stake',
+    'share',
+    'book',
+    'booking',
+    'place bet',
+    'remove',
+    'delete',
+    'edit',
+    'cash out',
+    'cashout',
+    'terms',
+    'accept',
+    'odds change',
+    'tax',
+    'bonus',
   ];
   return noise.any((n) => l == n || l.startsWith('$n:') || l.startsWith('$n '));
 }
@@ -192,7 +213,9 @@ double? readOdds(String line) {
 
 /// True when a fragment is more number than name.
 bool _mostlyDigits(String text) {
-  final letters = text.runes.where((r) => RegExp(r'[A-Za-z]').hasMatch(String.fromCharCode(r))).length;
+  final letters = text.runes
+      .where((r) => RegExp(r'[A-Za-z]').hasMatch(String.fromCharCode(r)))
+      .length;
   final digits = text.runes.where((r) => RegExp(r'[0-9]').hasMatch(String.fromCharCode(r))).length;
   return digits > 0 && letters <= digits;
 }

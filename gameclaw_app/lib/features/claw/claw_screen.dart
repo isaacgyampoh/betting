@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../data/providers.dart';
 import '../../domain/models.dart';
@@ -39,27 +38,28 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
 
   bool _scanning = false;
 
-  /// Reads a slip out of a photograph, then shows what it found for checking.
+  /// Reads a slip out of a screenshot, then shows what it found for checking.
   ///
   /// Everything here happens on the device: the picture is recognised by ML Kit and matched
   /// against fixtures the app already has. Nothing is uploaded, which is the right default for a
-  /// photograph of somebody's betting slip even before cost is considered.
-  Future<void> _scan(ImageSource source) async {
+  /// screenshot of somebody's betting slip even before cost is considered.
+  Future<void> _scan() async {
     if (_scanning) return;
     final scanner = SlipScanner();
     String? path;
     try {
       setState(() => _scanning = true);
-      final picked = source == ImageSource.camera ? await scanner.capture() : await scanner.pick();
+      final picked = await scanner.pick();
       // Backing out of the picker is a decision, not a failure, and says nothing on screen.
       if (picked == null) return;
-      path = picked.path;
+      final imagePath = picked.path;
+      path = imagePath;
 
-      final slip = await scanner.read(path);
+      final slip = await scanner.read(imagePath);
       if (!mounted) return;
       if (slip == null) {
-        _toast('That image could not be read. A straighter, brighter photo usually works.');
-        await discardImage(path);
+        _toast('That image could not be read. A full, uncropped screenshot usually works.');
+        await discardImage(imagePath);
         return;
       }
       if (slip.isEmpty) {
@@ -77,13 +77,14 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
       final confirmed = await Navigator.of(context).push<List<FixtureMatch>>(
         MaterialPageRoute(
           builder: (routeContext) => SlipReviewScreen(
-            imagePath: path!,
+            imagePath: imagePath,
             slip: slip,
             matches: matches,
+            candidates: candidates,
             onConfirm: (result) => Navigator.pop(routeContext, result),
             onRetake: () {
               Navigator.pop(routeContext);
-              _scan(source);
+              _scan();
             },
             onDiscard: () => Navigator.pop(routeContext),
           ),
@@ -462,8 +463,8 @@ class _Composer extends StatelessWidget {
   final bool enabled;
   final ValueChanged<String> onSubmit;
 
-  /// Opens the camera or the gallery to read a slip from a picture.
-  final ValueChanged<ImageSource> onScan;
+  /// Opens the gallery to read a slip from a screenshot.
+  final VoidCallback onScan;
 
   @override
   Widget build(BuildContext context) {
@@ -553,57 +554,26 @@ class _Send extends StatelessWidget {
   }
 }
 
-/// Camera and gallery, behind one button.
+/// Attaching a screenshot of a slip.
 ///
-/// A sheet rather than two buttons in the composer: the bar is already narrow, and choosing a
-/// source is a decision made once per picture rather than something to keep on screen.
+/// Gallery only. A photograph of a screen is the worst input OCR can get - moire, glare, keystone
+/// and a reflection of the room - while a screenshot is the pixels the bookmaker drew. Offering a
+/// camera invites the bad path and makes the feature look unreliable when it is the input that is.
 class _Attach extends StatelessWidget {
   const _Attach({required this.enabled, required this.onScan});
 
   final bool enabled;
-  final ValueChanged<ImageSource> onScan;
+  final VoidCallback onScan;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Add a photo of a slip',
+      label: 'Add a screenshot of a slip',
       child: IconButton(
-        onPressed: enabled
-            ? () => showModalBottomSheet<void>(
-                context: context,
-                backgroundColor: gc(context).surface,
-                showDragHandle: true,
-                builder: (sheetContext) => SafeArea(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.photo_camera_outlined),
-                        title: const Text('Take a photo'),
-                        subtitle: const Text('Point at a printed or on-screen slip'),
-                        onTap: () {
-                          Navigator.pop(sheetContext);
-                          onScan(ImageSource.camera);
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.photo_library_outlined),
-                        title: const Text('Choose a screenshot'),
-                        subtitle: const Text('From your gallery or files'),
-                        onTap: () {
-                          Navigator.pop(sheetContext);
-                          onScan(ImageSource.gallery);
-                        },
-                      ),
-                      const SizedBox(height: GcSpace.sm),
-                    ],
-                  ),
-                ),
-              )
-            : null,
-        icon: const Icon(Icons.add_a_photo_outlined, size: 20),
-        tooltip: 'Add a photo of a slip',
+        onPressed: enabled ? onScan : null,
+        icon: const Icon(Icons.image_outlined, size: 20),
+        tooltip: 'Add a screenshot of a slip',
       ),
     );
   }

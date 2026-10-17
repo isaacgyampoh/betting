@@ -6,6 +6,7 @@ import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
 import '../../ui/components/gc_states.dart';
+import '../../domain/models.dart';
 import 'fixture_matcher.dart';
 import 'slip_parser.dart';
 
@@ -27,11 +28,16 @@ class SlipReviewScreen extends StatefulWidget {
     required this.onConfirm,
     required this.onRetake,
     required this.onDiscard,
+    this.candidates = const [],
   });
 
   final String imagePath;
   final ParsedSlip slip;
   final List<FixtureMatch> matches;
+
+  /// Every fixture the app could offer, so a selection that matched nothing can still be
+  /// attached to the right game by hand instead of being a dead end.
+  final List<Fixture> candidates;
 
   /// Called with whatever the user settled on.
   final ValueChanged<List<FixtureMatch>> onConfirm;
@@ -46,8 +52,7 @@ class _SlipReviewScreenState extends State<SlipReviewScreen> {
   late final List<FixtureMatch> _matches = List.of(widget.matches);
   bool _imageExpanded = false;
 
-  void _replace(int index, FixtureMatch next) =>
-      setState(() => _matches[index] = next);
+  void _replace(int index, FixtureMatch next) => setState(() => _matches[index] = next);
 
   void _remove(int index) => setState(() => _matches.removeAt(index));
 
@@ -121,6 +126,7 @@ class _SlipReviewScreenState extends State<SlipReviewScreen> {
             for (var i = 0; i < _matches.length; i++)
               _SelectionCard(
                 match: _matches[i],
+                candidates: widget.candidates,
                 onChanged: (next) => _replace(i, next),
                 onRemove: () => _remove(i),
               ),
@@ -137,9 +143,7 @@ class _SlipReviewScreenState extends State<SlipReviewScreen> {
                       ? 'Use anyway ($_unresolved unchecked)'
                       : 'Use these ${_matches.length}',
                   size: GcButtonSize.large,
-                  onPressed: _matches.isEmpty
-                      ? widget.onRetake
-                      : () => widget.onConfirm(_matches),
+                  onPressed: _matches.isEmpty ? widget.onRetake : () => widget.onConfirm(_matches),
                 ),
                 const SizedBox(height: GcSpace.sm),
                 GcButton(
@@ -208,10 +212,7 @@ class _ImageStrip extends StatelessWidget {
           const SizedBox(height: GcSpace.xs),
           Row(
             children: [
-              TextButton(
-                onPressed: onToggle,
-                child: Text(expanded ? 'Hide photo' : 'Show photo'),
-              ),
+              TextButton(onPressed: onToggle, child: Text(expanded ? 'Hide photo' : 'Show photo')),
               const Spacer(),
               TextButton(onPressed: onRetake, child: const Text('Replace')),
             ],
@@ -226,13 +227,47 @@ class _ImageStrip extends StatelessWidget {
 class _SelectionCard extends StatelessWidget {
   const _SelectionCard({
     required this.match,
+    required this.candidates,
     required this.onChanged,
     required this.onRemove,
   });
 
   final FixtureMatch match;
+
+  /// Every fixture that could be offered, so a selection the matcher could not settle is not a
+  /// dead end.
+  final List<Fixture> candidates;
   final ValueChanged<FixtureMatch> onChanged;
   final VoidCallback onRemove;
+
+  /// Lets the user attach this selection to a fixture by hand.
+  ///
+  /// The way out of every case the matcher cannot settle: a name OCR mangled beyond recognition,
+  /// a competition the app has not loaded, two clubs that genuinely read alike. Searching is
+  /// better than guessing and far better than silently dropping the leg.
+  Future<void> _chooseFixture(BuildContext context) async {
+    final chosen = await showModalBottomSheet<Fixture>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: gc(context).surface,
+      showDragHandle: true,
+      builder: (sheetContext) => _FixturePicker(
+        candidates: candidates,
+        initialQuery: [match.parsed.home, match.parsed.away].whereType<String>().join(' ').trim(),
+      ),
+    );
+    if (chosen != null) {
+      onChanged(
+        FixtureMatch(
+          parsed: match.parsed,
+          fixture: chosen,
+          // Picked by a person, so it is settled however the strings compare.
+          score: 1,
+          ambiguous: false,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -282,21 +317,28 @@ class _SelectionCard extends StatelessWidget {
               ),
             ),
 
-          if (fixture == null)
+          if (fixture == null) ...[
             Padding(
               padding: const EdgeInsets.only(top: GcSpace.xs),
               child: Text(
-                'No fixture on the card matched this. It will be left out unless you pick one.',
+                'No fixture matched this. It will be left out unless you pick one.',
                 style: GcType.caption.copyWith(color: gc(context).warn),
               ),
             ),
+            const SizedBox(height: GcSpace.xs),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _chooseFixture(context),
+                icon: const Icon(Icons.search_rounded, size: 16),
+                label: const Text('Find the match'),
+              ),
+            ),
+          ],
 
           if (match.ambiguous && match.alternatives.isNotEmpty) ...[
             const SizedBox(height: GcSpace.sm),
-            Text(
-              'Could also be',
-              style: GcType.caption.copyWith(color: gc(context).inkFaint),
-            ),
+            Text('Could also be', style: GcType.caption.copyWith(color: gc(context).inkFaint)),
             const SizedBox(height: GcSpace.xs),
             Wrap(
               spacing: GcSpace.xs,
@@ -304,10 +346,7 @@ class _SelectionCard extends StatelessWidget {
               children: [
                 for (final other in match.alternatives)
                   ActionChip(
-                    label: Text(
-                      '${other.home.name} v ${other.away.name}',
-                      style: GcType.caption,
-                    ),
+                    label: Text('${other.home.name} v ${other.away.name}', style: GcType.caption),
                     onPressed: () => onChanged(
                       FixtureMatch(
                         parsed: parsed,
@@ -464,6 +503,112 @@ class _ConfidenceChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(GcRadius.sm),
       ),
       child: Text(label, style: GcType.caption.copyWith(color: colour)),
+    );
+  }
+}
+
+/// Search the day's fixtures and pick one.
+///
+/// Seeded with whatever OCR read, because that is usually close enough to find the game even
+/// when it was not close enough to match automatically.
+class _FixturePicker extends StatefulWidget {
+  const _FixturePicker({required this.candidates, required this.initialQuery});
+
+  final List<Fixture> candidates;
+  final String initialQuery;
+
+  @override
+  State<_FixturePicker> createState() => _FixturePickerState();
+}
+
+class _FixturePickerState extends State<_FixturePicker> {
+  late final TextEditingController _query = TextEditingController(text: widget.initialQuery);
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  List<Fixture> get _results {
+    final text = _query.text.trim();
+    if (text.isEmpty) return widget.candidates.take(40).toList();
+    // Ranked by the same similarity the matcher uses, so what the user sees at the top is what
+    // the matcher thought was closest - just without the threshold that rejected it.
+    final scored =
+        widget.candidates
+            .map(
+              (f) => (
+                f,
+                [
+                  similarity(text, '${f.home.name} ${f.away.name}'),
+                  similarity(text, f.home.name),
+                  similarity(text, f.away.name),
+                ].reduce((a, b) => a > b ? a : b),
+              ),
+            )
+            .where((r) => r.$2 > 0.2)
+            .toList()
+          ..sort((a, b) => b.$2.compareTo(a.$2));
+    return scored.take(40).map((r) => r.$1).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final results = _results;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.7,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(GcSpace.gutter, 0, GcSpace.gutter, GcSpace.sm),
+              child: TextField(
+                controller: _query,
+                autofocus: true,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  hintText: 'Search teams',
+                  prefixIcon: Icon(Icons.search_rounded),
+                  isDense: true,
+                ),
+              ),
+            ),
+            Expanded(
+              child: results.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(GcSpace.gutter),
+                        child: Text(
+                          widget.candidates.isEmpty
+                              ? 'No fixtures loaded to choose from.'
+                              : 'Nothing matched that. The game may be on a day the app has '
+                                    'not loaded.',
+                          textAlign: TextAlign.center,
+                          style: GcType.caption.copyWith(color: gc(context).inkFaint),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: results.length,
+                      itemBuilder: (listContext, i) {
+                        final f = results[i];
+                        return ListTile(
+                          dense: true,
+                          title: Text('${f.home.name} v ${f.away.name}', style: GcType.body),
+                          subtitle: Text(
+                            f.competition.name,
+                            style: GcType.caption.copyWith(color: gc(listContext).inkFaint),
+                          ),
+                          onTap: () => Navigator.pop(listContext, f),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
