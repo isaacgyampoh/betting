@@ -26,8 +26,18 @@ class SecureStore {
       if (raw == null) return null;
       return AuthSession.fromJson(jsonDecode(raw) as Map<String, dynamic>);
     } on Exception {
-      // A keystore that cannot be opened - a restored backup on new hardware, a corrupt entry -
-      // means no session, not a crash on launch. The user signs in again.
+      // A keystore entry that cannot be opened - a restored backup on new hardware, a reinstall,
+      // a cleared app - means no session, not a crash on launch.
+      //
+      // And it has to be thrown away, not merely ignored. Returning null left the unreadable
+      // blob in place, so every launch decrypted it again and failed again:
+      //
+      //   E FlutterSecureStorage: Could not decrypt key. decryption failed
+      //
+      // Seen on this device after a reinstall. Worse than the noise, a broken entry can make the
+      // next write fail too, which is a user signed out on every single launch with nothing on
+      // screen explaining why. Deleting it lets the next write start from a fresh key.
+      await clear();
       return null;
     }
   }
