@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { getAdapter, isBookmakerSlug, REFUSED_BY_BOOKMAKER } from "@/lib/bookmakers/registry";
+import { AWAITING_SETUP, getAdapter, isBookmakerSlug, REFUSED_BY_BOOKMAKER } from "@/lib/bookmakers/registry";
 import type { BookmakerSlug } from "@/lib/bookmakers/types";
 import { AppError } from "@/lib/errors";
 
@@ -48,23 +48,6 @@ export type BookmakerStatus = (typeof BOOKMAKER_STATUSES)[number];
  * The UI uses this so it never offers a conversion that is bound to fail: a bookmaker we cannot book
  * at is shown as coming soon rather than as a target.
  */
-/**
- * Bookmakers whose integration is written and working but is waiting on something of ours.
- *
- * Separate from "no integration" because the difference is actionable: these need a decision or a
- * credential, not research. The 1xBet-platform four read fixtures and prices correctly from the
- * live feed; what has never worked is booking - 1xBet's SaveCoupon refuses with ErrorCode 161627
- * and PariPesa's creates a coupon that reads back empty (checked 2026-10-16, see live/onex.ts).
- * Until an authorised booking route exists they cannot be a destination, which is why they are
- * here rather than available.
- */
-const AWAITING_SETUP: Partial<Record<BookmakerSlug, string>> = {
-  "1xbet": "Reads fixtures and prices. Booking needs an authorised integration with 1xBet.",
-  "22bet": "Reads fixtures and prices. Booking needs an authorised integration with 22Bet.",
-  betwinner: "Reads fixtures and prices. Booking needs an authorised integration with Betwinner.",
-  paripesa: "Reads fixtures and prices. Booking needs an authorised integration with PariPesa.",
-};
-
 function statusOf(slug: BookmakerSlug, canLoad: boolean, canBook: boolean): BookmakerStatus {
   if (canLoad && canBook) return "available";
   if (REFUSED_BY_BOOKMAKER[slug]) return "unavailable";

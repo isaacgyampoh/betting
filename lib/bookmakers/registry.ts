@@ -68,23 +68,51 @@ export const REFUSED_BY_BOOKMAKER: Partial<Record<BookmakerSlug, string>> = {
 };
 
 /**
+ * Bookmakers whose integration works as far as it goes, and whose remaining step is ours to take.
+ *
+ * The 1xBet-platform four read fixtures and prices correctly from the live feed. What has never
+ * worked is booking: a non-wagering round trip on 2026-10-16 had 1xBet's SaveCoupon refuse with
+ * ErrorCode 161627 and PariPesa's create a coupon that read back empty (see live/onex.ts). So
+ * they cannot be a destination, and saying "we are still connecting it" would be wrong in a way
+ * that matters - it suggests waiting, when what is actually needed is an agreement with the
+ * operator.
+ */
+export const AWAITING_SETUP: Partial<Record<BookmakerSlug, string>> = {
+  "1xbet": "1xBet booking needs an authorised integration we don't have yet.",
+  "22bet": "22Bet booking needs an authorised integration we don't have yet.",
+  betwinner: "Betwinner booking needs an authorised integration we don't have yet.",
+  paripesa: "PariPesa booking needs an authorised integration we don't have yet.",
+};
+
+/**
  * A bookmaker that is implemented but is turning us away.
  *
  * Reads as unavailable everywhere a bookmaker's capabilities are shown, and says why rather than
  * implying we never built it. Code detection and market mapping still work, so a pasted MSport
  * code is still recognised as an MSport code and named as one.
  */
-function refusedByBookmaker(adapter: BookmakerAdapter, reason: string): BookmakerAdapter {
+function refusedByBookmaker(
+  adapter: BookmakerAdapter,
+  reason: string,
+  /**
+   * Whether this bookmaker still answers for fixtures and prices.
+   *
+   * The two refusals are not the same shape. MSport returns 403 to everything, so nothing of it
+   * works. The 1xBet platform serves its fixture feed and its prices perfectly well and only
+   * refuses to book - and that reading is worth keeping, because it is what lets a slip be
+   * *priced* against those bookmakers even though it cannot be booked there.
+   */
+  keepEvents = false,
+): BookmakerAdapter {
   const refuse = async (): Promise<never> => {
     throw new AppError("BOOKMAKER_NOT_CONNECTED", `${reason} Your code is fine - try another destination.`);
   };
   return {
     ...adapter,
-    capabilities: { loadCode: false, createCode: false, events: false },
+    capabilities: { loadCode: false, createCode: false, events: keepEvents && adapter.capabilities.events },
     loadCode: refuse,
     createCode: refuse,
-    searchEvent: refuse,
-    getEventMarkets: refuse,
+    ...(keepEvents ? {} : { searchEvent: refuse, getEventMarkets: refuse }),
   };
 }
 
@@ -124,8 +152,18 @@ export function getAdapter(slug: BookmakerSlug): BookmakerAdapter {
     const mode = modeFor(slug);
     adapter = FACTORIES[slug](mode, latency !== undefined ? { latencyMs: Number(latency) } : {});
     if (mode === "mock" && !sampleDataAllowed()) adapter = notConnected(adapter);
-    const refusal = REFUSED_BY_BOOKMAKER[slug];
-    if (refusal) adapter = refusedByBookmaker(adapter, refusal);
+    // One source of truth for why a bookmaker is unavailable, so the refusal a user reads matches
+    // the status the directory shows them.
+    //
+    // Only in a build that is serving real data. With sample data allowed - local development and
+    // the test suite - the mock adapters stand in for all nine, and clamping them here would mean
+    // the whole conversion path could only ever be exercised against two bookmakers.
+    if (!sampleDataAllowed()) {
+      const refused = REFUSED_BY_BOOKMAKER[slug];
+      const setup = AWAITING_SETUP[slug];
+      if (refused) adapter = refusedByBookmaker(adapter, refused);
+      else if (setup) adapter = refusedByBookmaker(adapter, setup, true);
+    }
     cache.set(slug, adapter);
   }
   return adapter;

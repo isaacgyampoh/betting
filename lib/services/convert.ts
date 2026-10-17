@@ -144,11 +144,29 @@ export async function convertSlip(opts: {
     throw new AppError("BAD_REQUEST", `This slip is already on ${sourceSlip.bookmaker.name}. Pick a different bookmaker.`);
   }
   const targetBookmaker = await requireEnabledBookmaker(target);
+
+  // Refuse a destination that cannot book, before doing any of the work.
+  //
+  // The app only offers bookmakers whose capabilities say they can issue a code, so this is not
+  // reachable from the UI. It is reachable from the API, and without it the request did every
+  // expensive thing - finding each game at the destination, reading its prices - and then failed
+  // on the final write, having told the user nothing useful and spent the bookmaker's quota to
+  // learn what the capability flag already knew. The adapter's own refusal message is better than
+  // anything generic here: it says whether this is a bookmaker we have not finished, or one that
+  // is turning us away.
+  const targetAdapter = getAdapter(target);
+  if (!targetAdapter.capabilities.createCode) {
+    await targetAdapter.createCode([]).catch((err: unknown) => {
+      throw err;
+    });
+    throw new AppError("BAD_REQUEST", `${targetBookmaker.name} can't issue booking codes.`);
+  }
+
   await enforceRateLimit({ userId: user.id, kind: "SLIP_CONVERT", ...SLIP_CONVERT_LIMIT });
 
   const meta = { from: sourceSlip.bookmaker.slug, to: target, sourceSlipId: sourceSlip.id };
   try {
-    const adapter = getAdapter(target);
+    const adapter = targetAdapter;
     const aliases = await getAliasIndex();
     const now = new Date();
     const sources = sourceSlip.selections.filter((s) => s.status === "OK");
