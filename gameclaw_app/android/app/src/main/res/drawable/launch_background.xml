@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The window behind the app until Flutter's first frame.
-     The app's own canvas colour, in both light and dark: GameClaw has one theme, and the
-     generated default of white meant every cold start flashed white before a near-black UI. -->
+<!-- The window behind the app until Flutter's first frame: the app's own canvas colour.
+
+     @color/gc_canvas has a values-night twin, so this follows the system appearance along with
+     everything else. It used to say GameClaw had one dark theme, which stopped being true when
+     light mode arrived and would send the next reader to hardcode near-black here - putting a
+     dark flash in front of every light-mode launch, the mirror image of the white one this was
+     added to remove. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/gc_canvas" />
 </layer-list>

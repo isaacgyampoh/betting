@@ -134,6 +134,55 @@ If health says `database_unreachable`, Hyperdrive has the old password: fix (a) 
 
 ---
 
+## 6. Google and Firebase
+
+Checked 2026-10-17. Three credentials, and two of them are not secrets at all — which matters,
+because treating a public identifier as a leak wastes a rotation, and treating a real key as
+public does the opposite.
+
+| | What it is | Secret? | Where it lives |
+|---|---|---|---|
+| Web OAuth client ID | `400646694915-…apps.googleusercontent.com` | **No** | passed to the build as `GC_GOOGLE_SERVER_CLIENT_ID`, and shipped inside every APK |
+| Firebase Android API key | the `AIzaSy…` in `google-services.json` | **No** | `gameclaw_app/android/app/google-services.json` |
+| FCM service account | a JSON file with a PEM private key | **Yes, badly** | Worker secret `FCM_SERVICE_ACCOUNT` |
+
+**The first two cannot be kept secret and are not meant to be.** Both ship inside the APK, where
+anyone can read them with `unzip`. Google's own documentation says so of the API key. What
+protects them is not obscurity: the Android API key is restricted to callers matching the package
+name and signing fingerprint, and the OAuth client ID is only useful to something Google already
+believes is GameClaw. Rotating either because it "appeared somewhere" accomplishes nothing and
+breaks every installed copy. What *does* matter is that the restrictions are actually in place —
+Google Cloud Console → *APIs & Services* → *Credentials* → the Android key → **Application
+restrictions: Android apps**, listing `win.gameclaw.app` with each signing fingerprint.
+
+**The OAuth client *secret* is a different thing** and is never needed here: the app uses the
+native ID-token flow, which has no secret. If one was ever issued and exposed, reset it in the
+console. Nothing in this repository wants it and nothing should ask for it.
+
+**The service account is the one that is genuinely dangerous.** It can send a notification to
+every device on the project. If the JSON file was ever committed, emailed, pasted or screenshotted:
+
+1. Firebase → *Project settings* → *Service accounts* → *Manage service account permissions*,
+   which opens Google Cloud IAM.
+2. Find the key under that service account and **delete it there**. Deleting the downloaded file
+   does nothing; the key stays valid until it is revoked in the console.
+3. Generate a new private key and set it: `npx wrangler secret put FCM_SERVICE_ACCOUNT
+   --config wrangler.api.jsonc < ~/Downloads/<file>.json`
+
+### Status as checked
+
+- `google-services.json` **has never been committed** — not in the working tree, not anywhere in
+  history. `git log --all -S AIzaSy` finds nothing. It is covered by
+  `gameclaw_app/android/.gitignore`.
+- No service-account private key has ever been committed either.
+- **`FCM_SERVICE_ACCOUNT` is not set on the Worker.** `wrangler secret list` returns six secrets
+  and that is not among them, so the server cannot send a push at all today. Step 4 of
+  `docs/notifications.md` is the outstanding one.
+- Whether anything was exposed *outside* this repository — a chat, a screenshot, a ticket — is
+  not something a coding session can see. If it was, it still needs revoking in the console.
+
+---
+
 ## After any rotation
 
 ```bash

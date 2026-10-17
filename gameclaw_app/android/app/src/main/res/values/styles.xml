@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- A dark parent even under the OS's light setting: the app is dark-only, and inheriting
-         Theme.Light here is what put a white flash in front of every cold launch. -->
+    <!-- The app follows the system appearance; it is not dark-only, whatever this comment used
+         to say. What keeps the launch window in step is android:windowBackground below, which
+         resolves @color/gc_canvas against values/ or values-night/ and so is already correct in
+         both. The parent only supplies defaults this theme overrides. -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
