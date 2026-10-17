@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/providers.dart';
 import '../../domain/models.dart';
 import '../../data/repository.dart';
+import '../convert/convert_controller.dart';
 import '../slip_scan/fixture_matcher.dart';
 import '../slip_scan/slip_parser.dart';
 import '../slip_scan/slip_review_screen.dart';
@@ -87,6 +89,15 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
               _scan();
             },
             onDiscard: () => Navigator.pop(routeContext),
+            // A code goes to the conversion screen, which talks to the bookmaker's own
+            // interface. That is the only way a slip is ever reconstructed exactly, and it is
+            // the only path that can produce a real destination code - nothing here invents one.
+            onConvertCode: (code, bookmaker) {
+              Navigator.pop(routeContext);
+              ref.read(convertProvider.notifier).reset();
+              ref.read(convertProvider.notifier).load(code, bookmaker: bookmaker);
+              context.go('/convert');
+            },
           ),
         ),
       );

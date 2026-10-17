@@ -29,6 +29,7 @@ class SlipReviewScreen extends StatefulWidget {
     required this.onRetake,
     required this.onDiscard,
     this.candidates = const [],
+    this.onConvertCode,
   });
 
   final String imagePath;
@@ -38,6 +39,10 @@ class SlipReviewScreen extends StatefulWidget {
   /// Every fixture the app could offer, so a selection that matched nothing can still be
   /// attached to the right game by hand instead of being a dead end.
   final List<Fixture> candidates;
+
+  /// Offered only when the slip printed a booking code. Null otherwise, and the button is not
+  /// shown at all rather than shown and refusing.
+  final void Function(String code, String? bookmaker)? onConvertCode;
 
   /// Called with whatever the user settled on.
   final ValueChanged<List<FixtureMatch>> onConfirm;
@@ -85,9 +90,10 @@ class _SlipReviewScreenState extends State<SlipReviewScreen> {
             onRetake: widget.onRetake,
           ),
 
-          // A booking code outranks everything the parser worked out. With it the real slip can
-          // be loaded from the bookmaker, and none of what follows has to be trusted.
-          if (code != null)
+          // A booking code outranks everything the parser worked out, so it is offered first and
+          // described plainly: loading the real slip through the bookmaker's own interface is
+          // exact, where anything read off an image is a reading.
+          if (code != null) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.md, GcSpace.gutter, 0),
               child: GcNote(
@@ -97,6 +103,20 @@ class _SlipReviewScreenState extends State<SlipReviewScreen> {
                 icon: Icons.confirmation_number_outlined,
               ),
             ),
+            if (widget.onConvertCode != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  GcSpace.gutter,
+                  GcSpace.sm,
+                  GcSpace.gutter,
+                  0,
+                ),
+                child: GcButton(
+                  label: 'Load $code and convert',
+                  onPressed: () => widget.onConvertCode!(code, widget.slip.bookmaker),
+                ),
+              ),
+          ],
 
           if (_matches.isEmpty)
             const Padding(
