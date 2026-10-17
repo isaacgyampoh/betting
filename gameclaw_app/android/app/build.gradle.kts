@@ -33,6 +33,20 @@ val keystoreProperties = Properties().apply {
 }
 val hasUploadKey = keystoreProperties.getProperty("storeFile") != null
 
+/**
+ * `-PunsignedRelease=true` builds a release-shaped APK with the debug key, for checking that
+ * minification works before any production key exists.
+ *
+ * It had to exist because the guard below fires during `packageRelease`, which runs *after* R8 -
+ * except that resource packaging fails first, so R8 had in fact never run at all. proguard-rules
+ * .pro was written, committed, and never once exercised. The first time anyone would have learnt
+ * whether those rules are complete is the day they created the upload key and tried to ship, with
+ * a stripped class showing up as a crash in the field rather than as a build error.
+ *
+ * It cannot become an accidental release: Play rejects anything signed with the debug key.
+ */
+val unsignedRelease = (project.findProperty("unsignedRelease") as String?)?.toBoolean() == true
+
 android {
     namespace = "win.gameclaw.app"
     compileSdk = flutter.compileSdkVersion
@@ -76,7 +90,12 @@ android {
         release {
             // Only when a real upload key is configured. Without one the build fails at the check
             // below rather than producing something that looks shippable and is not.
-            if (hasUploadKey) signingConfig = signingConfigs.getByName("upload")
+            signingConfig = when {
+                hasUploadKey -> signingConfigs.getByName("upload")
+                // Verification only, and loudly announced below.
+                unsignedRelease -> signingConfigs.getByName("debug")
+                else -> null
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -108,12 +127,21 @@ dependencies {
 tasks.configureEach {
     if (name.contains("Release") && (name.startsWith("package") || name.startsWith("sign"))) {
         doFirst {
-            if (!hasUploadKey) {
+            if (!hasUploadKey && unsignedRelease) {
+                logger.lifecycle(
+                    "\n  This release APK is signed with the DEBUG key, because -PunsignedRelease" +
+                        "=true.\n  It exists to check minification. Play will reject it. Do not " +
+                        "distribute it.\n",
+                )
+            }
+            if (!hasUploadKey && !unsignedRelease) {
                 throw GradleException(
                     "\n\nRelease signing is not configured.\n" +
                         "  android/key.properties is missing, so this build has no upload key.\n" +
                         "  See docs/release-signing.md to create one.\n" +
-                        "  Debug builds are unaffected: flutter build apk --debug\n",
+                        "  Debug builds are unaffected: flutter build apk --debug\n" +
+                        "  To check minification without a key: --android-project-arg=" +
+                        "unsignedRelease=true\n",
                 )
             }
         }

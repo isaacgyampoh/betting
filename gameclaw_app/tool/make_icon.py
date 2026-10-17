@@ -14,43 +14,50 @@ hand and gives cleaner tapered points than any stroke would.
 import math, os, sys
 from PIL import Image, ImageDraw
 
-ACCENT = (76, 125, 240, 255)      # GcColors.accent
-CANVAS = (11, 11, 13, 255)        # GcColors.canvas
-INK = (245, 245, 247, 255)        # GcColors.ink
+# Kept in step with lib/theme/tokens.dart by hand, which is why they drifted: these three were
+# left on the old blue long after the theme moved to lime, so the icons on disk were right and
+# the script that claims to produce them was not. Re-running it would have put the blue back.
+ACCENT = (204, 255, 46, 255)      # GcColors.accent  0xFFCCFF2E
+CANVAS = (9, 9, 11, 255)          # GcColors.canvas  0xFF09090B
+INK = (244, 244, 245, 255)        # GcColors.ink     0xFFF4F4F5
 
 SS = 4  # supersample
 
 
-def bezier(p0, p1, p2, t):
-    u = 1 - t
-    return (u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0],
-            u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1])
+# The same geometry as lib/ui/brand/gc_claw.dart, which is the mark everywhere inside the app.
+#
+# It used to be a different one - three quadratic beziers - and the icons on disk had moved on
+# without it, so this script produced neither the shipped icon's colours nor its shape. An icon
+# generator that does not reproduce the icon is worse than no generator, because it looks like
+# the source of truth. These numbers are now the Dart ones, and changing either file without the
+# other will show up the moment this is run.
+ORIGIN = (-0.35, 1.35)
 
-
-def slash(draw, p0, p1, p2, width, colour, steps=140):
-    """A claw mark: a curve that swells in the middle and comes to a point at both ends."""
-    left, right = [], []
-    for i in range(steps + 1):
-        t = i / steps
-        x, y = bezier(p0, p1, p2, t)
-        nx, ny = bezier(p0, p1, p2, min(t + 1e-3, 1.0))
-        dx, dy = nx - x, ny - y
-        length = math.hypot(dx, dy) or 1.0
-        # Normal to the direction of travel.
-        px, py = -dy / length, dx / length
-        # Pointed at both ends, fullest just past the middle - which is how a rake actually tears.
-        w = width * (math.sin(math.pi * t) ** 0.62)
-        left.append((x + px * w / 2, y + py * w / 2))
-        right.append((x - px * w / 2, y - py * w / 2))
-    draw.polygon(left + right[::-1], fill=colour)
-
-
-# Three marks, raked from upper-left to lower-right, the middle one longest.
-MARKS = [
-    ((0.26, 0.17), (0.60, 0.40), (0.63, 0.80), 0.105),
-    ((0.44, 0.13), (0.78, 0.38), (0.80, 0.79), 0.120),
-    ((0.62, 0.17), (0.93, 0.44), (0.92, 0.76), 0.098),
+# (radius, from, to, weight) - a circular arc swept between two radii, tapering to a point at
+# both ends. The middle slash is longest and heaviest.
+SLASHES = [
+    (1.032, -1.181, -0.463, 0.070),
+    (1.202, -1.245, -0.390, 0.086),
+    (1.372, -1.181, -0.463, 0.070),
 ]
+
+
+def slash(draw, s, radius, a0, a1, weight, colour, steps=160):
+    """One tapered crescent, sampled along its arc."""
+    ox, oy = ORIGIN[0] * s, ORIGIN[1] * s
+    r = radius * s
+    half = weight * s * 0.5
+    span = abs(a1 - a0)
+    outer, inner = [], []
+    for i in range(steps + 1):
+        f = i / steps
+        angle = a0 + (a1 - a0) * f
+        along = min(max((angle - a0) / span, 0.0), 1.0)
+        w = half * math.sin(math.pi * along)
+        dx, dy = math.cos(angle), math.sin(angle)
+        outer.append((ox + dx * (r + w), oy + dy * (r + w)))
+        inner.append((ox + dx * (r - w), oy + dy * (r - w)))
+    draw.polygon(outer + inner[::-1], fill=colour)
 
 
 def claw(size, bg, fg, inset=0.0):
@@ -66,13 +73,9 @@ def claw(size, bg, fg, inset=0.0):
     draw = ImageDraw.Draw(layer)
 
     scale = 1 - inset
-    cx = cy = s / 2
 
-    def pt(x, y):
-        return (cx + (x - 0.5) * s * scale, cy + (y - 0.5) * s * scale)
-
-    for p0, p1, p2, w in MARKS:
-        slash(draw, pt(*p0), pt(*p1), pt(*p2), w * s * scale, fg)
+    for radius, a0, a1, weight in SLASHES:
+        slash(draw, s * scale, radius, a0, a1, weight, fg)
 
     box = layer.getbbox()
     if box:
@@ -105,16 +108,16 @@ ADAPTIVE = {"mdpi": 108, "hdpi": 162, "xhdpi": 216, "xxhdpi": 324, "xxxhdpi": 43
 for density, size in LEGACY.items():
     d = f"{res}/mipmap-{density}"
     os.makedirs(d, exist_ok=True)
-    rounded(claw(size, ACCENT, INK, inset=0.10)).save(f"{d}/ic_launcher.png")
+    rounded(claw(size, CANVAS, ACCENT, inset=0.10)).save(f"{d}/ic_launcher.png")
 
 for density, size in ADAPTIVE.items():
     d = f"{res}/mipmap-{density}"
     os.makedirs(d, exist_ok=True)
     # Transparent background: the background layer is a flat colour the system animates against.
     # Inset hard, so nothing is lost to a circular or squircle mask.
-    claw(size, (0, 0, 0, 0), INK, inset=0.34).save(f"{d}/ic_launcher_foreground.png")
+    claw(size, (0, 0, 0, 0), ACCENT, inset=0.34).save(f"{d}/ic_launcher_foreground.png")
 
 # A large round one for the Play listing and anywhere a big icon is wanted.
 os.makedirs(f"{res}/../../../../", exist_ok=True)
-rounded(claw(512, ACCENT, INK, inset=0.10)).save(sys.argv[2])
+rounded(claw(512, CANVAS, ACCENT, inset=0.10)).save(sys.argv[2])
 print("icons written")

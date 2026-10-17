@@ -68,11 +68,11 @@ with `Success=true` can contain no events. We are sending `GameId`, `Type`, `Coe
 `Kind: 3` (prematch) and the rest of the serializer's fields — if one of those is wrong, that is
 the whole blocker.
 
-**Who to ask.** 1xBet Partners (the affiliate programme) is the documented route to API access on
-this platform: an account manager is assigned, and API credentials are issued through them. There
-is no public developer documentation. Register with 1xBet Partners, then ask the account manager
-for the sportsbook/coupon API — not the affiliate *reporting* API, which is a different thing and
-is all that is publicly described.
+**Who to ask.** Superseded — see *Is there one coupon API behind 1xBet, 22Bet, Betwinner and
+MelBet?* below. The affiliate programme turned out to be the wrong door; the platform supplier is.
+Left here because the reasoning was sound at the time: 1xBet Partners looked like the documented
+route to API access on this platform — an account manager is assigned, and credentials are issued
+through them. What that turns out to issue is reporting access, not sportsbook access.
 
 **Worth saying to them.** We are not placing bets. We generate a booking code that sends a user
 to *their* site to stake it, which is the outcome their affiliate programme exists to produce.
@@ -80,6 +80,86 @@ to *their* site to stake it, which is the outcome their affiliate programme exis
 **Done when.** A code created through the API reads back with the same selections. Then set
 `capabilities.createCode`/`loadCode` to `true` in `lib/bookmakers/1xbet.ts` and its three
 siblings, and remove them from `AWAITING_SETUP` in `lib/bookmakers/registry.ts`.
+
+---
+
+## Is there one coupon API behind 1xBet, 22Bet, Betwinner and MelBet?
+
+Researched 2026-10-17. The short answer: **they share an API, but not an authorised one, and no
+documentation for it exists anywhere public.** The route to an authorised one is a platform
+conversation, and it is probably not the one we assumed.
+
+### What we established ourselves
+
+First-hand, from our own integration rather than from anybody's claim:
+
+| | Public fixtures feed | `SaveCoupon` | Result |
+|---|---|---|---|
+| 1xBet (`1xbet.com.gh`) | 200, real prices | reached | `Success=false`, **ErrorCode 161627** |
+| 22Bet (`22bet.com.gh`) | 200 | implemented, untested | — |
+| Betwinner (`betwinner.com.gh`) | 200 | implemented, untested | — |
+| PariPesa (`paripesa.top`) | 200 | reached | `Success=true`, code reads back **empty** |
+| MelBet (`melbet.com.gh`) | **403 to our origin** | not reached | platform identity unconfirmed |
+
+The first four answer byte-identical endpoint paths — `/service-api/LineFeed/Get1x2_VZip`,
+`/service-api/LiveBet/Open/SaveCoupon`, `/service-api/LiveBet/Open/GetCoupon` — and accept the
+same `Events` payload, whose field list came from the serializer in their own web bundle rather
+than from guesswork. One platform, four skins, and one adapter (`createOnexClient`) serves all
+four. That much is settled.
+
+**MelBet could not be checked.** A single read of the same public fixtures feed, the kind our
+production adapters make for the other four, returns 403. That is a refusal of our origin, like
+MSport's, and it was not worked around. So MelBet is *probably* the same platform — the brand is
+named alongside the others by every third-party source — but we have not verified it and should
+not write it down as though we had.
+
+### What is not documented, anywhere
+
+- **ErrorCode 161627 has no public meaning.** It appears in no documentation, no forum, no error
+  reference. The one site offering a 1xBet "error code reference" has no 16xxxx range at all and
+  does not claim to be official.
+- **`SaveCoupon` is documented nowhere.** Not by the operators, not by third parties.
+- **No operator in this group publishes a developer API.** What is published is affiliate
+  *reporting* — clicks, registrations, revenue share. That is a different product and does not
+  create or read a booking code.
+
+### Who actually to ask — and a correction
+
+The onboarding note above says to go through 1xBet Partners. That is the affiliate programme, and
+on the evidence it is the wrong door: affiliate account managers issue reporting credentials, not
+sportsbook API access.
+
+The platform is supplied by a B2B company. **BetB2B** (`bet-b2b.com`, formerly `betb2b.com`)
+sells exactly this — "solutions, products and services for sports betting and online casino" — and
+multiple third-party platform surveys name it as the software behind 1xBet, 22Bet, Betwinner and
+MelBet. Its own site names no brands, so **treat the attribution as unconfirmed**: it is a strong
+lead, not a fact. Contact addresses, taken from the site itself: `b2b@bet-b2b.com`, and
+`sales@betb2b.com`.
+
+Ask them two things, in this order:
+
+1. Do you supply the platform behind 1xBet, 22Bet, Betwinner and MelBet? (If no, this is the wrong
+   company, and the question becomes who does.)
+2. Is there an authorised way for a third party to create a booking code on an operator running
+   your platform, and read it back? We are not placing bets and take no stakes — we hand a user a
+   code to stake on the operator's own site.
+
+### One open question to put to whoever answers
+
+Not a theory to test against their production service — a question for them:
+
+`SaveCoupon` takes a `Coef` per selection, and the platform exposes a separate `UpdateCoupon`
+endpoint that "prices a slip". If a coupon is rejected when the submitted coefficient no longer
+matches the current price, that would explain a refusal on one site and an empty-but-successful
+coupon on another, since the two were read at different moments. **This is a hypothesis and
+nothing more.** It will not be tested by firing variations at their production endpoints; it is
+written here so it can be asked.
+
+### What this means for the directory today
+
+Nothing changes. All four stay `setup` — implemented, not usable — and MelBet is still not in the
+registry, for the reason given below: a fifth adapter that cannot book adds a row to a list and
+nothing else. Adding it is a few lines against `createOnexClient` the day booking works.
 
 ---
 
