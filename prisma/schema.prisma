@@ -721,3 +721,29 @@ model Follow {
   @@index([kind, targetId])
   @@map("follows")
 }
+
+
+/// One alert that has already been sent, so it is never sent twice.
+///
+/// The alerting job re-reads a live match every time it runs and sees the same goal again, so
+/// without this a 70th-minute goal would be announced on every pass for the rest of the game.
+/// Retries after a failed send would do the same.
+///
+/// The key is derived from the event itself - fixture, kind, minute, player - and not from a
+/// counter or a timestamp, so the same goal produces the same key however many times it is read
+/// and whatever order the job sees things in. The unique index is what actually enforces it:
+/// two workers racing both try to insert, one loses, and the loser does not send.
+model NotificationDelivery {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  profileId String   @map("profile_id") @db.Uuid
+  /// Stable per real-world event. See alertKey() in lib/services/match-alerts.ts.
+  eventKey  String   @map("event_key")
+  fixtureId Int      @map("fixture_id")
+  sentAt    DateTime @default(now()) @map("sent_at") @db.Timestamptz
+
+  @@unique([profileId, eventKey])
+  /// The cleanup job deletes deliveries for matches long finished.
+  @@index([fixtureId])
+  @@index([sentAt])
+  @@map("notification_deliveries")
+}
