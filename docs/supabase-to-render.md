@@ -296,10 +296,35 @@ The dev server was pointed at the Render database and exercised:
 /auth/refresh    rejects an unknown refresh token
 ```
 
-**`sslmode=require` is mandatory.** Render refuses an unencrypted connection with
+### TLS, which bit twice and differently
+
+**From outside: `sslmode=require` is mandatory.** Render refuses an unencrypted connection with
 `28000: SSL/TLS required`, and the connection string it hands out does not include the parameter,
-so Prisma connects in the clear and every query fails. The service's `DATABASE_URL` must carry
-it. This cost a confusing `database_unreachable` before it was found.
+so Prisma connects in the clear and every query fails.
+
+**From inside: the parameter does not help, and the certificate is self-signed.** The deployed
+service came up, served nothing, and reported `database_unreachable`. The real error was only in
+the logs:
+
+> `Error opening a TLS connection: self-signed certificate`
+
+Three things combine here, and each hides the next:
+
+1. Newer node-postgres reads `sslmode=require` as **verify-full**, not libpq's "encrypt but do
+   not verify". Render's internal endpoint is self-signed, so it is refused.
+2. The driver's own deprecation warning suggests `uselibpqcompat=true&sslmode=require`. That has
+   no effect through Prisma: `PrismaPg` hands the connection string to `pg.Pool`, which does not
+   act on it. It has to be passed as an **option**, not a query parameter.
+3. `/health` catches the failure and answers `database_unreachable`, which describes everything
+   and explains nothing.
+
+`sslFor()` in `lib/db.ts` decides from the host. Exactly one qualifies: the bare `dpg-...`
+internal name, which has no dots and is routable only inside Render's private network.
+
+**Render's external hostname is excluded on purpose** — it presents a certificate signed by a
+public CA, verified from a laptop with Prisma during this migration, so relaxing it there would
+discard a check that works. Supabase keeps verifying too. A blanket `rejectUnauthorized: false`
+would be one line shorter and would quietly stop verifying anything, anywhere.
 
 ### Access control
 
