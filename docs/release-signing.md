@@ -108,3 +108,37 @@ about; having all three (debug, upload, app-signing) registered is normal.
 
 The failure mode if you skip it: the account chooser appears, the user picks an account, and the
 app reports `[16] Account reauth failed`. It looks like the user's fault. It is not.
+
+### Telling that failure apart from any other
+
+`[16] Account reauth failed` is what the plugin surfaces, and it is not specific enough to act
+on. The real message is in Play Services' own log, and it names the problem exactly:
+
+```bash
+adb logcat -c
+# ...drive the sign-in on the device...
+adb logcat -d | grep -iE "GetTokenResponseHandler|UNREGISTERED_ON_API_CONSOLE"
+```
+
+Checked on the Pixel, 2026-10-17:
+
+> `Server returned error: This android application is not registered to use OAuth2.0, please
+> confirm the package name and SHA-1 certificate fingerprint match what you registered in Google
+> Developer Console.`
+>
+> `cvtf: [8] Unknown error [status=UNREGISTERED_ON_API_CONSOLE].`
+
+`UNREGISTERED_ON_API_CONSOLE` means exactly one thing: Google has no Android OAuth client for
+this package name and this signing fingerprint. It is not a token problem, not an audience
+problem and not a Supabase or Render problem - the request never gets that far.
+
+Confirm the fingerprint Google is actually seeing, rather than the one you think it is, by
+reading it off the APK on the phone:
+
+```bash
+adb pull "$(adb shell pm path win.gameclaw.app | head -1 | tr -d '\r' | sed 's/package://')" /tmp/installed.apk
+"$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs /tmp/installed.apk | grep SHA-1
+```
+
+On 2026-10-17 that returned `1b33669cb0801a8550897686e4b75312d38e74ec`, which is the debug
+keystore's fingerprint - so the fingerprint was right and the client was simply absent.
