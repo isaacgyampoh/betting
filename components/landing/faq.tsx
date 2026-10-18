@@ -1,3 +1,4 @@
+import { androidRelease } from "@/lib/release";
 /**
  * The questions people actually ask before they trust a betting tool with a code.
  *
@@ -54,9 +55,27 @@ const REST: Entry[] = [
   },
   {
     q: "Is there an app to download?",
-    a: "No store, no download. It runs in the browser, and you can add it to your home screen so it opens full screen like an app.",
+    a: androidAnswer(),
   },
 ];
+
+/**
+ * Answered from the release state rather than written down.
+ *
+ * This said "no store, no download" - true when the only build was the browser one, and false the
+ * day the Android app is published. An FAQ is exactly where a sentence like that survives a launch
+ * unnoticed, because nobody re-reads it.
+ */
+function androidAnswer(): string {
+  const release = androidRelease();
+  if (release.kind === "play") {
+    return "Yes - GameClaw is on Google Play for Android. It also runs in the browser, including on iPhone.";
+  }
+  if (release.kind === "testing") {
+    return "The Android app is in testing and can be installed directly; it is not on Google Play yet. It also runs in the browser, including on iPhone.";
+  }
+  return "The Android app is on its way to Google Play. Until then it runs in the browser, and you can add it to your home screen so it opens full screen like an app.";
+}
 
 export function Faq({ connected }: { connected: string[] }) {
   const items = entries(connected);

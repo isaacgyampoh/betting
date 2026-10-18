@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeftRight, ArrowRight, CalendarCheck, Camera, LineChart, Scissors, Share2, Sparkles, Split } from "lucide-react";
 import { Bookmakers } from "@/components/landing/bookmakers";
+import { GetTheApp } from "@/components/landing/get-the-app";
+import { Screens } from "@/components/landing/screens";
 import { Faq } from "@/components/landing/faq";
 import { PlansPreview } from "@/components/landing/plans-preview";
 import { TrackRecordSummary } from "@/components/landing/track-record-summary";
@@ -11,6 +13,7 @@ import { ProblemFix } from "@/components/landing/problem-fix";
 import { PhoneDemo } from "@/components/landing/phone-demo";
 import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
+import { androidRelease } from "@/lib/release";
 import { connectedBookmakers } from "@/lib/bookmakers/registry";
 import { getTrackRecord } from "@/lib/services/daily-picks";
 import { listActivePlans } from "@/lib/services/plans";
@@ -66,16 +69,7 @@ export default async function HomePage() {
             See every game and price on your booking code, move it to another bookmaker, or ask for a 2 or 5 odds built
             from today&apos;s real prices.
           </p>
-          <div className="flex flex-col justify-center gap-2 sm:flex-row lg:justify-start">
-            <Button asChild size="lg" className="h-12 px-6">
-              <Link href="/chat">
-                Open app <ArrowRight data-icon="inline-end" />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="h-12 px-6">
-              <Link href="/pricing">See plans</Link>
-            </Button>
-          </div>
+          <GetTheApp />
           <p className="text-xs text-muted-foreground">
             Free to paste and view. Every pick we publish stays on the{" "}
             <Link href="/track-record" className="underline underline-offset-2 hover:text-foreground">
@@ -86,6 +80,8 @@ export default async function HomePage() {
         </div>
         <PhoneDemo />
       </section>
+
+      <Screens />
 
       <section aria-labelledby="features" className="gc-reveal gc-surface relative -mx-4 rounded-2xl px-4 py-8 sm:px-6">
         <h2 id="features" className="sr-only">
@@ -134,7 +130,12 @@ export default async function HomePage() {
             Keep it on your phone
           </h2>
           <p className="text-sm text-muted-foreground">
-            Works in the browser, or add it to your home screen and it opens full screen like an app. No store, no download.
+            {/* "No store, no download" was true while the browser build was the only one. It stops
+                being true the day the Android app is published, and this is exactly the sentence
+                nobody re-reads at launch - so it follows the release state too. */}
+            {androidRelease().kind === "unreleased"
+              ? "Works in the browser, and you can add it to your home screen so it opens full screen like an app."
+              : "The Android app is the full experience. The browser version still works, including on iPhone, and can be added to your home screen."}
           </p>
           {cheapest && (
             <p className="text-sm text-muted-foreground">

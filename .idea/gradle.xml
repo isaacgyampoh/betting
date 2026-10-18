@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GradleMigrationSettings" migrationVersion="1" />
+  <component name="GradleSettings">
+    <option name="linkedExternalProjectsSettings">
+      <GradleProjectSettings>
+        <compositeConfiguration>
+          <compositeBuild compositeDefinitionSource="SCRIPT">
+            <builds>
+              <build path="$PROJECT_DIR$/../dev/flutter/packages/flutter_tools/gradle" name="gradle">
+                <projects>
+                  <project path="$PROJECT_DIR$/../dev/flutter/packages/flutter_tools/gradle" />
+                </projects>
+              </build>
+            </builds>
+          </compositeBuild>
+        </compositeConfiguration>
+        <option name="testRunner" value="CHOOSE_PER_TEST" />
+        <option name="externalProjectPath" value="$PROJECT_DIR$/gameclaw_app/android" />
+        <option name="gradleJvm" value="#GRADLE_LOCAL_JAVA_HOME" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/firebase_core-5.0.0/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/firebase_messaging-17.0.0/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/flutter_local_notifications-22.3.2/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/flutter_plugin_android_lifecycle-2.0.35/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/flutter_secure_storage-10.3.4/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/google_mlkit_commons-0.13.0/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/google_mlkit_text_recognition-0.17.1/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/google_sign_in_android-7.2.18/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/image_picker_android-0.8.13+25/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/jni-1.1.0/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/jni_flutter-1.0.4+1/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/receive_sharing_intent-1.9.0/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/share_plus-13.3.1/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/shared_preferences_android-2.4.28/android" />
+            <option value="$PROJECT_DIR$/../.pub-cache/hosted/pub.dev/sqlite3_flutter_libs-0.5.42/android" />
+            <option value="$PROJECT_DIR$/gameclaw_app/android" />
+            <option value="$PROJECT_DIR$/gameclaw_app/android/app" />
+            <option value="$PROJECT_DIR$/../dev/flutter/packages/flutter_tools/gradle" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+    </option>
+  </component>
+</project>
