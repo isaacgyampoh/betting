@@ -25,6 +25,21 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- Receiving a slip shared from a bookmaker's app.
+                 This is what puts GameClaw in Android's share sheet. Without it the app simply
+                 does not appear as a target, which is why sharing into it never worked: there was
+                 no filter here, only MAIN/LAUNCHER.
+
+                 text/plain only. A bookmaker shares a sentence with a booking code in it; images
+                 go through the existing gallery import, which is a different and already-working
+                 path, and claiming to accept image/* here would put GameClaw in the share sheet
+                 for every screenshot a user ever takes. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

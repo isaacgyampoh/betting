@@ -10,6 +10,7 @@ import 'theme/palette.dart';
 import 'data/appearance.dart';
 import 'data/providers.dart';
 import 'data/retry.dart';
+import 'features/share_import/share_listener.dart';
 import 'theme/tokens.dart';
 
 Future<void> main() async {
@@ -55,7 +56,10 @@ class GameClawApp extends ConsumerWidget {
       darkTheme: gcTheme(brightness: Brightness.dark),
       themeMode: ref.watch(appearanceProvider).value ?? ThemeMode.system,
       routerConfig: ref.watch(routerProvider),
-      builder: (context, child) => _Launch(child: child ?? const SizedBox.shrink()),
+      // ShareListener sits above the launch overlay so a share that started the app is picked up
+      // on the first frame, before anything else competes for the route.
+      builder: (context, child) =>
+          ShareListener(child: _Launch(child: child ?? const SizedBox.shrink())),
     );
   }
 }

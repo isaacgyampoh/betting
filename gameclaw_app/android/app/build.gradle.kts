@@ -49,7 +49,13 @@ val unsignedRelease = (project.findProperty("unsignedRelease") as String?)?.toBo
 
 android {
     namespace = "win.gameclaw.app"
-    compileSdk = flutter.compileSdkVersion
+    // 37 rather than flutter.compileSdkVersion (36), because receive_sharing_intent 1.9.0
+    // requires it and the share-sheet filter is useless without that plugin.
+    //
+    // compileSdk only decides which APIs the code may compile against; targetSdk, which is what
+    // changes runtime behaviour, is left on Flutter's default. Android 37 is installed locally and
+    // the release build is verified against it below.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

@@ -55,6 +55,9 @@ dependencies:
   # The system share sheet, for sending a slip out of the app as an image.
   share_plus: ^13.3.1
 
+  # The other direction: receiving a slip shared *into* GameClaw from a bookmaker's app.
+  receive_sharing_intent: ^1.9.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
