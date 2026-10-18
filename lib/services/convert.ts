@@ -61,7 +61,15 @@ async function convertByName(
   return { target: match.candidate, offers, score: match.score };
 }
 
-async function convertSelection(
+/**
+ * Finds one selection at a destination and prices it there.
+ *
+ * Exported for the merge service, which does exactly this for legs taken from several slips. The
+ * alternative was a second copy of the matching rules, which is the one place a divergence would
+ * be invisible: a merged leg and a converted leg must resolve to the same fixture and the same
+ * market, or the same pick books differently depending on which screen the user came from.
+ */
+export async function convertSelection(
   sel: SlipRecord["selections"][number],
   adapter: BookmakerAdapter,
   aliases: AliasIndex,
