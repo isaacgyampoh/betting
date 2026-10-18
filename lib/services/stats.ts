@@ -154,6 +154,55 @@ async function orBusy<T>(p: Promise<T>): Promise<T> {
  */
 const MAX_LISTED = 150;
 
+/**
+ * The leagues a day's list shows, in order, within the cap.
+ *
+ * Whole leagues only: half a league's fixtures reads as missing games rather than as a shorter
+ * list.
+ *
+ * A league with a match in play is listed whatever its rank. The cap used to be applied purely by
+ * competition priority over the whole day, which on a busy Sunday filled all 150 slots with
+ * big-league fixtures that had not kicked off - and cut the matches actually being played, in
+ * smaller competitions, before the app ever filtered for "live". That is what "matches are
+ * missing" meant: not a synchronisation failure, a ranking that ignored what the user had opened
+ * the screen to look at.
+ *
+ * Live leagues are still ranked among themselves, so the order stays familiar; they are simply
+ * not droppable.
+ */
+export function listedGroups(matches: MatchSummary[], max = MAX_LISTED): LeagueGroup[] {
+  const byLeague = new Map<number, LeagueGroup>();
+  for (const m of matches) {
+    const g = byLeague.get(m.league.id) ?? { league: m.league, matches: [] };
+    g.matches.push(m);
+    byLeague.set(m.league.id, g);
+  }
+
+  const rank = (g: LeagueGroup) => {
+    const i = PRIORITY.findIndex(([c, l]) => c === g.league.country && l === g.league.name);
+    return i === -1 ? PRIORITY.length : i;
+  };
+  const ranked = [...byLeague.values()]
+    .map((g) => ({ ...g, matches: g.matches.sort((a, b) => a.kickoffAt.localeCompare(b.kickoffAt)) }))
+    .sort((a, b) => rank(a) - rank(b) || a.league.country.localeCompare(b.league.country) || a.league.name.localeCompare(b.league.name));
+
+  const hasLive = (g: LeagueGroup) => g.matches.some((m) => m.status === "LIVE");
+  const live = ranked.filter(hasLive);
+  const rest = ranked.filter((g) => !hasLive(g));
+
+  const groups: LeagueGroup[] = [...live];
+  let shown = groups.reduce((n, g) => n + g.matches.length, 0);
+  for (const g of rest) {
+    if (shown >= max) break;
+    groups.push(g);
+    shown += g.matches.length;
+  }
+
+  // Back into ranked order, so a live Algerian second division does not sit above the Premier
+  // League in the list. It is protected from the cap, not promoted above everything.
+  return groups.sort((a, b) => ranked.indexOf(a) - ranked.indexOf(b));
+}
+
 export async function listMatches(
   date: string,
   search?: string,
@@ -169,28 +218,8 @@ export async function listMatches(
     ? all.filter((m) => [m.home.name, m.away.name, m.league.name, m.league.country].some((v) => v.toLowerCase().includes(needle)))
     : all;
 
-  const byLeague = new Map<number, LeagueGroup>();
-  for (const m of matches) {
-    const g = byLeague.get(m.league.id) ?? { league: m.league, matches: [] };
-    g.matches.push(m);
-    byLeague.set(m.league.id, g);
-  }
-  const rank = (g: LeagueGroup) => {
-    const i = PRIORITY.findIndex(([c, l]) => c === g.league.country && l === g.league.name);
-    return i === -1 ? PRIORITY.length : i;
-  };
-  const ranked = [...byLeague.values()]
-    .map((g) => ({ ...g, matches: g.matches.sort((a, b) => a.kickoffAt.localeCompare(b.kickoffAt)) }))
-    .sort((a, b) => rank(a) - rank(b) || a.league.country.localeCompare(b.league.country) || a.league.name.localeCompare(b.league.name));
-
-  // Whole leagues: half a league's fixtures reads as missing games rather than as a shorter list.
-  const groups: LeagueGroup[] = [];
-  let shown = 0;
-  for (const g of ranked) {
-    if (shown >= MAX_LISTED) break;
-    groups.push(g);
-    shown += g.matches.length;
-  }
+  const groups = listedGroups(matches);
+  const shown = groups.reduce((n, g) => n + g.matches.length, 0);
   return { groups, featured: featuredFixtures(groups), source: provider.source, total: matches.length, shown };
 }
 

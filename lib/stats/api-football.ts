@@ -179,6 +179,20 @@ type ApiSquad = {
   players: { id: number | null; name: string; number: number | null; position: string | null; age: number | null; photo: string | null }[] | null;
 };
 
+/**
+ * Phases where the ball is actually in play.
+ *
+ * Nine provider codes map to LIVE, and only these three mean the clock is running. The others -
+ * half time, the break before extra time, a penalty shoot-out, a suspended or interrupted match -
+ * are all stopped, and printing a minute for them was the cause of a match reading "45'" when it
+ * was at half time and "63'" when the referee had taken the players off.
+ *
+ * The app has no clock of its own; it renders what this sends. So a halted match did not tick on
+ * screen - it sat frozen at the minute play stopped, which looks like stale data rather than a
+ * wrong label, and is harder to notice for it.
+ */
+const BALL_IN_PLAY = new Set(["1H", "2H", "ET"]);
+
 const STATUS: Record<string, MatchStatus> = {
   TBD: "SCHEDULED", NS: "SCHEDULED",
   "1H": "LIVE", HT: "LIVE", "2H": "LIVE", ET: "LIVE", BT: "LIVE", P: "LIVE", SUSP: "LIVE", INT: "LIVE", LIVE: "LIVE",
@@ -191,7 +205,13 @@ export function toMatchSummary(f: ApiFixture): MatchSummary {
     id: f.fixture.id,
     kickoffAt: new Date(f.fixture.date).toISOString(),
     status: STATUS[f.fixture.status.short] ?? "SCHEDULED",
-    statusLabel: f.fixture.status.elapsed && STATUS[f.fixture.status.short] === "LIVE" ? `${f.fixture.status.elapsed}'` : f.fixture.status.long,
+    // A minute only while the ball is in play; otherwise the provider's own words for the phase.
+    // `> 0` rather than a truthiness check: elapsed is null before kick-off and 0 in the opening
+    // seconds, and both should read as "First Half" rather than as "0'".
+    statusLabel:
+      BALL_IN_PLAY.has(f.fixture.status.short) && (f.fixture.status.elapsed ?? 0) > 0
+        ? `${f.fixture.status.elapsed}'`
+        : f.fixture.status.long,
     league: { id: f.league.id, name: f.league.name, country: f.league.country, season: f.league.season, logo: f.league.logo },
     home: { id: f.teams.home.id, name: f.teams.home.name, logo: f.teams.home.logo },
     away: { id: f.teams.away.id, name: f.teams.away.name, logo: f.teams.away.logo },
