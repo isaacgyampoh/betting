@@ -219,6 +219,34 @@ class SlipsRepository {
     return Slip.fromJson(json);
   }
 
+  /// Merges chosen legs from several slips onto one destination.
+  ///
+  /// [picks] names each leg by the slip it came from and its position on that slip, so the server
+  /// never has to re-identify a selection from its wording. `book: false` stops at a draft: every
+  /// leg is found at the destination and priced there, and nothing is booked until the user says
+  /// so - the same two-step shape a conversion uses.
+  ///
+  /// Returns the draft and any duplicates that collapsed, which the screen must show. A leg that
+  /// silently disappears between choosing and booking is the one thing a merge must never do.
+  Future<MergeResult> merge({
+    required List<MergePick> picks,
+    required String target,
+    bool book = false,
+  }) async {
+    final json = await _api.post<Map<String, dynamic>>(
+      '/slips/merge',
+      body: {
+        'target': target,
+        'book': book,
+        'picks': [
+          for (final p in picks) {'slipId': p.slipId, 'position': p.position},
+        ],
+      },
+      receiveTimeout: const Duration(seconds: 90),
+    );
+    return MergeResult.fromJson(json);
+  }
+
   /// Works out what a destination can carry, without booking anything.
   ///
   /// Every expensive part still happens - each game is found at the destination and its own price

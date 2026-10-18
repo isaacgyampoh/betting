@@ -1390,3 +1390,52 @@ String matchDayOf(Fixture fixture) =>
     '${fixture.kickoffUtc.toUtc().year.toString().padLeft(4, '0')}-'
     '${fixture.kickoffUtc.toUtc().month.toString().padLeft(2, '0')}-'
     '${fixture.kickoffUtc.toUtc().day.toString().padLeft(2, '0')}';
+
+/// One leg a user chose, named by where it came from.
+///
+/// Position rather than wording: the server already knows what is on each slip, and re-identifying
+/// a selection by its text is how a merge ends up carrying a different bet than the one tapped.
+class MergePick {
+  const MergePick({required this.slipId, required this.position});
+  final String slipId;
+  final int position;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MergePick && other.slipId == slipId && other.position == position;
+
+  @override
+  int get hashCode => Object.hash(slipId, position);
+}
+
+/// Two or more chosen legs that turned out to be the same bet.
+class MergeDuplicate {
+  const MergeDuplicate({required this.fixture, required this.market, required this.count});
+  final String fixture;
+  final String market;
+
+  /// How many of the user's picks collapsed into one.
+  final int count;
+
+  factory MergeDuplicate.fromJson(Map<String, dynamic> json) => MergeDuplicate(
+    fixture: json['fixture'] as String? ?? '',
+    market: json['market'] as String? ?? '',
+    count: (json['picks'] as List<dynamic>? ?? const []).length,
+  );
+}
+
+/// A merged draft, and what collapsed on the way.
+class MergeResult {
+  const MergeResult({required this.slip, required this.duplicates});
+  final Slip slip;
+
+  /// Shown to the user, never swallowed: these are legs they chose that will not appear twice.
+  final List<MergeDuplicate> duplicates;
+
+  factory MergeResult.fromJson(Map<String, dynamic> json) => MergeResult(
+    slip: Slip.fromJson(json['slip'] as Map<String, dynamic>),
+    duplicates: (json['duplicates'] as List<dynamic>? ?? const [])
+        .map((d) => MergeDuplicate.fromJson(d as Map<String, dynamic>))
+        .toList(growable: false),
+  );
+}

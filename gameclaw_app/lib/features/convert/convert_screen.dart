@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -222,6 +223,16 @@ class _Entry extends StatelessWidget {
           'Paste a booking code. We read the original slip, then try to find the same games and '
           'markets on another bookmaker.',
           style: GcType.body.copyWith(color: gc(context).inkMuted),
+        ),
+        const SizedBox(height: GcSpace.lg),
+        // Merging lives on its own screen rather than here: this one reads a single code, and
+        // combining several is a different task with a different shape.
+        GcButton(
+          label: 'Merge slips from different bookmakers',
+          icon: Icons.merge_rounded,
+          kind: GcButtonKind.ghost,
+          size: GcButtonSize.small,
+          onPressed: () => GoRouter.of(context).go('/convert/merge'),
         ),
         const SizedBox(height: GcSpace.xl),
         GcTextField(

@@ -17,6 +17,7 @@ import '../features/profile/profile_screen.dart';
 import '../features/team/team_screen.dart';
 import '../theme/tokens.dart';
 import 'shell.dart';
+import '../features/merge/merge_screen.dart';
 
 /// Navigation.
 ///
@@ -99,7 +100,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [GoRoute(path: '/claw', builder: (_, __) => const ClawScreen())],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/convert', builder: (_, __) => const ConvertScreen())],
+            routes: [
+              GoRoute(
+                path: '/convert',
+                builder: (_, __) => const ConvertScreen(),
+                routes: [
+                  GoRoute(path: 'merge', builder: (_, __) => const MergeScreen()),
+                ],
+              ),
+            ],
           ),
           StatefulShellBranch(
             routes: [
