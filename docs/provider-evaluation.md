@@ -42,6 +42,36 @@ right teams at the wrong country's prices and look entirely correct on screen.
 Until this is answered, `createConvatRoute().supports()` refuses any pair whose countries differ.
 That is deliberately conservative and should stay until Convat states how a market is chosen.
 
+## Betloy's free tier: the terms contradict themselves
+
+Re-checked on 2026-10-18, because an allowance is exactly the thing that changes quietly.
+
+| Source | What it says about the free plan and the API |
+|---|---|
+| betloy.com/pricing | Free plan lists **"No API access"**; the comparison table shows API access as "—" for Free, and only Business as "full · all endpoints" |
+| betloy.com/api | FAQ: *"Sign up for a Betloy account (free), then generate a key in your account dashboard."* The rate-limit table lists **Free: 10/min, 1,000 monthly requests** |
+
+Both cannot be true. The same page also contradicts itself on limits — Individual is 60/min in the
+table and 120/min in the FAQ; Business is 120 and 1,200 — and gives monthly *requests* in one place
+and monthly *credits* in another.
+
+**This retracts the earlier recommendation.** "Start with the free tier, it costs nothing" was
+based on the API page. If the pricing page is the accurate one, an API evaluation needs the
+Individual plan at **NGN 10,000/month**, and that is a paid subscription requiring approval.
+
+### How to settle it for nothing
+
+The account's own endpoints answer the question, and both are free per the documented contract:
+
+- `GET /api/v1/bookmakers` — free. Also returns each bookmaker's **region**, which is what makes
+  country expressible here and not on Convat.
+- `GET /api/v1/usage` — free. Returns this month's usage and the remaining allowance.
+- `?test=true` on any endpoint — mock data, **no credits**.
+
+So: register, generate a key, and run `pnpm eval:provider --preflight`. It calls only those two
+free endpoints, prints the real allowance, and spends nothing. If the key is rejected or the
+allowance is zero, the pricing page was right and the decision is yours.
+
 ## The minimal matrix
 
 Eight conversions. Enough to answer every question that decides the commercial case, few enough to
