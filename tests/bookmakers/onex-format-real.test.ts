@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { ONEX_GROUP_TYPES, onexFormat } from "@/lib/bookmakers/formats/onex-format";
 
 // The 1xBet platform ships no labels, so its market mapping cannot be read off a response the way
@@ -20,12 +20,43 @@ async function onexGame(constId: number) {
   return body.Value ?? {};
 }
 
+/**
+ * A fixture on the board right now that carries a deep market list.
+ *
+ * This file used to pin one `constId` - Germany v Serbia - and the comment next to it already
+ * said any well-covered fixture would do. It stopped doing: the match is long played, GetGameZip
+ * returns nothing for it, and two tests failed asserting that 0 > 100. Nothing about the mapping
+ * had drifted, which is the one thing this file exists to detect, so the failure was pure noise.
+ *
+ * Resolved from the listing feed instead, picking the best-covered of the first few candidates.
+ * `CI` is the constant id GetGameZip takes.
+ */
+async function wellCoveredGame(): Promise<{ id: number; bets: Bet[] }> {
+  const url = "https://1xbet.com.gh/service-api/LineFeed/Get1x2_VZip?sports=1&count=40&lng=en&mode=4";
+  const res = await fetch(url, { headers: { "user-agent": UA, referer: "https://1xbet.com.gh/en" } });
+  const body = (await res.json()) as { Value?: { CI?: number; I?: number }[] };
+  const ids = (body.Value ?? []).map((g) => Number(g.CI ?? g.I)).filter((n) => Number.isFinite(n));
+
+  let best: { id: number; bets: Bet[] } = { id: 0, bets: [] };
+  for (const id of ids.slice(0, 12)) {
+    const bets = (await onexGame(id)).E ?? [];
+    if (bets.length > best.bets.length) best = { id, bets };
+    // Deep enough to exercise every group this file checks; no need to keep fetching.
+    if (best.bets.length > 150) break;
+  }
+  return best;
+}
+
 describe.skipIf(!live)("1xBet market mapping, against live data", () => {
+  let game: { id: number; bets: Bet[] };
+
+  beforeAll(async () => {
+    game = await wellCoveredGame();
+  }, 120_000);
+
   it("every declared group really carries the outcome types we expect", async () => {
-    // Germany v Serbia; any well-covered fixture exercises the same groups.
-    const game = await onexGame(367912266);
-    const bets = game.E ?? [];
-    expect(bets.length).toBeGreaterThan(100);
+    const bets = game.bets;
+    expect(bets.length, `best-covered fixture was ${game.id}`).toBeGreaterThan(100);
 
     for (const [groupId, types] of Object.entries(ONEX_GROUP_TYPES)) {
       const g = Number(groupId.slice(1));
@@ -37,8 +68,7 @@ describe.skipIf(!live)("1xBet market mapping, against live data", () => {
   }, 60_000);
 
   it("maps and round-trips the markets it claims", async () => {
-    const game = await onexGame(367912266);
-    const bets = game.E ?? [];
+    const bets = game.bets;
     const mapped = bets
       .map((b) => ({ b, raw: { marketId: `G${b.G}`, outcomeId: `T${b.T}`, specifier: b.P === undefined ? "" : `P=${b.P}` } }))
       .map((x) => ({ ...x, market: onexFormat.mapMarket(x.raw) }))
@@ -53,8 +83,7 @@ describe.skipIf(!live)("1xBet market mapping, against live data", () => {
   }, 60_000);
 
   it("reads an away asian handicap as the same bet as the home side's", async () => {
-    const game = await onexGame(367912266);
-    const bets = (game.E ?? []).filter((b) => b.G === 2);
+    const bets = game.bets.filter((b) => b.G === 2);
     const home = bets.find((b) => b.T === 7 && b.P === -2);
     const away = bets.find((b) => b.T === 8 && b.P === 2);
     if (!home || !away) return; // this line not offered right now

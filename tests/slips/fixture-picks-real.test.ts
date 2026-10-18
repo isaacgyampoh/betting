@@ -21,7 +21,15 @@ describe.skipIf(!live)("building slips from real fixtures", () => {
     for (const c of candidates) {
       expect(c.probability).toBeGreaterThan(0);
       expect(c.probability).toBeLessThanOrEqual(1);
-      expect(c.label).not.toMatch(/^\d|Home|Away$/);
+      // A label has to read like a bet rather than a raw outcome token. Anchored over the whole
+      // string: the previous pattern was /^\d|Home|Away$/, whose alternation put the anchors on
+      // different branches, so it really meant "starts with a digit, or contains Home, or ends in
+      // Away". It failed on "1. FC Magdeburg to win or draw" - a perfectly readable label for a
+      // club whose name begins with a digit.
+      expect(c.label, "a label should read like a bet, not a raw outcome token").not.toMatch(
+        /^(\d+|Home|Away|Draw|1|X|2|1X|12|X2)$/,
+      );
+      expect(c.label.length, `label too short to be a sentence: ${c.label}`).toBeGreaterThan(3);
     }
     const groups = new Set(candidates.map((c) => c.group));
     console.log(`\n  ${fixtures.length} fixtures → ${candidates.length} candidates across: ${[...groups].join(", ")}`);

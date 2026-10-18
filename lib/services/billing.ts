@@ -12,15 +12,20 @@ const DAY_MS = 86_400_000;
 
 /** Starts a Paystack checkout for a plan. Returns the URL to send the user to. */
 export async function startCheckout(user: AuthUser, planCode: string): Promise<{ authorizationUrl: string; reference: string }> {
-  // Checked before the plan lookup and before any payment row is written: an unconfigured
-  // deployment should turn somebody away at the door, not after it has recorded a PENDING payment
-  // it can never take money for.
-  if (!paymentsConfigured()) {
-    throw new AppError("PAYMENTS_UNAVAILABLE", "Payments aren't set up yet. Nothing has been charged.");
-  }
   const plan = await db.plan.findUnique({ where: { code: planCode } });
   if (!plan || !plan.isActive) throw new AppError("BAD_REQUEST", "That plan isn't available.");
   if (plan.pricePesewas <= 0) throw new AppError("BAD_REQUEST", "That plan is free: there's nothing to pay for.");
+
+  // After the plan is known to be real and to cost something, and before any payment row exists.
+  //
+  // The order matters in both directions. Whether a plan is free is a permanent fact about the
+  // plan, so it has to be answered first - telling somebody that payments are not set up when
+  // they asked for the free tier implies they could buy it once they are, which is wrong. And an
+  // unconfigured deployment has to be caught before the PENDING row is written, because that row
+  // is a promise to charge money this deployment has no way to collect.
+  if (!paymentsConfigured()) {
+    throw new AppError("PAYMENTS_UNAVAILABLE", "Payments aren't set up yet. Nothing has been charged.");
+  }
   const profile = await db.profile.findUnique({ where: { id: user.id }, select: { email: true } });
   const email = profile?.email ?? user.email;
   if (!email) throw new AppError("BAD_REQUEST", "Add an email address to your account to pay.");

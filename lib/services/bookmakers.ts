@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { AWAITING_SETUP, getAdapter, isBookmakerSlug, REFUSED_BY_BOOKMAKER } from "@/lib/bookmakers/registry";
+import { AWAITING_SETUP, REFUSED_BY_BOOKMAKER, getAdapter, isBookmakerSlug } from "@/lib/bookmakers/registry";
 import type { BookmakerSlug } from "@/lib/bookmakers/types";
 import { AppError } from "@/lib/errors";
 
