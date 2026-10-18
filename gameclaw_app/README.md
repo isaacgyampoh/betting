@@ -35,24 +35,49 @@ release build, which keeps Android's refusal of plain HTTP:
 adb reverse tcp:3000 tcp:3000
 flutter build apk --debug \
   --dart-define=GC_API_BASE=http://localhost:3000/api/v1 \
-  --dart-define=GC_SUPABASE_URL=https://<project>.supabase.co \
-  --dart-define=GC_SUPABASE_ANON_KEY=<anon key>
+  --dart-define=GC_AUTH_BASE=http://localhost:3000/api/v1 \
+  --dart-define=GC_GOOGLE_SERVER_CLIENT_ID=<web client id>
 ```
 
 ## Signing in
 
-The API accepts `Authorization: Bearer <supabase access token>` and checks the signature itself, so
-the app talks to Supabase for a token and to GameClaw for everything else. Email and password, over
-Supabase's REST API - no SDK, because the app needs an eighth of one.
+Google, against GameClaw's own API. The app gets an ID token from Google natively, posts it to
+`GC_AUTH_BASE`, and GameClaw verifies it against Google's JWKS and issues its own session. There is
+no email-and-password form and no Supabase in the path.
 
-The anon key is designed to be public: it identifies the project and grants nothing on its own,
-which is why the web client has always shipped it in its bundle. The service key, which does grant
-everything, is not in the app and never will be. Without the two flags above the sign-in screen
-says so rather than offering a form that cannot work.
+Two flags decide this, and **a release build needs both**:
+
+| Flag | What it does |
+| --- | --- |
+| `GC_AUTH_BASE` | GameClaw's auth endpoints, e.g. `https://gameclaw-api.onrender.com/api/v1`. **When set, Supabase is not involved at all.** |
+| `GC_GOOGLE_SERVER_CLIENT_ID` | The **Web** OAuth client id - not the Android one. See below. |
+
+Leave `GC_AUTH_BASE` empty and the build falls back to the Supabase path (`GC_SUPABASE_URL` and
+`GC_SUPABASE_ANON_KEY`), which is the rollback and nothing else. It is one flag to go back to, and
+one flag to ship by mistake: a release built without `GC_AUTH_BASE` signs in against a backend that
+is being retired. Check a built APK if in doubt -
+
+```bash
+# Release keeps Dart in libapp.so; a debug build keeps it in kernel_blob.bin, so match both.
+unzip -p app-release.apk 'lib/*/libapp.so' 'assets/flutter_assets/kernel_blob.bin' 2>/dev/null \
+  | grep -ac 'supabase\.co'
+```
+
+A release on the right path prints `0`: no Supabase hostname is compiled into it. Grep the binary
+directly rather than piping through `strings` - macOS `strings` breaks the hostname across lines
+and the match silently never fires.
+
+### The Web client id, not the Android one
+
+This is the counter-intuitive part of native Google sign-in and the usual reason it fails. The
+Android client is what lets Google trust the app - matched by package name and signing fingerprint,
+never named in code. The Web client is what the ID token is *addressed to*, and that audience is
+what the server checks, so the Web id is the one the app hands over. Supplying the Android id
+produces a token the server rejects.
 
 The session lives in the OS keystore and is refreshed on the first request that needs it, one
-refresh at a time - Supabase rotates refresh tokens, so six screens loading at once would otherwise
-fire six refreshes and five would be rejected with a token that no longer exists.
+refresh at a time - refresh tokens rotate, so six screens loading at once would otherwise fire six
+refreshes and five would be rejected with a token that no longer exists.
 
 Signing out clears the cache as well as the session. A phone gets handed around.
 
@@ -80,9 +105,9 @@ flutter build apk --debug --dart-define=GC_API_BASE=https://<host>/api/v1
 Without the flag it points at `http://10.0.2.2:3000/api/v1`, which is how an Android emulator
 reaches a server running on the host machine.
 
-**The production host is undecided.** The existing Cloudflare Worker already serves this API
-contract and is already paid for, so a second hostname on it is the cheapest route; a separate
-deployment is the alternative. Nothing in the code depends on which is chosen.
+The production host is `https://gameclaw-api.onrender.com/api/v1`, a Render web service in
+Frankfurt with its own Postgres. `gameclaw.win` and `www.gameclaw.win` stay as they are - they are
+the marketing site and serve no API.
 
 ## Layout
 
