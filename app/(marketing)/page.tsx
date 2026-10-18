@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeftRight, ArrowRight, CalendarCheck, Camera, LineChart, Scissors, Share2, Sparkles, Split } from "lucide-react";
+import { ArrowLeftRight, CalendarCheck, Camera, LineChart, Scissors, Share2, Sparkles, Split } from "lucide-react";
 import { Bookmakers } from "@/components/landing/bookmakers";
 import { GetTheApp } from "@/components/landing/get-the-app";
 import { Screens } from "@/components/landing/screens";
@@ -11,7 +11,6 @@ import { HowItWorks } from "@/components/landing/how-it-works";
 import { InstallGuide } from "@/components/landing/install-guide";
 import { ProblemFix } from "@/components/landing/problem-fix";
 import { PhoneDemo } from "@/components/landing/phone-demo";
-import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
 import { androidRelease } from "@/lib/release";
 import { connectedBookmakers } from "@/lib/bookmakers/registry";
@@ -154,11 +153,11 @@ export default async function HomePage() {
         <div className="gc-aurora" aria-hidden />
         <h2 className="text-lg font-semibold">Paste your first code</h2>
         <p className="mt-1 text-sm text-muted-foreground">It takes a few seconds and costs nothing.</p>
-        <Button asChild size="lg" className="mt-4 h-12 px-6">
-          <Link href="/chat">
-            Open app <ArrowRight data-icon="inline-end" />
-          </Link>
-        </Button>
+        {/* The same offer as the hero rather than a second, different one. This said "Open app"
+            and opened the browser build, which is the thing the page is no longer led by. */}
+        <div className="mt-4 flex justify-center">
+          <GetTheApp />
+        </div>
       </section>
     </div>
   );
