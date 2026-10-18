@@ -22,7 +22,14 @@ import 'gc_states.dart';
 ///    A slip that quietly loses two legs between being read and being booked is worse than one
 ///    that says what it could not take across.
 class GcSlipCard extends StatelessWidget {
-  const GcSlipCard({super.key, required this.slip, this.onBook, this.onRemove, this.busy = false});
+  const GcSlipCard({
+    super.key,
+    required this.slip,
+    this.onBook,
+    this.onRemove,
+    this.onShare,
+    this.busy = false,
+  });
 
   final Slip slip;
 
@@ -32,6 +39,10 @@ class GcSlipCard extends StatelessWidget {
 
   /// Removes one selection, by its own position number.
   final Future<void> Function(int position)? onRemove;
+
+  /// Sends the slip out of the app as a branded picture. Absent where there is nothing worth
+  /// sending - a draft with no code is a working note, not something to forward.
+  final Future<void> Function()? onShare;
 
   /// A request is in flight; actions are disabled rather than re-entrant.
   final bool busy;
@@ -140,6 +151,20 @@ class GcSlipCard extends StatelessWidget {
                     icon: Icons.info_outline_rounded,
                   ),
           ),
+
+          if (onShare != null) ...[
+            const SizedBox(height: GcSpace.md),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: GcSpace.md),
+              child: GcButton(
+                label: 'Share slip',
+                icon: Icons.ios_share_rounded,
+                kind: GcButtonKind.secondary,
+                size: GcButtonSize.small,
+                onPressed: busy ? null : onShare,
+              ),
+            ),
+          ],
 
           const SizedBox(height: GcSpace.md),
           const Divider(height: 1),

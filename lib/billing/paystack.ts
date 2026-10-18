@@ -7,6 +7,18 @@ import { logger } from "@/lib/logger";
 // Paystack REST API (https://paystack.com/docs/api/). Amounts are in the subunit (pesewas for GHS).
 const BASE = "https://api.paystack.co";
 
+/**
+ * Whether payments can work at all.
+ *
+ * Asked before touching Paystack, because the alternative is finding out through `requireEnv`
+ * throwing - which surfaces as a bare 500 and an empty body. A deployment with no payment key is
+ * a configuration state, not a fault: it should say so, with a status that distinguishes "not set
+ * up here" from "we broke". /api/v1/health reports the same fact as `features.payments`.
+ */
+export function paymentsConfigured(): boolean {
+  return !!process.env.PAYSTACK_SECRET_KEY?.trim();
+}
+
 export type PaystackTransaction = {
   id: number;
   reference: string;

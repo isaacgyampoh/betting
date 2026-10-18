@@ -1,7 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import type { AuthUser } from "@/lib/auth";
-import { initializeTransaction, verifyTransaction, type PaystackTransaction } from "@/lib/billing/paystack";
+import { initializeTransaction, paymentsConfigured, type PaystackTransaction, verifyTransaction } from "@/lib/billing/paystack";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
@@ -12,6 +12,12 @@ const DAY_MS = 86_400_000;
 
 /** Starts a Paystack checkout for a plan. Returns the URL to send the user to. */
 export async function startCheckout(user: AuthUser, planCode: string): Promise<{ authorizationUrl: string; reference: string }> {
+  // Checked before the plan lookup and before any payment row is written: an unconfigured
+  // deployment should turn somebody away at the door, not after it has recorded a PENDING payment
+  // it can never take money for.
+  if (!paymentsConfigured()) {
+    throw new AppError("PAYMENTS_UNAVAILABLE", "Payments aren't set up yet. Nothing has been charged.");
+  }
   const plan = await db.plan.findUnique({ where: { code: planCode } });
   if (!plan || !plan.isActive) throw new AppError("BAD_REQUEST", "That plan isn't available.");
   if (plan.pricePesewas <= 0) throw new AppError("BAD_REQUEST", "That plan is free: there's nothing to pay for.");

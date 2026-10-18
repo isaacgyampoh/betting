@@ -19,6 +19,7 @@ import '../../ui/components/gc_chip.dart';
 import '../../ui/components/gc_slip_card.dart';
 import '../../ui/components/gc_states.dart';
 import 'claw_controller.dart';
+import '../share/share_button.dart';
 
 /// Ask for a slip in words, get one back with the reasoning attached.
 class ClawScreen extends ConsumerStatefulWidget {
@@ -562,7 +563,7 @@ class _Turn extends StatelessWidget {
               GcSpace.gutter,
               GcSpace.md,
             ),
-            child: GcSlipCard(slip: slip),
+            child: GcSlipCard(slip: slip, onShare: () => shareSlip(context, slip)),
           ),
       ],
     );

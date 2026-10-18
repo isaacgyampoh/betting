@@ -12,6 +12,7 @@ import '../../ui/components/gc_sheet.dart';
 import '../../ui/components/gc_slip_card.dart';
 import '../../ui/components/gc_states.dart';
 import 'convert_controller.dart';
+import '../share/share_button.dart';
 
 /// Import a booking code from one bookmaker and convert it to another.
 ///
@@ -389,7 +390,7 @@ class _Loaded extends StatelessWidget {
             children: [
               Text('SOURCE SLIP', style: GcType.overline.copyWith(color: gc(context).inkFaint)),
               const SizedBox(height: GcSpace.md),
-              GcSlipCard(slip: slip),
+              GcSlipCard(slip: slip, onShare: () => shareSlip(context, slip)),
               if (error != null) ...[
                 const SizedBox(height: GcSpace.md),
                 Text('$error', style: GcType.caption.copyWith(color: gc(context).loss)),
@@ -523,6 +524,7 @@ class _Result extends StatelessWidget {
                 busy: busy,
                 onBook: result.code == null ? onBook : null,
                 onRemove: result.code == null ? onRemove : null,
+                onShare: () => shareSlip(context, result),
               ),
               if (error != null) ...[
                 const SizedBox(height: GcSpace.md),
