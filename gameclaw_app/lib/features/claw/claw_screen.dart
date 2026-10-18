@@ -7,6 +7,7 @@ import '../../domain/models.dart';
 import '../../data/repository.dart';
 import '../convert/convert_controller.dart';
 import '../slip_scan/fixture_matcher.dart';
+import '../slip_scan/slip_commands.dart';
 import '../slip_scan/slip_parser.dart';
 import '../slip_scan/slip_review_screen.dart';
 import '../slip_scan/slip_scanner.dart';
@@ -39,6 +40,11 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
   }
 
   bool _scanning = false;
+
+  /// The slip from the last scan, so a follow-up like "remove the third selection" has something
+  /// to act on. Cleared when a new scan starts.
+  List<FixtureMatch> _scanned = const [];
+  String? _scannedBookmaker;
 
   /// Reads a slip out of a screenshot, then shows what it found for checking.
   ///
@@ -103,7 +109,16 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
       );
 
       if (confirmed != null && confirmed.isNotEmpty && mounted) {
-        _send(_describe(slip, confirmed));
+        setState(() {
+          _scanned = confirmed;
+          _scannedBookmaker = slip.bookmaker;
+        });
+        // Straight to the model, not through _send: the description is written by the app, and
+        // running it through the command interpreter meant the app read its own summary as an
+        // instruction. On the device that produced "I am not sure which selection you mean"
+        // sitting above the slip, answering a question nobody had asked.
+        await ref.read(chatProvider.notifier).send(_describe(slip, confirmed));
+        _toBottom();
       }
     } finally {
       // The picker copies the chosen image into the app's cache, so an abandoned scan would
@@ -167,10 +182,124 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Handles a follow-up about the slip just scanned, or returns false to let Claw answer.
+  ///
+  /// Only the phrasings that are unambiguous, and only while there is a scanned slip to act on.
+  /// Everything else goes to Claw untouched - this is a shortcut, not a replacement for the
+  /// conversation.
+  bool _handleSlipCommand(String text) {
+    if (_scanned.isEmpty) return false;
+    final command = readCommand(text);
+    if (command == null) return false;
+    _asked = text;
+
+    switch (command) {
+      case Rescan():
+        _scan();
+        return true;
+
+      case ShowUnmatched():
+        final unmatched = _scanned.where((m) => m.fixture == null).toList();
+        _say(
+          unmatched.isEmpty
+              ? 'Every selection on that slip matched a fixture.'
+              : '${unmatched.length} could not be matched: '
+                    '${unmatched.map((m) => '${m.parsed.home} v ${m.parsed.away}').join('; ')}.',
+        );
+        return true;
+
+      case ConvertTo(:final bookmaker):
+        // Conversion needs a booking code; selections read off an image cannot produce one, and
+        // inventing a destination code is the thing this product must never do.
+        _say(
+          'To move a slip I need its booking code, which is what the bookmaker will accept. '
+          'Open Convert and paste the code${_scannedBookmaker == null ? '' : ' from $_scannedBookmaker'}, '
+          'then pick $bookmaker as the destination.',
+        );
+        return true;
+
+      case RemoveSelection(:final index, :final team):
+        final at = _resolveIndex(index, team);
+        if (at == null) {
+          _say(
+            team == null
+                ? 'I am not sure which selection you mean. There are ${_scanned.length}.'
+                : 'Nothing on that slip looked like "$team".',
+          );
+          return true;
+        }
+        final removed = _scanned[at];
+        setState(() => _scanned = [..._scanned]..removeAt(at));
+        _say(
+          'Removed ${_label(removed)}. ${_scanned.length} '
+          '${_scanned.length == 1 ? 'selection' : 'selections'} left.',
+        );
+        return true;
+
+      case SetOdds(:final index, :final odds):
+        final at = _resolveIndex(index, null);
+        if (at == null) {
+          _say('I am not sure which selection you mean. There are ${_scanned.length}.');
+          return true;
+        }
+        final updated = [..._scanned];
+        final current = updated[at];
+        updated[at] = FixtureMatch(
+          parsed: current.parsed.copyWith(odds: odds),
+          fixture: current.fixture,
+          score: current.score,
+          alternatives: current.alternatives,
+          ambiguous: current.ambiguous,
+        );
+        setState(() => _scanned = updated);
+        _say('Set ${_label(current)} to ${odds.toStringAsFixed(2)}.');
+        return true;
+    }
+  }
+
+  /// Turns a position or a name into a real index, or null when it matches nothing.
+  int? _resolveIndex(int? index, String? team) {
+    if (index != null) {
+      final at = index == -1 ? _scanned.length - 1 : index;
+      return at >= 0 && at < _scanned.length ? at : null;
+    }
+    if (team == null) return null;
+    for (var i = 0; i < _scanned.length; i++) {
+      final m = _scanned[i];
+      final haystack = [
+        m.parsed.home,
+        m.parsed.away,
+        m.fixture?.home.name,
+        m.fixture?.away.name,
+      ].whereType<String>().join(' ').toLowerCase();
+      if (haystack.contains(team.toLowerCase())) return i;
+    }
+    return null;
+  }
+
+  String _label(FixtureMatch m) {
+    final f = m.fixture;
+    return f != null ? '${f.home.name} v ${f.away.name}' : '${m.parsed.home} v ${m.parsed.away}';
+  }
+
+  /// What the user just asked, so a local answer can be recorded against it.
+  String _asked = '';
+
+  /// Answers in the thread without going to the model.
+  void _say(String message) => ref.read(chatProvider.notifier).addLocalReply(_asked, message);
+
   Future<void> _send(String text) async {
     if (text.trim().isEmpty) return;
     _composer.clear();
     FocusScope.of(context).unfocus();
+
+    // A follow-up about the slip just scanned is answered here, where the answer is certain.
+    // Anything else, including every ordinary question, goes to Claw untouched.
+    if (_handleSlipCommand(text)) {
+      _toBottom();
+      return;
+    }
+
     await ref.read(chatProvider.notifier).send(text);
     _toBottom();
   }

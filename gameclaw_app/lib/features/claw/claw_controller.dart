@@ -54,6 +54,27 @@ class ChatController extends Notifier<ChatState> {
       for (final slip in turn.slips) slip.id,
   ];
 
+  /// Adds a turn the app answered itself, without asking the model.
+  ///
+  /// Used for the few follow-ups about a scanned slip that are unambiguous - removing a numbered
+  /// selection, listing what did not match. Those are operations on data the app already holds,
+  /// and a round trip to a language model to restate them would cost a second, cost a request
+  /// from the allowance, and introduce a way to be wrong that does not otherwise exist.
+  ///
+  /// The user's own words are recorded too, so the thread reads as a conversation rather than
+  /// answers appearing from nowhere, and so the history sent with the next real question still
+  /// makes sense.
+  void addLocalReply(String question, String answer) {
+    state = state.copyWith(
+      clearError: true,
+      turns: [
+        ...state.turns,
+        ChatTurn(role: 'user', text: question),
+        ChatTurn(role: 'assistant', text: answer),
+      ],
+    );
+  }
+
   Future<void> send(String text) async {
     final message = text.trim();
     if (message.isEmpty || state.sending) return;

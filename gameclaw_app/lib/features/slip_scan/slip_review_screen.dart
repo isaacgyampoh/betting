@@ -105,12 +105,7 @@ class _SlipReviewScreenState extends State<SlipReviewScreen> {
             ),
             if (widget.onConvertCode != null)
               Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  GcSpace.gutter,
-                  GcSpace.sm,
-                  GcSpace.gutter,
-                  0,
-                ),
+                padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.sm, GcSpace.gutter, 0),
                 child: GcButton(
                   label: 'Load $code and convert',
                   onPressed: () => widget.onConvertCode!(code, widget.slip.bookmaker),
