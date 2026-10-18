@@ -51,7 +51,12 @@ class _MatchScreenState extends ConsumerState<MatchScreen> {
         bottom: false,
         child: request.when(
           skipLoadingOnRefresh: true,
-          loading: () => const _Loading(),
+          // The fixture the user tapped is still in memory from the list they tapped it on, so
+          // the header is drawn from it immediately and only the parts we genuinely do not have
+          // yet are skeletons. Opening a match showed a blank header for the third of a second
+          // the detail request takes, which is precisely what "slow" feels like - the data was
+          // on screen a moment earlier.
+          loading: () => _Loading(known: ref.watch(knownFixtureProvider(widget.match))),
           error: (error, _) => Column(
             children: [
               const _BackBar(),
@@ -102,27 +107,60 @@ class _BackBar extends StatelessWidget {
 }
 
 class _Loading extends StatelessWidget {
-  const _Loading();
+  const _Loading({this.known});
+
+  /// The fixture as the list had it, when the match was opened from one.
+  ///
+  /// Null for a notification or a deep link, where there is no list behind the match. Those get
+  /// the skeleton, which is the honest answer: nothing is known yet.
+  final Fixture? known;
 
   @override
   Widget build(BuildContext context) {
+    final fixture = known;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _BackBar(),
         const SizedBox(height: GcSpace.xl),
-        Center(
-          child: Column(
-            children: const [
-              GcSkeleton(width: 140, height: 11),
-              SizedBox(height: GcSpace.xl),
-              GcSkeleton(width: 200, height: 44, radius: GcRadius.sm),
-              SizedBox(height: GcSpace.md),
-              GcSkeleton(width: 90, height: 11),
-            ],
+        if (fixture == null)
+          Center(
+            child: Column(
+              children: const [
+                GcSkeleton(width: 140, height: 11),
+                SizedBox(height: GcSpace.xl),
+                GcSkeleton(width: 200, height: 44, radius: GcRadius.sm),
+                SizedBox(height: GcSpace.md),
+                GcSkeleton(width: 90, height: 11),
+              ],
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
+            child: Column(
+              children: [
+                Text(
+                  fixture.competition.name,
+                  style: GcType.overline.copyWith(color: gc(context).inkFaint),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: GcSpace.lg),
+                Text(
+                  '${fixture.home.name}  v  ${fixture.away.name}',
+                  style: GcType.title,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: GcSpace.sm),
+                Text(
+                  fixture.statusLabel,
+                  style: GcType.label.copyWith(color: gc(context).inkMuted),
+                ),
+              ],
+            ),
           ),
-        ),
         const SizedBox(height: GcSpace.xxl),
+        // Only the parts we really do not have yet.
         const Expanded(child: GcFixtureSkeleton(rows: 4)),
       ],
     );

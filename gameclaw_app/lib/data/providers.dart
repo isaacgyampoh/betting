@@ -69,6 +69,39 @@ final matchDayProvider = FutureProvider.family<Cached<MatchDay>, String>(
 /// fixture by id, which is a separate upstream call that can be refused on its own; with it the
 /// server finds the fixture in the day it already holds. A match opened from a day list that
 /// loaded a moment ago should never fail to open.
+/// The fixture as the list already knew it, if that list is still loaded.
+///
+/// Opening a match used to show a skeleton while it re-fetched the teams, the score and the
+/// status - all of which were on screen a moment earlier, in the row the user tapped. The detail
+/// request is quick (about a third of a second against production, warm) but a blank header for a
+/// third of a second after a tap is exactly what "slow" feels like.
+///
+/// Nothing is cached specially for this. The day's fixtures are already in [matchDayProvider],
+/// keyed by date, and a [MatchRef] carries the date it was opened from - so this is a lookup in
+/// memory, not a second copy of the truth that could disagree with the first.
+///
+/// Null when the match was opened from a notification or a deep link, where there is no list
+/// behind it. Those still show the skeleton, which is honest: we genuinely do not know yet.
+final knownFixtureProvider = Provider.family<Fixture?, MatchRef>((ref, match) {
+  final date = match.date;
+  if (date == null) return null;
+
+  // Only consult a day that is already loaded. Watching it outright would *start* a fetch - and
+  // for a match opened from a notification, that means pulling a whole day of fixtures (267 of
+  // them on an ordinary Sunday) purely to draw a header the detail request supplies a third of a
+  // second later. The point of this provider is to use what we have, not to go and get more.
+  final day = ref.container.exists(matchDayProvider(date))
+      ? ref.watch(matchDayProvider(date)).value?.value
+      : null;
+  if (day == null) return null;
+  for (final group in day.groups) {
+    for (final fixture in group.fixtures) {
+      if (fixture.id == match.id) return fixture;
+    }
+  }
+  return null;
+});
+
 final matchDetailProvider = FutureProvider.family<Cached<MatchDetail>, MatchRef>(
   (ref, at) => ref.watch(repositoryProvider).matchDetail(at.id, dateHint: at.date),
 );
