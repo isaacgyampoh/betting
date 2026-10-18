@@ -179,6 +179,40 @@ different failures in sequence, which is why fixing the first did not fix the si
 2. Android client present, Web client deleted → consent screen appears, then
    **`[28444] Developer console is not set up correctly`**.
 
+### And again on 2026-10-18, after the release key existed
+
+Two faults stacked, and the first masked the second.
+
+The release build was signed with the new upload key, whose SHA-1 is registered nowhere, so Google
+refused before any server call: **`[16] Account reauth failed`**. Underneath that, the build had
+been compiled with `400646694915-uso8a1…` as `serverClientId` - the **Android** client this
+document had already identified a day earlier. Fixing only the fingerprint would have produced an
+audience mismatch at our own server instead.
+
+The probe below no longer needs interpreting: Google now returns the client type in as many words,
+base64 inside the `authError` parameter of the redirect.
+
+```bash
+curl -s -i -G "https://accounts.google.com/o/oauth2/v2/auth" \
+  --data-urlencode "client_id=<ID>.apps.googleusercontent.com" \
+  --data-urlencode "response_type=code" --data-urlencode "scope=openid" \
+  --data-urlencode "redirect_uri=com.googleusercontent.apps.<ID>:/oauth2redirect" \
+  | grep -oE 'authError=[A-Za-z0-9_-]+' | cut -d= -f2 | base64 -d
+```
+
+| Client id | Decoded verdict |
+|---|---|
+| `400646694915-uso8a1…` | "Custom URI scheme is not enabled for your **Android** client" |
+| `400646694915-b4oh5at…` | "Custom scheme URIs are not allowed for **'WEB'** client type" |
+| `400646694915-g6t2757…` | "Custom scheme URIs are not allowed for **'WEB'** client type" |
+
+Both Web clients are in `GOOGLE_WEB_CLIENT_ID` on Render, so either works as `serverClientId`.
+Builds now use `b4oh5at…`.
+
+**An Android OAuth client holds one package and one SHA-1.** A second fingerprint needs a second
+client, not an edit to the first - so the debug key keeps its own client and the release key gets
+another. Play App Signing will add a third, because Google re-signs the upload with its own key.
+
 `serverClientId` must be a **Web** client - it is the audience the ID token is addressed to, and
 an Android client cannot serve as one. Both must exist: the Android client is how Google decides
 the caller is really this app; the Web client is who the token is for.
