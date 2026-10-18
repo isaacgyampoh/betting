@@ -110,6 +110,31 @@ describe("the operator catalogue", () => {
       }
     });
 
+    it("never treats a failed probe as evidence the operator is absent", () => {
+      // The defect this is here for: the first catalogue called these `no-host` and reasoned "the
+      // brand may not serve this market". Four of those hosts resolve perfectly well at an
+      // address we had not guessed. A probe failure is a fact about our URL, not the operator.
+      for (const e of entries) {
+        if (e.presence.kind !== "unconfirmed") continue;
+        const text = `${e.reason ?? ""} ${e.presence.note}`.toLowerCase();
+        for (const claim of ["does not serve", "not serve this market", "no presence", "absent from"]) {
+          expect(text, `${e.id} infers absence from a failed probe`).not.toContain(claim);
+        }
+        expect(e.presence.note.length, `${e.id} needs to say what was actually checked`).toBeGreaterThan(20);
+      }
+    });
+
+    it("claims no capability for an operator whose address is unconfirmed", () => {
+      for (const e of entries) {
+        if (e.presence.kind !== "unconfirmed") continue;
+        expect(e.capabilities.readsCodes, e.id).toBe(false);
+        expect(e.capabilities.issuesCodes, e.id).toBe(false);
+        expect(e.status, `${e.id} cannot be verified without a confirmed address`).not.toBe(
+          "live-verified",
+        );
+      }
+    });
+
     it("dates every piece of evidence", () => {
       for (const e of entries) {
         expect(e.presence.checkedAt, e.id).toMatch(/^\d{4}-\d{2}-\d{2}$/);

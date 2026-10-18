@@ -63,8 +63,20 @@ export type Presence =
    * integration will have to be agreed rather than simply written. MSport is the worked example.
    */
   | { kind: "site-blocked"; url: string; httpStatus: number; checkedAt: string }
-  /** No host answered at the expected address. Often means the brand does not serve this market. */
-  | { kind: "no-host"; url: string; checkedAt: string }
+  /**
+   * We did not confirm an address for this operator in this market.
+   *
+   * **This is not evidence that the operator is absent.** It says our candidate URL did not
+   * answer, which is a fact about our guess, not about the operator. The first version of this
+   * catalogue called it `no-host` and reasoned "the brand may not serve this market", which was
+   * wrong in a way worth spelling out: `www.wsb.co.za`, `betway.com.ng`, `www.mozzartbet.ng` and
+   * `www.promosport.tn` all resolve to live Cloudflare addresses, and every one of them had been
+   * written off by a failed probe against a different URL.
+   *
+   * `dnsResolves` separates the two cases that got conflated - no DNS record at all, versus a host
+   * that exists and would not complete a request. Neither licenses an inference about the market.
+   */
+  | { kind: "unconfirmed"; url: string; dnsResolves: boolean; note: string; checkedAt: string }
   /** Reported by press or an aggregator and not independently checked. Treat as a lead. */
   | { kind: "secondary"; source: string; checkedAt: string };
 

@@ -173,9 +173,16 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://melbet.cm/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://melbet.cm/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://melbet.cm/",
+      dnsResolves: false,
+      note:
+        "No DNS record for our candidate address. We did not find the operator's real address; this says nothing about whether it serves the market.",
+      checkedAt: "2026-10-18",
+    },
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -207,9 +214,16 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://1xbet.dz/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://1xbet.dz/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://1xbet.dz/",
+      dnsResolves: false,
+      note:
+        "No DNS record for our candidate address. We did not find the operator's real address; this says nothing about whether it serves the market.",
+      checkedAt: "2026-10-18",
+    },
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -301,10 +315,17 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://www.betlion.com.gh/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://www.betlion.com.gh/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://www.betlion.com.gh/",
+      dnsResolves: false,
+      note:
+        "No DNS record for our candidate address. We did not find the operator's real address; this says nothing about whether it serves the market.",
+      checkedAt: "2026-10-18",
+    },
     regulator: "Gaming Commission of Ghana",
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -485,10 +506,17 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://1xbet.ma/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://1xbet.ma/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://1xbet.ma/",
+      dnsResolves: false,
+      note:
+        "No DNS record for our candidate address. We did not find the operator's real address; this says nothing about whether it serves the market.",
+      checkedAt: "2026-10-18",
+    },
     regulator: "Ministere de l'Economie et des Finances",
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -509,9 +537,16 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://1xbet.ml/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://1xbet.ml/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://1xbet.ml/",
+      dnsResolves: false,
+      note:
+        "No DNS record for our candidate address. We did not find the operator's real address; this says nothing about whether it serves the market.",
+      checkedAt: "2026-10-18",
+    },
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -656,10 +691,17 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://www.betway.ng/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://www.betway.ng/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://www.betway.ng/",
+      dnsResolves: true,
+      note:
+        "betway.com.ng resolves (Cloudflare); our candidate www.betway.ng has no DNS record.",
+      checkedAt: "2026-10-18",
+    },
     regulator: "National Lottery Regulatory Commission",
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -682,10 +724,17 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://www.mozzartbet.com.ng/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://www.mozzartbet.com.ng/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://www.mozzartbet.com.ng/",
+      dnsResolves: true,
+      note:
+        "www.mozzartbet.ng resolves (Cloudflare); our candidate www.mozzartbet.com.ng has no DNS record.",
+      checkedAt: "2026-10-18",
+    },
     regulator: "National Lottery Regulatory Commission",
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -807,10 +856,17 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "http://www.promosport.com.tn/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "http://www.promosport.com.tn/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "http://www.promosport.com.tn/",
+      dnsResolves: true,
+      note:
+        "www.promosport.tn resolves; our candidate www.promosport.com.tn has no DNS record.",
+      checkedAt: "2026-10-18",
+    },
     regulator: "Promosport (state operator)",
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -842,10 +898,17 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://www.mozzartbet.co.tz/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://www.mozzartbet.co.tz/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://www.mozzartbet.co.tz/",
+      dnsResolves: false,
+      note:
+        "No DNS record for our candidate address. We did not find the operator's real address; this says nothing about whether it serves the market.",
+      checkedAt: "2026-10-18",
+    },
     regulator: "Gaming Board of Tanzania",
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -888,10 +951,17 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://www.betlion.ug/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://www.betlion.ug/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://www.betlion.ug/",
+      dnsResolves: false,
+      note:
+        "No DNS record for our candidate address. We did not find the operator's real address; this says nothing about whether it serves the market.",
+      checkedAt: "2026-10-18",
+    },
     regulator: "Lotteries and Gaming Regulatory Board",
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -945,10 +1015,17 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://www.gsbgaming.com/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://www.gsbgaming.com/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://www.gsbgaming.com/",
+      dnsResolves: true,
+      note:
+        "www.gsbgaming.com resolves to 54.83.59.54 but did not complete a request.",
+      checkedAt: "2026-10-18",
+    },
     regulator: "Lotteries and Gaming Regulatory Board",
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -1090,10 +1167,17 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     website: "https://www.africanbet.co.zw/",
     status: "researching",
     capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://www.africanbet.co.zw/", checkedAt: "2026-10-18" },
+    presence: {
+      kind: "unconfirmed",
+      url: "https://www.africanbet.co.zw/",
+      dnsResolves: false,
+      note:
+        "No DNS record for our candidate address. We did not find the operator's real address; this says nothing about whether it serves the market.",
+      checkedAt: "2026-10-18",
+    },
     regulator: "Lotteries and Gaming Board",
     reason:
-      "No host answered at the expected address; the brand may not serve this market.",
+      "We have not confirmed this operator's address for this market. Not evidence of absence - see presence.note.",
     verifiedAt: "2026-10-18",
   },
   {
@@ -1107,19 +1191,6 @@ export const AFRICA_CATALOGUE: readonly CatalogueEntry[] = [
     regulator: "Lotteries and Gaming Board",
     reason:
       "Operator site answered 403: it serves this market but refuses automated access, so any integration must be agreed.",
-    verifiedAt: "2026-10-18",
-  },
-  {
-    id: "worldsport-zw",
-    brand: "World Sport Betting",
-    country: "ZW",
-    website: "https://www.worldsportbetting.co.zw/",
-    status: "researching",
-    capabilities: { readsCodes: false, issuesCodes: false },
-    presence: { kind: "no-host", url: "https://www.worldsportbetting.co.zw/", checkedAt: "2026-10-18" },
-    regulator: "Lotteries and Gaming Board",
-    reason:
-      "No host answered at the expected address; the brand may not serve this market.",
     verifiedAt: "2026-10-18",
   },
 ];
