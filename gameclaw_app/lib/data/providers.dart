@@ -315,6 +315,26 @@ final signOutProvider = Provider<Future<void> Function()>((ref) {
   };
 });
 
+/// Deletes the account on the server, then leaves the device in the same state as a sign-out.
+///
+/// Google Play requires this to exist in the app as well as on the web, and requires that it
+/// remove the data rather than deactivate the row; `/delete-account` on the site describes exactly
+/// what goes.
+///
+/// Order matters and is the opposite of a sign-out's reasoning. The device is unregistered for
+/// push first, because that call needs the token that is about to stop working. The server delete
+/// comes next. Only if it succeeds is the local session cleared - if the request fails, the user
+/// is still signed in and can try again, rather than being left signed out on a device while the
+/// account they asked to delete is still there.
+final deleteAccountProvider = Provider<Future<void> Function()>((ref) {
+  return () async {
+    await ref.read(pushServiceProvider).unregister();
+    await ref.read(apiClientProvider).delete<Map<String, dynamic>>('/me');
+    await ref.read(sessionProvider.notifier).signOut();
+    await ref.read(cacheDbProvider).clearAll();
+  };
+});
+
 /// Confirms the user is 18 or older, which the API requires before it will answer anything about
 /// football. Clears the age gate on success by rebuilding everything that was refused.
 final confirmAgeProvider = Provider<Future<void> Function()>((ref) {

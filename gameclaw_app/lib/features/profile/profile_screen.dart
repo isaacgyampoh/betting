@@ -47,6 +47,7 @@ class ProfileScreen extends ConsumerWidget {
                       session: current,
                       favourites: favourites,
                       onSignOut: () => ref.read(signOutProvider)(),
+                      onDelete: () => ref.read(deleteAccountProvider)(),
                     ),
             ),
             const GcSectionHeader(title: 'Appearance'),
@@ -153,15 +154,74 @@ class _SignedOut extends StatelessWidget {
   }
 }
 
-class _SignedIn extends StatelessWidget {
-  const _SignedIn({required this.session, required this.favourites, required this.onSignOut});
+class _SignedIn extends StatefulWidget {
+  const _SignedIn({
+    required this.session,
+    required this.favourites,
+    required this.onSignOut,
+    required this.onDelete,
+  });
 
   final AuthSession session;
   final int favourites;
   final Future<void> Function() onSignOut;
+  final Future<void> Function() onDelete;
+
+  @override
+  State<_SignedIn> createState() => _SignedInState();
+}
+
+class _SignedInState extends State<_SignedIn> {
+  bool _deleting = false;
+
+  /// Two steps, and the second one is typed.
+  ///
+  /// Deletion is immediate and nothing comes back, so a single tap next to "Sign out" is too
+  /// close to an action people take casually. The dialog says what goes before asking, and the
+  /// confirm button is destructive-coloured rather than the accent used for ordinary actions.
+  Future<void> _confirmDelete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete your account?'),
+        content: const Text(
+          'Your slips, followed teams and notification settings are deleted immediately, on every '
+          'device. This cannot be undone.\n\n'
+          'Signing in again later starts a new, empty account.\n\n'
+          'A booking code you have already placed stays with the bookmaker. Deleting this account '
+          'does not cancel a bet.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep my account')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Delete', style: TextStyle(color: gc(context).loss)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      await widget.onDelete();
+    } catch (error) {
+      // The account still exists if this failed, so say so rather than leaving a spinner. Being
+      // signed out here would be the worst outcome: it looks like it worked.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete the account: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final session = widget.session;
+    final favourites = widget.favourites;
     final email = session.email ?? 'Signed in on this device';
     final initial = email.trim().isEmpty ? '?' : email.trim().characters.first.toUpperCase();
 
@@ -216,7 +276,7 @@ class _SignedIn extends StatelessWidget {
           const SizedBox(height: GcSpace.md),
           GcButton(
             label: 'Sign out',
-            onPressed: onSignOut,
+            onPressed: widget.onSignOut,
             kind: GcButtonKind.secondary,
             icon: Icons.logout_rounded,
           ),
@@ -225,6 +285,22 @@ class _SignedIn extends StatelessWidget {
             // Said because it is a real consequence and a surprise otherwise.
             'Signing out clears everything saved on this device. Followed teams are kept.',
             style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
+          ),
+          const SizedBox(height: GcSpace.lg),
+          // Deliberately below sign-out and visually quieter: it is a real control people must be
+          // able to find, not one to invite. Play requires it to be in the app at all.
+          TextButton(
+            onPressed: _deleting ? null : _confirmDelete,
+            child: _deleting
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    'Delete account',
+                    style: GcType.caption.copyWith(color: gc(context).loss),
+                  ),
           ),
         ],
       ),
