@@ -134,3 +134,46 @@ Nothing here is reversible once the last step runs, so the order matters.
 | New auth deployed | `/auth/google`, `/auth/refresh`, `/auth/logout` live and refusing bad input |
 | Admin dashboard | live at `https://admin.gameclaw.win/admin`, anonymous access refused |
 | Rollback | nothing is cut over; the app still uses Cloudflare + Supabase, both untouched |
+
+---
+
+## 19 Oct — Supabase is already gone, and three things broke with it
+
+The project at `qefedcphkmxuxjetmtqw.supabase.co` no longer answers: `curl` to its REST endpoint
+returns no response at all, not a 4xx. Whatever retired it, this document's "nothing has been
+deleted" opening is no longer true, and the Cloudflare Worker was never repointed.
+
+The Worker's `DATABASE_URL` still refers to it. Everything below follows from that one secret:
+
+| Symptom | Where |
+| --- | --- |
+| `{"status":"database_unreachable"}` | `gameclaw.win/api/v1/health` |
+| **HTTP 500** on a page linked from the home page three times | `gameclaw.win/track-record` |
+| `INTERNAL` error | `gameclaw.win/api/v1/picks` |
+| **No daily picks since 2026-10-17** | the `0 7 * * *` trigger |
+
+The picks one is the expensive one and was invisible. `worker.ts`'s `scheduled` handler does not
+call the API over the network; it invokes the OpenNext handler in-process, so the job runs inside
+the Worker against the Worker's own database. With that database gone the job has failed every
+morning since, and the most recent published pick is dated 17 October. Nothing alerts on it — the
+handler logs `cron.triggered` with a non-ok status and that is the end of it.
+
+The Render service is unaffected and healthy: it has its own `DATABASE_URL` pointing at
+`gameclaw-db`, and it is what the Flutter app talks to. This is why the app looks fine while the
+website does not.
+
+### The fix
+
+Point the Worker at the same database the Render service uses:
+
+```
+wrangler secret put DATABASE_URL --name gameclaw   # the gameclaw-db external connection string
+```
+
+That restores `/track-record`, the site's `/api/v1/picks`, and both cron triggers together,
+because all three fail for the same reason. Repointing the cron alone would leave the website's
+pages broken.
+
+Worth doing at the same time, and not done here: a non-ok `cron.triggered` should page someone.
+Two days of a headline feature producing nothing, with the failure written only to a log nobody
+reads, is the part of this that should not have needed a person to notice.
