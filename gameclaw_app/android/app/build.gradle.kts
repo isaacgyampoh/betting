@@ -47,6 +47,9 @@ val hasUploadKey = keystoreProperties.getProperty("storeFile") != null
  */
 val unsignedRelease = (project.findProperty("unsignedRelease") as String?)?.toBoolean() == true
 
+/** See the release build type below: R8 off, for isolating minification from signing. */
+val noMinify = (project.findProperty("noMinify") as String?)?.toBoolean() == true
+
 android {
     namespace = "win.gameclaw.app"
     // 37 rather than flutter.compileSdkVersion (36), because receive_sharing_intent 1.9.0
@@ -102,8 +105,18 @@ android {
                 unsignedRelease -> signingConfigs.getByName("debug")
                 else -> null
             }
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // `-PnoMinify=true` builds a real, upload-signed release with R8 off.
+            //
+            // It exists to settle one question that otherwise cannot be answered: when something
+            // works in debug and fails in release, the difference is the signing key *and*
+            // minification, and those have to be separated before guessing at keep rules. Google
+            // Sign-In is the case in point - it is reached reflectively through Credential
+            // Manager, so a missing rule shows up as a configuration error rather than a crash.
+            //
+            // Diagnostic only. It is not a shipping configuration: an unminified release is
+            // larger and keeps every symbol, which is exactly what minification is for.
+            isMinifyEnabled = !noMinify
+            isShrinkResources = !noMinify
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
