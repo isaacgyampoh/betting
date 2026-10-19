@@ -216,3 +216,42 @@ another. Play App Signing will add a third, because Google re-signs the upload w
 `serverClientId` must be a **Web** client - it is the audience the ID token is addressed to, and
 an Android client cannot serve as one. Both must exist: the Android client is how Google decides
 the caller is really this app; the Web client is who the token is for.
+
+## 19 Oct — proving which variable caused `[28444]`
+
+Sign-in worked on debug and failed on release with `[28444] Developer console is not set up
+correctly`. Three things differed between those builds — the signing key, R8, and (unknown at the
+time) the package name the OAuth client was registered against. The error names none of them.
+
+Each was isolated rather than guessed at:
+
+| Variable | How it was isolated | Result |
+| --- | --- | --- |
+| R8 | `-PnoMinify=true`, a real upload-signed release with minification off | Failed identically. Not the cause. |
+| OAuth client reachability | `GET accounts.google.com/o/oauth2/v2/auth` per client id, with a fabricated id as a control | All clients live; control correctly reported missing. Not propagation. |
+| Signing certificate | APK pulled back off the device with `adb pull`, `apksigner verify --print-certs` | `c9b519…`, matching what was registered. Not the key. |
+| Package name | `-PdiagPkg=win.gameclaw.app2`, same key, same audience, installed **beside** the real app | **Signed in successfully.** |
+
+The last row is the answer. `win.gameclaw.app2` and `win.gameclaw.app` differed in nothing except
+which package name the Android OAuth client carried, so the registration was the only broken part.
+
+Two things made this cheap, and both are worth repeating:
+
+- A package-name override installs as a *second* app. Nothing had to be uninstalled and no user
+  data was touched, which an experiment on the signing key would have required.
+- `applicationIdSuffix` is joined with a dot and produces `win.gameclaw.app.2`. An override of
+  `applicationId` is what gives the exact string.
+
+Reproduce by adding, temporarily, to `android/app/build.gradle.kts`:
+
+```kotlin
+val diagPkg = project.findProperty("diagPkg") as String?
+// in defaultConfig:
+applicationId = diagPkg ?: "win.gameclaw.app"
+```
+
+`google-services.json` needs a client block whose `package_name` matches, or the Google Services
+plugin fails the build. Revert both afterwards; neither belongs in a release build.
+
+Beware one false positive when grepping logcat for the error code: `ParceledListSlice: Element #97
+is 28444 bytes` is a byte count, not a status. Match on `Auth.Api.Credentials` instead.
