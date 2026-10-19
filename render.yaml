@@ -58,8 +58,14 @@ services:
 
       # Not a secret: it ships inside the APK. It is the audience every Google ID token is
       # checked against, so it must match the client id the Flutter build was given.
+      #
+      # Comma-separated, newest first, because the id is baked into each installed APK and the
+      # server has to keep accepting builds already in the field. The release build signs in with
+      # b4oh5at..., which is the id actually present in the signed APK; k5ikq1qt... is kept for
+      # anything built before the switch. Removing an id here rejects every APK still carrying it,
+      # so ids come off this list only once no install can be sending them.
       - key: GOOGLE_WEB_CLIENT_ID
-        value: 400646694915-k5ikq1qt4mjcrctfpckebuq24qlbttqo.apps.googleusercontent.com
+        value: 400646694915-b4oh5athe842emcnga4913s1oq1igjh1.apps.googleusercontent.com,400646694915-k5ikq1qt4mjcrctfpckebuq24qlbttqo.apps.googleusercontent.com
 
       - key: NODE_VERSION
         value: "24"
