@@ -1,6 +1,7 @@
 # Google Play readiness
 
-Audited 2026-10-17 against the real project and Google's current policy text.
+Audited 2026-10-17 against the real project and Google's current policy text, and updated
+2026-10-19 where the position has moved. §1 has not moved and still outranks the rest.
 
 **Read §1 before doing any of the rest.** The technical work is nearly done; whether the app is
 allowed on Play at all is the open question, and it is a business and licensing matter rather
@@ -80,32 +81,30 @@ Verified by reading the built artifact, not the configuration that is supposed t
 |---|---|
 | Package | `win.gameclaw.app` — confirmed in the APK manifest |
 | `targetSdkVersion` | **36**, confirmed in the APK. Meets the requirement in force since 31 Aug 2026 |
-| `compileSdkVersion` | 36 |
+| `compileSdkVersion` | 37 — raised for receive_sharing_intent; `targetSdk` deliberately left at Flutter's default |
 | `minSdkVersion` | 24 |
 | Secrets in the artifact | **none** — scanned the extracted APK for JWTs, `sk_live`, `AIzaSy`, private keys, database URLs |
 | Version | `versionCode 1`, `versionName 1.0.0` |
 | R8 / minification | runs and the minified build works on device |
 
-### Signing — not done, and deliberately not done by me
+### Signing — done since this was written
 
-```
-~/keys/gameclaw-upload.jks      not created
-android/key.properties          absent
-```
+An upload key now exists, with `key.properties` pointing at it and a backup kept outside the
+repository. `docs/release-signing.md` records the detail; the fingerprint is
+`C9:B5:19:40:33:DB:53:38:EC:3E:E7:94:A0:D9:67:B1:52:00:13:75`, and a signed APK and AAB have both
+been built and verified against it.
 
-There is no upload key. Creating one is a step only you should take, because the key is the
-permanent identity of the app on Play: whoever holds it can ship updates, and losing it means
-losing the ability to update under the listing at all. `docs/release-signing.md` has the exact
-commands and the backup advice.
+The consequence predicted here arrived exactly as described: the release build's SHA-1 differs
+from the debug key's and **Google sign-in fails in a release build** with
+`[28444] Developer console is not set up correctly`. It is not a signing fault. The Android OAuth
+client in project `game-claw` is registered against the package `win.gameclaw.app2` — a diagnostic
+identity created to work around a console save error — rather than `win.gameclaw.app`. A release
+build under `win.gameclaw.app2`, same key and same audience, signs in successfully, which isolates
+it to that one registration. See `docs/release-signing.md`, 19 Oct.
 
-**After creating it**, two things follow immediately:
-
-- The release build's SHA-1 differs from the debug key's, so Google sign-in **will not work in a
-  release build** until an Android OAuth client exists for the upload-key fingerprint, and
-  another for the Play App Signing fingerprint once Play has re-signed. See
-  `docs/release-signing.md` §5. This is the same failure already debugged once, and it will
-  present identically.
-- Nothing has yet been tested in a release-signed build, because there is no key to sign with.
+Still outstanding, and unchanged: a third Android OAuth client is needed for the **Play App
+Signing** fingerprint once Play re-signs the first upload, or sign-in will break again for
+everyone who installs from the store.
 
 ---
 
@@ -113,10 +112,10 @@ commands and the backup advice.
 
 | | Status |
 |---|---|
-| Privacy policy | **not written** — required, and must cover what the app collects |
+| Privacy policy | **written** — `/privacy`, rewritten 19 Oct against `prisma/schema.prisma` so the Data safety form can be filled in to match it |
 | Data safety form | not completed. The app collects: Google account id and email, device push token, slips and selections |
 | Content rating (IARC) | not completed. A gambling-adjacent app will not rate as low as it might look |
-| Account deletion | **required** by Play for apps with accounts, including a **web** route, not only in-app |
+| Account deletion | **done** — `DELETE /api/v1/me`, a control in the app's Profile tab, and `/delete-account` on the site for the web route Play requires |
 | Store listing, screenshots, feature graphic | not prepared |
 | Reviewer access | needed — reviewers must be able to sign in. Google sign-in with a test account is the obvious route |
 
@@ -150,11 +149,27 @@ safety form and no content rating.
 
 ## 5. What I would do next, in order
 
+Struck-through items were done between 17 and 19 October.
+
 1. Put the policy question to Google in writing. Everything else is wasted effort if the answer
-   is no, and the answer is not predictable from the policy text alone.
-2. Create and back up the upload key (`docs/release-signing.md`).
+   is no, and the answer is not predictable from the policy text alone. **Still the first thing.**
+2. ~~Create and back up the upload key.~~ Done.
 3. Register Android OAuth clients for the upload-key and Play App Signing fingerprints.
-4. Build a release-signed artifact and test sign-in, following, match detail and conversion on it
-   — none of which has been exercised in a release build yet.
-5. Write the privacy policy and complete the data safety form honestly.
-6. Check the account type and start closed testing early if the 14-day clock applies.
+   **Half done and currently broken**: the upload-key client exists but is registered against
+   `win.gameclaw.app2`, so release sign-in fails. The Play App Signing client cannot be created
+   until Play has re-signed a first upload.
+4. ~~Build a release-signed artifact~~ — done, APK and AAB both verified. Testing on it is partly
+   done: live scores, Match Centre, Claw and slip generation were exercised on a release build;
+   **sign-in has only been proved under the `app2` diagnostic package**, and conversion has not
+   been re-tested since.
+5. ~~Write the privacy policy~~ — done, `/privacy`, rewritten against the schema. The Data safety
+   form still has to be filled in to match it, and that is a console task.
+6. Check the account type and start closed testing early if the 14-day clock applies. **Still
+   unknown and still the longest pole** after the policy question — it is a hard 14-day floor.
+
+### Added since
+
+7. Account deletion is implemented and tested (`DELETE /api/v1/me`, the Profile control, and
+   `/delete-account`). The web route is the part Play specifically requires.
+8. Store listing, screenshots, feature graphic and content rating remain untouched. None can be
+   completed without console access.
