@@ -1,8 +1,12 @@
 import type { NextConfig } from "next";
 
 // The commit being built, so /api/v1/health can say which one is serving. GitHub Actions sets
-// GITHUB_SHA; locally there is no commit worth naming.
-const commit = (process.env.GITHUB_SHA ?? "dev").slice(0, 7);
+// GITHUB_SHA and Render sets RENDER_GIT_COMMIT; locally there is no commit worth naming.
+//
+// Render was missing, so every deploy there reported "dev" and the endpoint whose whole purpose
+// is answering "did my change go out?" answered identically before and after a deploy. That is
+// worse than no field: it reads like a real answer.
+const commit = (process.env.GITHUB_SHA ?? process.env.RENDER_GIT_COMMIT ?? "dev").slice(0, 7);
 
 const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_COMMIT_SHA: commit },
