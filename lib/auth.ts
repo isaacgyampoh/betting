@@ -1,8 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { publicEnv } from "@/lib/public-env";
 import { db } from "@/lib/db";
 import { readAccessToken } from "@/lib/identity/session";
 import { AppError } from "@/lib/errors";
@@ -14,12 +12,15 @@ export type AuthUser = { id: string; email: string | null };
 /**
  * Resolves the signed-in user from a bearer token, or the Supabase cookie on the website.
  *
- * Two token issuers are accepted during the move off Supabase, and the order matters:
+ * A bearer token is GameClaw's own, verified locally with our signing secret - no network call and
+ * no third party. This is what every session gets.
  *
- *   1. **GameClaw's own access token.** Verified locally with our signing secret - no network
- *      call, no third party. This is what every new session gets.
- *   2. **Supabase**, as a fallback, so sessions issued before the cutover keep working rather
- *      than signing everybody out the moment this deploys.
+ * There used to be a second issuer here: a Supabase fallback, so sessions from before the cutover
+ * kept working rather than everybody being signed out the moment it deployed. The Supabase project
+ * has since been deleted, which ends that argument - a token it issued cannot be verified by
+ * anyone now. What the fallback still did was spend a network round trip to a host that no longer
+ * resolves, on every request carrying a token we had already declined, before returning the null
+ * it was always going to return.
  *
  * Ours is tried first because it is the cheap one: a local HS256 verification against a token we
  * issued, versus a call into the Supabase client. Once no Supabase-issued token can still be
@@ -31,14 +32,7 @@ export const getAuthUser = cache(async (authorization?: string | null): Promise<
 
   if (bearer) {
     const own = await readAccessToken(bearer);
-    if (own) return { id: own.id, email: own.email };
-
-    const supabase = createSupabaseClient(publicEnv.supabaseUrl, publicEnv.supabaseAnonKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data, error } = await supabase.auth.getClaims(bearer);
-    if (error || !data) return null;
-    return { id: data.claims.sub, email: (data.claims.email as string | undefined) ?? null };
+    return own ? { id: own.id, email: own.email } : null;
   }
 
   const supabase = await createClient();
