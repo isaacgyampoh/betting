@@ -26,6 +26,12 @@
   // scripts/cf-build.mjs also injects the NEXT_PUBLIC_* values below into `next build`.
   "vars": {
     "NEXT_PUBLIC_SITE_URL": "https://gameclaw.win",
+
+    // The website has no database connection of its own: gameclaw-db permits no external
+    // connections, so the Hyperdrive binding cannot reach it. Public, read-only pick data is
+    // fetched from the API, which does have one. Deliberately absent from render.yaml - set
+    // there, the API would call itself. See lib/services/remote-data.ts.
+    "GC_DATA_API_BASE": "https://gameclaw-api.onrender.com/api/v1",
     "NEXT_PUBLIC_SUPABASE_URL": "https://qefedcphkmxuxjetmtqw.supabase.co",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlZmVkY3Boa214dXhqZXRtdHF3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NjE0NTUsImV4cCI6MjEwNjMzNzQ1NX0.0uK_oW-vIBwPfpg1qXi53BjXpF2XjfsdUz2SO9hYh6g",
     "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "pk_live_9d21dd9b8bd208a10cd1a1195a0dbd1d477894b1",

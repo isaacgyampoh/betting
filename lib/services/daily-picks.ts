@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { everythingIsFree } from "@/lib/launch";
 import { logger } from "@/lib/logger";
+import { readViaApi } from "@/lib/services/remote-data";
 import { BOOKMAKER_SLUGS } from "@/lib/bookmakers/types";
 import { getAdapter } from "@/lib/bookmakers/registry";
 import type { PickStatus } from "@/lib/generated/prisma/enums";
@@ -124,6 +125,13 @@ const pickInclude = { legs: { orderBy: { position: "asc" as const } } };
 
 /** Today's published picks. Legs are hidden unless the viewer's plan includes them. */
 export async function getTodaysPicks(userId: string | null): Promise<DailyPickView[]> {
+  // Anonymous reads only. A signed-in request must not be answered from an unauthenticated fetch,
+  // because what a user may see depends on their plan - so this path is taken only when there is
+  // no user to tailor it to.
+  if (userId === null) {
+    const remote = await readViaApi<DailyPickView[]>("/picks");
+    if (remote) return remote;
+  }
   const unlocked = await canSeePicks(userId);
   const picks = await db.dailyPick.findMany({
     where: { forDate: new Date(ghanaDate()) },
@@ -174,6 +182,11 @@ export type TrackRecord = {
  * every pick opens up the moment it settles, and none is ever edited or removed.
  */
 export async function getTrackRecord(limit = 60, window: RecordWindow = "all"): Promise<TrackRecord> {
+  // On the website, which has no database connection: see lib/services/remote-data.ts. Unset on
+  // the API, where this returns null immediately and the query below runs as it always has.
+  const remote = await readViaApi<TrackRecord>(`/picks/track-record?window=${window}`);
+  if (remote) return remote;
+
   // The window is on the day the pick was *for*, not when it settled. A pick from the 1st that
   // settled on the 2nd belongs to the 1st, which is the day it was published and judged on.
   const since =
