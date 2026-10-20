@@ -200,6 +200,40 @@ const STATUS: Record<string, MatchStatus> = {
   PST: "POSTPONED", CANC: "CANCELLED", ABD: "CANCELLED",
 };
 
+const MINUTE_MS = 60_000;
+
+/**
+ * How long a day's fixture roster is worth keeping.
+ *
+ * Separate from how long a *score* is worth keeping, which is the distinction this whole file got
+ * wrong until 19 Oct: one 15-minute entry held both, so the clock on a live match could be a
+ * quarter of an hour behind. In-play rows are overlaid from the live feed instead - see
+ * [overlayLiveRows] - and these lifetimes now cover only the roster.
+ *
+ *   past    a settled day that cannot change again
+ *   today   short, because only the roster can retire a match that has finished and therefore
+ *           dropped out of the live feed
+ *   future  a fixture list that moves only when something is rescheduled
+ */
+export function dayTtlMs(date: string, now: Date = new Date()): number {
+  const today = now.toISOString().slice(0, 10);
+  if (date < today) return 24 * 60 * MINUTE_MS;
+  return date === today ? 3 * MINUTE_MS : 15 * MINUTE_MS;
+}
+
+/**
+ * Replaces a day's rows with the live feed's version of the same matches.
+ *
+ * Only ids already present are touched. A live match belonging to another date stays on that date
+ * rather than appearing in a day somebody asked for specifically, and an empty live feed - which
+ * is what a failed fetch looks like - leaves the day exactly as it was.
+ */
+export function overlayLiveRows(day: MatchSummary[], live: MatchSummary[]): MatchSummary[] {
+  if (day.length === 0 || live.length === 0) return day;
+  const byId = new Map(live.map((m) => [m.id, m]));
+  return day.map((m) => byId.get(m.id) ?? m);
+}
+
 export function toMatchSummary(f: ApiFixture): MatchSummary {
   return {
     id: f.fixture.id,
@@ -573,12 +607,65 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
   const MIN = 60_000;
   const HOUR = 60 * MIN;
 
+  /**
+   * Every match in play anywhere, in one request.
+   *
+   * `live=all` is the endpoint that makes a short refresh affordable. Asking per-date would cost a
+   * call per date anybody is looking at; this is one call that covers the lot, cached server-side,
+   * so the cost is fixed no matter how many people are watching or how many days they browse.
+   *
+   * 30 seconds, and the budget is the reason it can be that low. The key is on API-Football's Pro
+   * plan: 7,500 requests a day, of which this project was using 144 - under 2% - precisely because
+   * the old 15-minute cache was so coarse. At 30s this adds at most 2,880 a day, which is well
+   * inside the plan and still leaves the match-detail panels their share.
+   *
+   * A failure here is not an error. If the live feed cannot be reached the day's own rows are
+   * returned unchanged: slightly stale is a worse answer than fresh, and a much better one than
+   * an error page where the scores should be.
+   */
+  const LIVE_TTL_MS = 30_000;
+
+  async function liveRows(): Promise<MatchSummary[]> {
+    try {
+      return (await call<ApiFixture>("/fixtures", { live: "all" }, LIVE_TTL_MS)).map(toMatchSummary);
+    } catch (err) {
+      logger.warn("stats.live_overlay_failed", { err: err instanceof Error ? err.message : String(err) });
+      return [];
+    }
+  }
+
+  /**
+   * Replaces a day's in-play rows with the live feed's version of them.
+   *
+   * Only ids already in the day are touched. A live match that belongs to a different date stays
+   * on that date rather than appearing here, which is what someone looking at a particular day
+   * asked for.
+   */
+  async function overlayLive(day: MatchSummary[]): Promise<MatchSummary[]> {
+    if (day.length === 0) return day;
+    return overlayLiveRows(day, await liveRows());
+  }
+
   return {
     source: "api-football",
     async fixturesByDate(date) {
-      const isPast = date < new Date().toISOString().slice(0, 10);
-      const rows = await call<ApiFixture>("/fixtures", { date }, isPast ? 24 * HOUR : 15 * MIN);
-      return rows.map(toMatchSummary);
+      const today = new Date().toISOString().slice(0, 10);
+      const isPast = date < today;
+      // Three different questions, three different lifetimes.
+      //
+      // Which fixtures exist on a day, and who is playing, barely changes: a day in the past is
+      // settled, and a day in the future only moves when a game is rescheduled. What does change,
+      // every minute, is the score and the clock of a match being played right now - and that used
+      // to ride along on this same 15-minute entry, which is why the app showed 37' while the rest
+      // of the world showed 45'. Measured on 19 Oct: Goias sat on 50' for four minutes and then
+      // jumped straight to 65'.
+      //
+      // So the roster keeps a long-ish lifetime and the in-play rows are overlaid from a separate,
+      // much shorter entry below. Today is still shortened to three minutes, because a match that
+      // has *finished* drops out of the live feed entirely and only the roster can retire it.
+      const rows = await call<ApiFixture>("/fixtures", { date }, dayTtlMs(date));
+      const day = rows.map(toMatchSummary);
+      return isPast ? day : overlayLive(day);
     },
     async fixture(id) {
       const rows = await call<ApiFixture>("/fixtures", { id }, 10 * MIN);
