@@ -162,13 +162,44 @@ The Render service is unaffected and healthy: it has its own `DATABASE_URL` poin
 `gameclaw-db`, and it is what the Flutter app talks to. This is why the app looks fine while the
 website does not.
 
-### The fix
+### The fix — and the wrong version of it
 
-Point the Worker at the same database the Render service uses:
+**Setting the `DATABASE_URL` secret does not work.** That was the first answer here and it was
+wrong. `lib/db.ts` picks its connection like this:
+
+```ts
+client = createClient(cf.env.HYPERDRIVE?.connectionString ?? env().DATABASE_URL);
+```
+
+Hyperdrive wins whenever it is bound, and `wrangler.jsonc` binds it unconditionally. The secret is
+only ever read when the binding is absent, so writing a correct value into it would have changed
+nothing and looked like the fix had failed for some other reason.
+
+The connection actually in use belongs to the Hyperdrive config, and it still points at the
+deleted project:
 
 ```
-wrangler secret put DATABASE_URL --name gameclaw   # the gameclaw-db external connection string
+$ wrangler hyperdrive get 673d415bb1174f8092e5649a5675516a
+  name:   gameclaw-db
+  origin: aws-1-eu-west-1.pooler.supabase.com   user: postgres.qefedcphkmxuxjetmtqw
 ```
+
+So the repair is to repoint Hyperdrive:
+
+```
+wrangler hyperdrive update 673d415bb1174f8092e5649a5675516a \
+  --origin-host <host> --origin-port 5432 --database gameclaw \
+  --origin-user gameclaw --origin-password <password>
+```
+
+Two details that decide whether it works:
+
+- It needs `gameclaw-db`'s **external** connection string, from the Render dashboard. The
+  `connectionString` property `render.yaml` wires into the Render service is the *internal* one,
+  reachable only from inside Render's network — Cloudflare cannot use it.
+- Hyperdrive caches reads for 30 seconds (`caching.max_age`). That is fine for the website's
+  pages, and it is worth knowing before anyone debugs a stale-looking `/track-record` right after
+  the switch.
 
 That restores `/track-record`, the site's `/api/v1/picks`, and both cron triggers together,
 because all three fail for the same reason. Repointing the cron alone would leave the website's
