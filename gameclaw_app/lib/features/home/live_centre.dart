@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -47,10 +49,21 @@ class LiveCentreScreen extends ConsumerStatefulWidget {
   ConsumerState<LiveCentreScreen> createState() => _LiveCentreScreenState();
 }
 
-class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> {
+class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> with WidgetsBindingObserver {
   /// Three days either side. Further is a different question - a competition's calendar - and a
   /// strip long enough to reach it is a strip nobody can aim at.
   static const _span = 3;
+
+  /// How often a day with football in it is re-fetched.
+  ///
+  /// The server overlays in-play rows from a 30-second entry, so asking more often than this
+  /// returns the same bytes. Asking *less* often was half of why the app showed 37' against
+  /// everyone else's 45': the other half was the server cache, and this screen never refetched at
+  /// all - a FutureProvider resolves once and then sits there until something invalidates it, so
+  /// the only way to see a newer score was to pull down or leave and come back.
+  static const _pollEvery = Duration(seconds: 30);
+
+  Timer? _poll;
 
   late final DateTime _today = DateTime.now().toUtc();
   late String _day = utcDay(_today);
@@ -68,6 +81,56 @@ class _LiveCentreScreenState extends ConsumerState<LiveCentreScreen> {
   bool _filterChosen = false;
 
   List<DateTime> get _days => [for (var i = -_span; i <= _span; i++) _today.add(Duration(days: i))];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startPolling();
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Polling stops with the app and catches up on the way back.
+  ///
+  /// A timer left running in the background wakes the radio to fetch scores nobody is looking at,
+  /// and the first thing someone wants on returning is not a 30-second-old screen but the current
+  /// one - so resuming refreshes immediately rather than waiting out the interval.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refresh();
+      _startPolling();
+    } else {
+      _poll?.cancel();
+      _poll = null;
+    }
+  }
+
+  void _startPolling() {
+    _poll?.cancel();
+    _poll = Timer.periodic(_pollEvery, (_) => _refreshIfLive());
+  }
+
+  /// Only refreshes a day that actually has a match in play.
+  ///
+  /// Yesterday's results and next Saturday's fixtures do not change every thirty seconds, and
+  /// polling them would spend the user's battery and data to be told the same thing repeatedly.
+  void _refreshIfLive() {
+    final day = ref.read(matchDayProvider(_day)).value?.value;
+    if (day == null) return;
+    final anyLive = day.groups.any((g) => g.fixtures.any((f) => f.status.isLive));
+    if (anyLive) _refresh();
+  }
+
+  void _refresh() {
+    if (mounted) ref.invalidate(matchDayProvider(_day));
+  }
 
   @override
   Widget build(BuildContext context) {
