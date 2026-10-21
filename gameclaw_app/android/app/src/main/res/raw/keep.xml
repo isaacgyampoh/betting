@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Keeps the notification sound through resource shrinking.
+
+  res/raw/gameclaw_alert.wav is never named in XML or in Java/Kotlin source. The only reference is
+  a string handed to flutter_local_notifications at runtime -
+  RawResourceAndroidNotificationSound('gameclaw_alert') in lib/data/push.dart - and the resource
+  shrinker cannot see a lookup by name. So it stripped the file from the release bundle while
+  leaving its entry in the resource table: the AAB declared raw/gameclaw_alert.wav and contained
+  no audio file at all.
+
+  That failure is invisible in debug and in any unshrunk build, and on a device it degrades to the
+  default notification sound rather than crashing - so nothing would have surfaced it before
+  release except listening to a real notification on a release build.
+
+  Verified by listing the bundle: with this file, base/res/raw/gameclaw_alert.wav is present at
+  64364 bytes; without it, the bundle holds no .wav at all.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/gameclaw_alert" />
