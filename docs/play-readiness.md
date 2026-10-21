@@ -173,3 +173,49 @@ Struck-through items were done between 17 and 19 October.
    `/delete-account`). The web route is the part Play specifically requires.
 8. Store listing, screenshots, feature graphic and content rating remain untouched. None can be
    completed without console access.
+
+
+---
+
+## 21 Oct — live-score freshness, verified on the device
+
+The 15-minute cache is gone and the fix is confirmed on a real Pixel running the real release
+build against production, with **no input at all** during the window:
+
+```
+21:59:11   2 matches live   (Mixco 21', Estudiantes Halftime)
+22:01:52   5 matches live   (three that kicked off in between, added on their own)
+```
+
+The list refreshed itself. That is the client half - `matchDayProvider` was a FutureProvider that
+resolved once and sat there - working together with the server's 30-second live overlay.
+
+### One match that does not move, and why it is not ours
+
+Mixco v Municipal read 21' across every sample over several minutes while five other fixtures
+advanced in lockstep:
+
+```
+22:02:13  Torque=2'  River Plate=3'  Mixco=21'  La Guaira=2'
+22:04:29  Torque=4'  River Plate=5'  Mixco=21'  La Guaira=5'
+```
+
+Asked API-Football directly about that fixture:
+
+```
+fixtures?id=1559657  ->  status.short: 1H   status.long: First Half   elapsed: 21
+```
+
+The provider's own feed is stuck, so the app is reporting what it was told. Nothing in GameClaw
+can correct that without inventing a minute, which is the one thing this project will not do -
+a fabricated clock is indistinguishable from a real one right up until it is wrong.
+
+Worth knowing when comparing against Flashscore or SofaScore: a difference on a particular match
+may be a difference in **data contracts**, not in our caching. Check the provider directly before
+treating a gap as a GameClaw bug. The test is whether other live fixtures are advancing at the
+same moment - if they are, the pipeline is fine.
+
+### A small UI defect found while doing this
+
+The status column truncates "Halftime" to "Half…" on the fixture row. Cosmetic, not wrong, but it
+is the kind of thing a reviewer notices on a store screenshot.
