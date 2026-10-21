@@ -208,3 +208,38 @@ pages broken.
 Worth doing at the same time, and not done here: a non-ok `cron.triggered` should page someone.
 Two days of a headline feature producing nothing, with the failure written only to a log nobody
 reads, is the part of this that should not have needed a person to notice.
+
+
+---
+
+## 21 Oct — resolved, and the second cause
+
+Repointing Hyperdrive was not possible and turned out not to be necessary.
+
+`gameclaw-db` has `ipAllowList: []`, so Render accepts no external connections at all and
+Hyperdrive's own validation failed with `Connection closed unexpectedly by the database server`.
+The obvious unblock was to allowlist Cloudflare's ranges, but Hyperdrive egresses from
+Cloudflare's *general* ranges, which belong to every Cloudflare customer — so that is barely
+narrower than allowlisting the internet, for the sake of two public read-only pages. The database
+stays shut; `lib/services/remote-data.ts` routes those two reads through the API instead.
+
+**The cron had a second, independent fault.** Retargeting it at the Render API was necessary but
+not sufficient: the runs then failed with
+
+```
+{"level":"error","msg":"cron.triggered","target":".../cron/cleanup","status":401,
+ "body":"{\"error\":\"unauthorized\"}"}
+```
+
+The Worker's `CRON_SECRET` and the API's had drifted apart. That is exactly what the status-and-body
+logging added that day was for — without it the symptom is identical to a job that runs and does
+nothing, which is how this went unnoticed for four days in the first place.
+
+Found by adding a temporary `*/2 * * * *` trigger and watching `wrangler tail`, rather than waiting
+for 03:30. Worth remembering: `wrangler tail` takes the worker name as a **positional**, and
+`--name` is silently a usage error that produces an empty capture that looks like "no events".
+
+The Worker's secret was set to the API's value, leaving the API untouched on the assumption that
+other things may already hold it. The next run returned 200 and did real work immediately —
+22 code-cache rows, 44 stats-cache rows, and the two picks that had been stuck PENDING since
+17 October were settled. A catch-up `daily-picks` run then published the 21st.
