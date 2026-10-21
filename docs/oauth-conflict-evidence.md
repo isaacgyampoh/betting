@@ -195,3 +195,60 @@ an Android client for the pair in the project that does **not** own the audience
 SHA afterwards does not delete the client it created. `t6c862s9` itself is the evidence for that:
 it still exists while its app has no SHA certificates. So a "successful" probe would consume the
 pair permanently and convert a recoverable problem into an unrecoverable one.
+
+
+---
+
+## 11. RESOLVED: the conflicting entity, read directly from the Console
+
+Read on 21 Oct through the already-authenticated Safari session, read-only
+(`scripts/console-inspect.sh`). Form **values** had to be read from `<input>` elements, because
+`innerText` does not include them — which is why the list view and every API route came up short.
+
+| Client | Project | Name | Package | SHA-1 |
+|---|---|---|---|---|
+| `…uso8a1k` | game-claw | Android client 1 | `win.gameclaw.app` | `1B:33:66:9C:…:74:EC` (**debug**) |
+| `…r59d0h59` | game-claw | Android client 2 | `win.gameclaw.app2` | `C9:B5:19:40:…:13:75` (**release**) |
+| `…t6c862s9` | **gameclaw-push-notifications** | Android client 1 | **`win.gameclaw.app`** | **`C9:B5:19:40:…:13:75`** |
+
+**`t6c862s9` is the conflict.** It holds the exact pair — production package *and* release
+fingerprint — in the push project, which does not own the audience the app sends. Google enforces
+that pair as unique across projects, so `game-claw` cannot have it while this client exists. That
+is the `ALREADY_EXISTS`, and it is also the `[28444]`: GMS resolves the app's identity to a client
+in 569032239509 while the token is requested for an audience in 400646694915.
+
+The earlier suspicion was right, but it is now read rather than inferred.
+
+### The alternative fix does not exist
+
+Repointing the app's audience at a Web client in the push project would also resolve the
+cross-project mismatch without deleting anything. The Console shows that project contains exactly
+**one** OAuth client — `t6c862s9` itself. There is no Web client to point at.
+
+### Dependencies, checked before recommending removal
+
+- it is the only OAuth client in that project, created 18 Oct;
+- the project's Firebase Android app lists **no** SHA certificates, so Firebase does not manage it;
+- the shipped `google-services.json` has **no** `oauth_client` entries, so the app never reads it;
+- the app's `serverClientId` is `b4oh5at…`, in the other project;
+- FCM authenticates with the service account and API key, not with an OAuth client — and push was
+  verified working end-to-end on 21 Oct *while this client existed and went unused*;
+- sign-in currently fails **because** it exists.
+
+It provides no function and actively blocks the correct registration.
+
+### Also found
+
+`game-claw` holds a fifth client not previously known here: **`…g6t2`, "GameClaw server"**, a Web
+application created 17 Oct. Not used by the app, whose audience is `b4oh5at…`. Left alone.
+
+### The fix, in order
+
+1. Delete `t6c862s9` from `gameclaw-push-notifications`, freeing the pair.
+2. In `game-claw`, create an Android OAuth client: package `win.gameclaw.app`, SHA-1
+   `C9:B5:19:40:33:DB:53:38:EC:3E:E7:94:A0:D9:67:B1:52:00:13:75`.
+3. Re-run the release-signed verification on the Pixel.
+
+Step 2 can equally be done by editing `r59d0h59`'s package from `win.gameclaw.app2` back to
+`win.gameclaw.app`, since it already carries the right fingerprint — but only after step 1, which
+is what has been rejecting that edit all along.
