@@ -156,3 +156,42 @@ stripping the sound and that the keep rule fixes it.
 `win.gameclaw.app2` has been uninstalled. It was a diagnostic package, and while installed it held
 an FCM token registered to the account, so test notifications were being delivered to it as well as
 to the real app. The signed release build is reinstalled on `win.gameclaw.app`.
+
+
+---
+
+## 9. The controlled A/B, same device, same hour
+
+Both builds were run on the same Pixel within twelve minutes of each other, against the same
+production API, under the same package `win.gameclaw.app`, with the same `google-services.json`
+and the same `serverClientId`. The signing key is the only difference.
+
+```
+23:00  debug build,   SHA-1 1B:33:66:9C:…  (registered as uso8a1k)
+       Auth.Api.Credentials: [CompleteSignInOperation] Operation succeeded
+       Auth.Api.Credentials: [GoogleSignInChimeraActivity] Activity finished successfully
+
+23:12  release build, SHA-1 C9:B5:19:40:…  (no OAuth client)
+       Auth.Api.Credentials: [CompleteSignInOperation] Operation started
+       Auth.Api.Credentials: bpxp: 28444: Developer console is not set up correctly
+       Auth.Api.Credentials: [GoogleSignInChimeraActivity] Activity finished with error
+       Auth.Api.Credentials: [CompleteSignInOperation] Operation failed
+```
+
+Every other explanation is eliminated by construction: R8, the audience, the backend, the Firebase
+configuration, the package name and the consent screen are identical across the two runs.
+
+## 10. Why `t6c862s9` has not been touched
+
+Its package name and fingerprint cannot be read through any available interface, and that is the
+precondition this work set for removing it. What is known: it is an Android client in
+`gameclaw-push-notifications`, and it is **not** attached to that project's Firebase app — the
+app's `oauth_client` list is empty, so the client is standalone rather than Firebase-managed.
+
+The one programmatic probe that would settle it — adding the release fingerprint to the push
+project's Firebase app and seeing whether Google returns `ALREADY_EXISTS` — was deliberately not
+run, because its outcomes are asymmetric. A failure would be information; a success would create
+an Android client for the pair in the project that does **not** own the audience, and deleting the
+SHA afterwards does not delete the client it created. `t6c862s9` itself is the evidence for that:
+it still exists while its app has no SHA certificates. So a "successful" probe would consume the
+pair permanently and convert a recoverable problem into an unrecoverable one.
