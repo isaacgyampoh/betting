@@ -112,3 +112,47 @@ and making the conflict permanent.
 Either confirm which client currently holds `win.gameclaw.app` +
 `C9:B5:19:40:33:DB:53:38:EC:3E:E7:94:A0:D9:67:B1:52:00:13:75`, or release that pair so an Android
 client can be created for it in `game-claw`.
+
+
+---
+
+## 8. What was verified on the device, 21 Oct
+
+The release fingerprint is the *only* broken link. Everything downstream of sign-in was proved by
+running a **debug** build — same package `win.gameclaw.app`, same `google-services.json`, same
+production API — whose fingerprint `1B:33:66:9C:…` *is* correctly registered as `uso8a1k`.
+
+| | Result |
+|---|---|
+| Google Sign-In, package `win.gameclaw.app` | **succeeded** — `CompleteSignInOperation` succeeded, `GoogleSignInChimeraActivity Activity finished successfully`, zero `28444` |
+| Backend session | **established** — age gate shown, then Profile reads "Signed in on this device" |
+| FCM token registration | **succeeded** — the production API delivered to this device |
+| Notification, app in foreground | **delivered**, two records on channel `gameclaw_matches_v2` |
+| Notification, app backgrounded | **delivered** — launcher in front at delivery, record posted |
+| Custom sound | **played** — `RingtonePlayer: play uri=android.resource://win.gameclaw.app/raw/gameclaw_alert` |
+| Channel configuration | `mId='gameclaw_matches_v2'`, `mName=Match alerts`, `mImportance=4`, `mSound=android.resource://win.gameclaw.app/raw/gameclaw_alert` |
+| Tap navigation | **works** — opens the Live Centre |
+
+So items 2 through 6 of the release criteria are satisfied on the production package. Only item 1
+— sign-in on a **release-signed** build — remains, and it fails solely because the release
+fingerprint has no OAuth client.
+
+### The shrinking bug, caught reproducing in the wild
+
+The same test ran against the leftover `win.gameclaw.app2` build, which was compiled **before**
+`res/raw/keep.xml` existed. The device log shows both outcomes side by side:
+
+```
+RingtonePlayer: play uri=android.resource://win.gameclaw.app/raw/gameclaw_alert      <- fixed build
+MediaPlayer:   FileNotFoundException: No resource found for:
+               android.resource://win.gameclaw.app2/raw/gameclaw_alert               <- pre-fix build
+```
+
+That is independent confirmation, from Android's own media stack, that resource shrinking was
+stripping the sound and that the keep rule fixes it.
+
+### Cleanup
+
+`win.gameclaw.app2` has been uninstalled. It was a diagnostic package, and while installed it held
+an FCM token registered to the account, so test notifications were being delivered to it as well as
+to the real app. The signed release build is reinstalled on `win.gameclaw.app`.
