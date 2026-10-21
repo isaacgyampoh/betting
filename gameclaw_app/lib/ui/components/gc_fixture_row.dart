@@ -110,7 +110,7 @@ class _Status extends StatelessWidget {
             child: Text(
               // The provider's own clock. Re-deriving a minute on the device gets it wrong the
               // moment a half is added to, and wrong by a minute is worse than not shown.
-              fixture.statusLabel,
+              shortLiveLabel(fixture.statusLabel),
               style: GcType.figureSm.copyWith(color: gc(context).live, fontSize: 11.5),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

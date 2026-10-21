@@ -12,6 +12,33 @@ library;
 
 enum MatchStatus { scheduled, live, halfTime, finished, postponed, cancelled, unknown }
 
+/// A live status short enough for the clock column on a fixture row.
+///
+/// That column is sized for `90'`. The server sends either a minute or, when the ball is not in
+/// play, the provider's own phrase - "Halftime", "Match Suspended" - and those were being ellipsed
+/// to "Half…", which reads as a rendering bug rather than as a status.
+///
+/// A phrase that is not recognised is returned unchanged rather than abbreviated on a guess. It
+/// will still ellipse, but a truncated real status is honest in a way an invented initialism is
+/// not: "MI" could be anything, and nobody could tell it was wrong.
+String shortLiveLabel(String label) {
+  final trimmed = label.trim();
+  if (trimmed.isEmpty) return trimmed;
+  // Already a minute, with or without the prime.
+  if (RegExp(r"^\d+'?$").hasMatch(trimmed)) return trimmed;
+  return switch (trimmed.toLowerCase()) {
+    'halftime' || 'half time' => 'HT',
+    'break time' => 'BRK',
+    'extra time' => 'ET',
+    'penalty in progress' || 'penalties' => 'PENS',
+    'match suspended' => 'SUSP',
+    'match interrupted' => 'INT',
+    'first half' => '1H',
+    'second half' => '2H',
+    _ => trimmed,
+  };
+}
+
 extension MatchStatusX on MatchStatus {
   bool get isLive => this == MatchStatus.live || this == MatchStatus.halfTime;
   bool get isDone => this == MatchStatus.finished;
