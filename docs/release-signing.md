@@ -255,3 +255,49 @@ plugin fails the build. Revert both afterwards; neither belongs in a release bui
 
 Beware one false positive when grepping logcat for the error code: `ParceledListSlice: Element #97
 is 28444 bytes` is a byte count, not a status. Match on `Auth.Api.Credentials` instead.
+
+
+## 21 Oct — what the Firebase CLI could and could not settle
+
+With an authenticated `firebase` session, three things became facts rather than hypotheses.
+
+**`game-claw` (400646694915) has no Firebase apps at all** — no Android, no Web. Every OAuth client
+in it (`uso8a1k`, `b4oh5at`, `k5ikq1qt`, `r59d0h59`) was created directly in Cloud Console, which
+is why nothing in the Firebase API can edit them.
+
+**`gameclaw-push-notifications` (569032239509) holds the Android app for `win.gameclaw.app`, and it
+has zero SHA certificates and zero `oauth_client` entries.**
+
+```
+$ firebase apps:android:sha:list 1:569032239509:android:d73db0f4968de8601a2e9c
+No SHA certificate hashes found.
+```
+
+That **corrects earlier advice in this repository.** The guidance was to remove the release
+fingerprint from the Firebase app before re-saving the client, on the theory that Firebase was
+holding it. Firebase is holding nothing. There is nothing to remove there, and following that
+advice would have been time spent on an empty list.
+
+**Creating the Android app in `game-claw` reproduces the Console error through a supported API:**
+
+```
+POST firebase.googleapis.com/v1beta1/projects/game-claw/androidApps
+     {"packageName":"win.gameclaw.app"}
+  -> 409 {"error":{"status":"ALREADY_EXISTS"}}
+```
+
+So `win.gameclaw.app` is already claimed inside `game-claw`, while `apps:list` shows no app there.
+The only things in that project claiming a package name are the Cloud Console OAuth clients, and
+`uso8a1k` is registered to `win.gameclaw.app` with the **debug** fingerprint.
+
+### What is left, and why no API reaches it
+
+Google publishes no API for creating or editing OAuth 2.0 client IDs; the Firebase Management API
+covers Firebase apps and their SHA certificates, which is a different resource. An Android client
+binds one package to one fingerprint, so the release key needs its own client alongside the debug
+one.
+
+The action is therefore in Cloud Console, and it is better done as a **create** than as an edit of
+`r59d0h59`: a new Android client for `win.gameclaw.app` + `C9:B5:19:…:13:75` leaves the diagnostic
+client untouched and fails loudly if that exact pair really is taken somewhere, which is the one
+thing still unestablished.

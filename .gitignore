@@ -65,3 +65,8 @@ mobile/android/app/src/main/assets/public/
 mobile/android/app/release/
 *.keystore
 *.jks
+
+# Firebase CLI debug output. Written into the repo root on any error, and it contains
+# request bodies and project identifiers.
+firebase-debug.log
+firebase-debug.*.log
