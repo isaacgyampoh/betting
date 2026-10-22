@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { PlanPicker } from "@/components/billing/plan-picker";
-import { getAuthUser } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { listActivePlans } from "@/lib/services/plans";
 
@@ -14,13 +13,10 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function PricingPage() {
-  const [plans, user] = await Promise.all([
-    listActivePlans().catch((err) => {
-      logger.error("pricing.plans_unavailable", { err });
-      return null;
-    }),
-    getAuthUser().catch(() => null),
-  ]);
+  const plans = await listActivePlans().catch((err) => {
+    logger.error("pricing.plans_unavailable", { err });
+    return null;
+  });
 
   return (
     <div className="space-y-6">
@@ -30,6 +26,7 @@ export default async function PricingPage() {
           Loading, converting and trimming slips is always free. Plans add chat, slip building, screenshot reading, analysis and the daily picks, from GHS 5 a day. Pay with
           MTN MoMo, Telecel Cash, AirtelTigo Money or card. No auto-renewal.
         </p>
+        <p className="mt-2 text-sm text-muted-foreground">Plans are bought inside the app.</p>
       </div>
 
       {!plans?.length ? (
@@ -37,7 +34,7 @@ export default async function PricingPage() {
           Plans are temporarily unavailable. Please check back shortly. Slip tools remain free.
         </p>
       ) : (
-        <PlanPicker plans={plans} signedIn={!!user} />
+        <PlanPicker plans={plans} signedIn={false} purchasable={false} />
       )}
 
       <p className="text-xs text-muted-foreground">

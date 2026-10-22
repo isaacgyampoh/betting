@@ -1,48 +1,69 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeftRight, CalendarCheck, Camera, LineChart, Scissors, Share2, Sparkles, Split } from "lucide-react";
-import { Bookmakers } from "@/components/landing/bookmakers";
-import { GetTheApp } from "@/components/landing/get-the-app";
-import { Screens } from "@/components/landing/screens";
+import { Activity, ArrowLeftRight, BarChart3, Bell } from "lucide-react";
 import { Faq } from "@/components/landing/faq";
-import { PlansPreview } from "@/components/landing/plans-preview";
+import { GetTheApp } from "@/components/landing/get-the-app";
+import { LiveNow } from "@/components/landing/live-now";
+import { Screens } from "@/components/landing/screens";
 import { TrackRecordSummary } from "@/components/landing/track-record-summary";
-import { HowItWorks } from "@/components/landing/how-it-works";
-import { InstallGuide } from "@/components/landing/install-guide";
-import { ProblemFix } from "@/components/landing/problem-fix";
-import { PhoneDemo } from "@/components/landing/phone-demo";
 import { logger } from "@/lib/logger";
-import { androidRelease } from "@/lib/release";
 import { connectedBookmakers } from "@/lib/bookmakers/registry";
+import { todaysScoreboard } from "@/lib/services/public-matches";
 import { getTrackRecord } from "@/lib/services/daily-picks";
 import { listActivePlans } from "@/lib/services/plans";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: { absolute: "gameclaw: convert booking codes between Ghana's bookmakers" },
+  title: { absolute: "GameClaw — live scores, form and stats for every match that matters" },
   description:
-    "Paste a booking code to see every game, market and price on it. Move it to another bookmaker, or ask for a 2 or 5 odds built from today's real prices. Built in Ghana. 18+.",
+    "Live scores and minutes from the competitions people actually follow, form and head-to-head on every game, and notifications for your teams. Plus a tool that moves a booking code between bookmakers. Built in Ghana. 18+.",
   alternates: { canonical: "/" },
   openGraph: { url: "/" },
 };
 
-// Shows live track record numbers, so it is rendered per request.
+// Shows today's real fixtures and live track record numbers, so it is rendered per request.
 export const dynamic = "force-dynamic";
 
-// Each line must describe something the app does today, and name the bookmakers it really works
-// with. Do not write "every bookmaker" until every bookmaker is actually connected.
+/**
+ * What the app does, in the order it matters.
+ *
+ * Football comes first because football is what the app is for and what almost every session is
+ * spent on. Conversion is a tool inside a football app, not the premise of the product - the old
+ * version of this page led with it, which undersold four fifths of the thing and framed a stats
+ * app as a betting utility.
+ *
+ * Each line has to be true of the build that is shipping. Where the honest answer is a limit, it
+ * says so.
+ */
 const FEATURES = [
-  { icon: ArrowLeftRight, title: "Convert your code", text: "Move a code between the bookmakers we're connected to, in one message." },
-  { icon: Sparkles, title: "Ask for a slip", text: "\"Build me a 5 odds\" — from today's real prices, across varied markets." },
-  { icon: Scissors, title: "Cut it down", text: "Trim to the odds you want, or keep only the safest picks." },
-  { icon: Camera, title: "Send a screenshot", text: "A picture of a slip from anywhere becomes games you can book." },
-  { icon: LineChart, title: "Check it running", text: "Ask how your ticket is doing and get every leg back with live scores." },
-  { icon: CalendarCheck, title: "Read the form first", text: "Recent results, home and away splits and head-to-head for any game." },
-  { icon: Share2, title: "Share the slip", text: "One image with the code, the games and the reason each one is on there." },
-  { icon: Split, title: "Split a long ticket", text: "Break twenty games into two or three slips instead of one all-or-nothing." },
+  {
+    icon: Activity,
+    title: "Every score, as it happens",
+    text: "Goals and match minutes from the competitions people actually follow, grouped by league and refreshed while you watch.",
+  },
+  {
+    icon: BarChart3,
+    title: "The full picture on a game",
+    text: "Open any match for recent form, home and away splits, and what happened the last time these two met.",
+  },
+  {
+    icon: Bell,
+    title: "Only your teams",
+    text: "Follow a club and get a notification at kick-off, at every goal and at full time. Nothing else.",
+  },
+  {
+    icon: ArrowLeftRight,
+    title: "Move a slip across",
+    text: "Paste a booking code to see every game and price on it, then rebuild it at another bookmaker. No money changes hands here.",
+  },
 ];
 
 export default async function HomePage() {
-  const [record, plans] = await Promise.all([
+  const [board, record, plans] = await Promise.all([
+    todaysScoreboard().catch((err) => {
+      logger.warn("landing.scoreboard_unavailable", { err });
+      return null;
+    }),
     getTrackRecord(12).catch((err) => {
       logger.warn("landing.track_record_unavailable", { err });
       return null;
@@ -53,111 +74,90 @@ export default async function HomePage() {
   const cheapest = plans?.filter((p) => p.priceGhs > 0).sort((a, b) => a.priceGhs - b.priceGhs)[0];
 
   return (
-    <div className="space-y-14 pb-4">
-      {/* Decoration only: both are aria-hidden and pointer-events: none, and the page reads the
-          same with them gone. */}
-      <section className="gc-grid relative isolate grid items-center gap-8 pt-4 lg:grid-cols-2 lg:pt-10">
+    <div className="space-y-16 pb-4 sm:space-y-24">
+      {/* Decoration only: aria-hidden and pointer-events: none, and the page reads the same with
+          both gone. */}
+      <section
+        className={cn(
+          "gc-grid relative isolate grid items-center gap-10 overflow-hidden pt-6 lg:pt-14",
+          board && "lg:grid-cols-[1.05fr_1fr]",
+        )}
+      >
         <div className="gc-aurora" aria-hidden />
-        <div className="space-y-5 text-center lg:text-left">
-          <h1 className="text-[2.75rem] leading-[1.03] font-semibold tracking-[-0.03em] text-balance sm:text-6xl">
-            Paste your code.
+
+        <div className={cn("min-w-0 space-y-6", !board && "mx-auto max-w-2xl text-center")}>
+          <h1 className="text-[2.9rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance sm:text-6xl">
+            Every match
             <br />
-            <span className="text-primary">Get a better slip.</span>
+            has a <span className="text-primary">story.</span>
           </h1>
-          <p className="mx-auto max-w-md text-balance text-muted-foreground lg:mx-0">
-            See every game and price on your booking code, move it to another bookmaker, or ask for a 2 or 5 odds built
-            from today&apos;s real prices.
+          <p className="max-w-lg text-lg text-balance text-muted-foreground">
+            Live scores, form and the full picture on every game that matters — and when you need to move a slip
+            between bookmakers, GameClaw reads the code and rebuilds it.
           </p>
+
           <GetTheApp />
+
           <p className="text-xs text-muted-foreground">
-            Free to paste and view. Every pick we publish stays on the{" "}
+            Free to follow football. Every pick we publish stays on the{" "}
             <Link href="/track-record" className="underline underline-offset-2 hover:text-foreground">
               public record
             </Link>
             , won or lost. 18+.
           </p>
         </div>
-        <PhoneDemo />
+
+        <LiveNow board={board} />
       </section>
 
-      <Screens />
+      <section aria-labelledby="features" className="space-y-8">
+        <div className="max-w-2xl space-y-3">
+          <h2 id="features" className="text-3xl font-semibold tracking-[-0.025em] text-balance sm:text-4xl">
+            A football app that happens to be good with slips
+          </h2>
+          <p className="text-muted-foreground text-balance">
+            Four things, done properly, instead of twenty half-finished ones.
+          </p>
+        </div>
 
-      <section aria-labelledby="features" className="gc-reveal gc-surface relative -mx-4 rounded-2xl px-4 py-8 sm:px-6">
-        <h2 id="features" className="sr-only">
-          What it does
-        </h2>
-        {/* Two up on a phone: eight of these stacked is most of a screen each, and the section after
-            this one is the one that does the selling. */}
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border lg:grid-cols-4">
+        <div className="gc-reveal grid gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-2">
           {FEATURES.map(({ icon: Icon, title, text }) => (
-            <div key={title} className="bg-card p-4 sm:p-6">
-              <Icon className="mb-2.5 size-5 text-primary sm:mb-3" strokeWidth={1.75} />
-              <p className="text-sm font-medium sm:text-base">{title}</p>
-              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{text}</p>
+            <div key={title} className="bg-card p-5 sm:p-8">
+              <Icon className="mb-3 size-6 text-primary sm:mb-4" strokeWidth={1.75} aria-hidden />
+              <p className="text-lg font-medium tracking-[-0.01em]">{title}</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <div className="gc-reveal">
-        <ProblemFix />
-      </div>
-
-      <div className="gc-reveal gc-pitch relative isolate py-2">
-        <HowItWorks />
-      </div>
-
-      <div className="gc-reveal">
-        <Bookmakers />
-      </div>
+      <Screens />
 
       <TrackRecordSummary record={record} />
-
-      {plans?.length ? (
-        <div className="gc-reveal">
-          <PlansPreview plans={plans} />
-        </div>
-      ) : null}
 
       <div className="gc-reveal">
         <Faq connected={connectedBookmakers().filter((b) => b.capabilities.loadCode).map((b) => b.name)} />
       </div>
 
-      <section aria-labelledby="install" className="gc-reveal grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <h2 id="install" className="text-lg font-semibold">
-            Keep it on your phone
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {/* "No store, no download" was true while the browser build was the only one. It stops
-                being true the day the Android app is published, and this is exactly the sentence
-                nobody re-reads at launch - so it follows the release state too. */}
-            {androidRelease().kind === "unreleased"
-              ? "Works in the browser, and you can add it to your home screen so it opens full screen like an app."
-              : "The Android app is the full experience. The browser version still works, including on iPhone, and can be added to your home screen."}
+      <section className="gc-reveal gc-claw gc-raised relative isolate overflow-hidden rounded-2xl border bg-card px-6 py-12 text-center sm:px-10">
+        <h2 className="text-2xl font-semibold tracking-[-0.02em] text-balance sm:text-3xl">
+          Follow the game. Own your matchday.
+        </h2>
+        <p className="mx-auto mt-3 max-w-md text-sm text-balance text-muted-foreground">
+          Scores, stats and your teams, free. {cheapest ? "Chat and the daily picks are the paid part." : null}
+        </p>
+        <div className="mt-7">
+          <GetTheApp align="center" />
+        </div>
+        {cheapest && (
+          <p className="mt-6 text-xs text-muted-foreground">
+            Chat and the daily picks start at{" "}
+            <Link href="/pricing" className="text-primary hover:underline">
+              GHS {cheapest.priceGhs} a day
+            </Link>
+            .
           </p>
-          {cheapest && (
-            <p className="text-sm text-muted-foreground">
-              Converting codes is free. Chat and the daily picks start at{" "}
-              <Link href="/pricing" className="text-primary hover:underline">
-                GHS {cheapest.priceGhs} a day
-              </Link>
-              .
-            </p>
-          )}
-        </div>
-        <InstallGuide />
-      </section>
-
-      <section className="gc-reveal gc-raised relative isolate overflow-hidden rounded-2xl border bg-card p-8 text-center">
-        <div className="gc-aurora" aria-hidden />
-        <h2 className="text-lg font-semibold">Paste your first code</h2>
-        <p className="mt-1 text-sm text-muted-foreground">It takes a few seconds and costs nothing.</p>
-        {/* The same offer as the hero rather than a second, different one. This said "Open app"
-            and opened the browser build, which is the thing the page is no longer led by. */}
-        <div className="mt-4 flex justify-center">
-          <GetTheApp />
-        </div>
+        )}
       </section>
     </div>
   );

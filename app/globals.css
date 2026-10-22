@@ -369,3 +369,93 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
+
+/* --- Brand surface -------------------------------------------------------
+   The marketing site is dark ink with one electric-lime accent, matching the Android app's theme
+   and the advertisement frame for frame. It used to be an off-white page with a deep-blue accent,
+   which made the site and the product look like two different companies.
+
+   Lime is an accent that only works on ink. #CCFF2E against white is about 1.4:1 - unreadable as
+   text and unusable as a button - so the brand surface does not offer a light variant, and the
+   marketing shell does not offer a theme toggle. Against #09090B it is 16:1.
+
+   Scoped with :has() rather than set on :root so the app keeps its own light/dark palette: the
+   tokens land on the html element whenever a page inside the marketing group is rendered, which
+   is what lets body itself carry the ink background instead of a wrapper div - otherwise the page
+   flashes off-white when a phone overscrolls past the end of the content.
+
+   Specificity: :root:has([data-brand="dark"]) is (0,2,0), so it beats .dark at (0,1,0) and the
+   surface is the same whatever the visitor's system theme is set to. */
+:root:has([data-brand="dark"]) {
+  color-scheme: dark;
+
+  --background: oklch(0.141 0.004 285.8);   /* #09090B */
+  --foreground: oklch(0.920 0.004 286.3);   /* #E4E4E7 */
+  --card: oklch(0.193 0.006 285.8);         /* #141417 */
+  --card-foreground: oklch(0.920 0.004 286.3);
+  --popover: oklch(0.193 0.006 285.8);
+  --popover-foreground: oklch(0.920 0.004 286.3);
+
+  --primary: oklch(0.932 0.219 123.5);      /* #CCFF2E */
+  --primary-foreground: oklch(0.141 0.004 285.8);
+
+  --secondary: oklch(0.235 0.005 286);
+  --secondary-foreground: oklch(0.920 0.004 286.3);
+  --muted: oklch(0.235 0.005 286);
+  --muted-foreground: oklch(0.712 0.013 286.1); /* #A1A1AA, 7.6:1 on the ink */
+  --accent: oklch(0.235 0.005 286);
+  --accent-foreground: oklch(0.920 0.004 286.3);
+
+  --border: oklch(0.274 0.005 286);         /* #27272A */
+  --input: oklch(0.310 0.005 286);
+  --ring: oklch(0.932 0.219 123.5);
+  --destructive: oklch(0.66 0.19 25);
+
+  /* Outcomes stay green/red. Lime is the brand, not a result - a lime "won" next to a lime button
+     makes both meaningless. */
+  --win: oklch(0.74 0.16 150);
+  --loss: oklch(0.68 0.19 25);
+
+  --radius: 0.75rem;
+}
+
+/* The glow behind the hero. Lime at the strengths the blue used would read as radioactive, so the
+   brand surface dims it and leans on a wide, low-chroma wash instead. */
+:root:has([data-brand="dark"]) .gc-aurora {
+  background:
+    radial-gradient(44rem 28rem at 16% 6%, color-mix(in oklab, var(--primary) 16%, transparent), transparent 68%),
+    radial-gradient(32rem 20rem at 88% 0%, color-mix(in oklab, var(--primary) 9%, transparent), transparent 70%);
+  filter: blur(6px);
+  opacity: 0.55;
+}
+
+:root:has([data-brand="dark"]) .gc-grid::before {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 8%, transparent) 1px, transparent 1px);
+}
+
+:root:has([data-brand="dark"]) .gc-surface {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary) 3%, var(--card)), var(--background));
+}
+
+/* On ink, a drop shadow does nothing. Depth has to come from a lit top edge instead. */
+:root:has([data-brand="dark"]) .gc-raised {
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, #fff 7%, transparent),
+    0 24px 60px -32px #000;
+}
+
+/* The claw mark, drawn large and faint. Used once, behind the closing call to action. */
+.gc-claw::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.07;
+  background-repeat: no-repeat;
+  background-position: right -4rem center;
+  background-size: auto 150%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23ccff2e' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M10 23 L14 9'/%3E%3Cpath d='M15.5 24 L19.5 10'/%3E%3Cpath d='M21 23 L24 13'/%3E%3C/svg%3E");
+}

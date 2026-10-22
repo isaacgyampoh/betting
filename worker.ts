@@ -22,12 +22,36 @@ type Env = { CRON_SECRET?: string; NEXT_PUBLIC_SITE_URL: string; CRON_TARGET_BAS
  */
 const CRON_TARGET = "https://gameclaw-api.onrender.com/api/v1";
 
+/**
+ * Routes that belong to the app, not to the marketing site.
+ *
+ * gameclaw.win signs nobody in. The web app's sign-in ran through a Supabase project that no
+ * longer exists, so /chat, /login and /account were still served here and still answered - with a
+ * sign-in form that cannot work. A visitor who found one spent their attempt on a dead end.
+ *
+ * They are redirected rather than 404'd: the pages are reachable from old links and search
+ * results, and the home page is a better answer than "not found" for someone looking for the
+ * product. The code stays in the build because the same Next app serves the API on Render, where
+ * these routes are legitimate.
+ */
+const APP_ONLY = ["/chat", "/login", "/account", "/convert", "/slip", "/picks", "/matches", "/welcome", "/auth"];
+
+function isAppOnly(pathname: string): boolean {
+  return APP_ONLY.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
     if (url.hostname === "www.gameclaw.win") {
       url.hostname = "gameclaw.win";
       return Response.redirect(url.toString(), 308);
+    }
+    // 302, not 308: this is a statement about what this deployment currently serves, not a
+    // permanent claim about the URL. A browser that cached a 308 would keep redirecting even
+    // after the app comes back.
+    if (isAppOnly(url.pathname)) {
+      return Response.redirect(new URL("/", url).toString(), 302);
     }
     return handler.fetch(request, env, ctx);
   },

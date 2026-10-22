@@ -25,8 +25,8 @@ export default function DeleteAccountPage() {
     <Prose>
       <h1>Delete your account</h1>
       <p>
-        You can delete your GameClaw account at any time, from the app or from this website. It takes effect
-        immediately — there is no waiting period and no reactivation.
+        You can delete your GameClaw account at any time. It takes effect immediately — there is no waiting period
+        and no reactivation.
       </p>
 
       <h2>From the app</h2>
@@ -36,15 +36,16 @@ export default function DeleteAccountPage() {
         <li>Confirm. You will be signed out on every device.</li>
       </ol>
 
-      <h2>From this website</h2>
+      <h2>If you cannot use the app</h2>
       <p>
-        <Link href="/account">Sign in to your account</Link> and choose <strong>Delete account</strong>. Use the same
-        Google account you signed in to the app with.
+        This website does not sign anybody in, so there is no second place to press the button — if you have
+        uninstalled the app, lost the phone, or lost access to the Google account you signed in with, email{" "}
+        <a href="mailto:support@gameclaw.win">support@gameclaw.win</a> from the address the account used and we will
+        delete it for you. Say &quot;delete my account&quot; and nothing else is needed.
       </p>
       <p>
-        If you cannot sign in — for example you have lost access to that Google account — email{" "}
-        <a href="mailto:support@gameclaw.win">support@gameclaw.win</a> from the address the account used, and we will
-        delete it for you.
+        Reinstalling the app and signing in again is the fastest route if you still can. Deleting the app on its own
+        does <strong>not</strong> delete the account.
       </p>
 
       <h2>What is deleted</h2>

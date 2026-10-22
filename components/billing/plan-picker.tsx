@@ -25,7 +25,7 @@ function Feature({ on, children }: { on: boolean; children: React.ReactNode }) {
   );
 }
 
-function Card({ plan, signedIn, featured }: { plan: PlanView; signedIn: boolean; featured: boolean }) {
+function Card({ plan, signedIn, featured, purchasable }: { plan: PlanView; signedIn: boolean; featured: boolean; purchasable: boolean }) {
   const free = plan.priceGhs === 0;
   const rate = perDay(plan);
   return (
@@ -54,7 +54,7 @@ function Card({ plan, signedIn, featured }: { plan: PlanView; signedIn: boolean;
         {free ? (
           <p className="text-center text-xs text-muted-foreground">What you get without paying.</p>
         ) : (
-          <CheckoutButton plan={plan.code} label={`Get ${plan.name}`} signedIn={signedIn} highlight={featured} />
+          purchasable && <CheckoutButton plan={plan.code} label={`Get ${plan.name}`} signedIn={signedIn} highlight={featured} />
         )}
       </div>
     </div>
@@ -62,7 +62,20 @@ function Card({ plan, signedIn, featured }: { plan: PlanView; signedIn: boolean;
 }
 
 /** Free alongside the three tiers, with a day/week/month switch for the paid ones. */
-export function PlanPicker({ plans, signedIn }: { plans: PlanView[]; signedIn: boolean }) {
+/**
+ * `purchasable` is false on gameclaw.win, which signs nobody in and takes no money: the buttons
+ * there pushed to /login, which the marketing site does not operate, so every price card ended in
+ * a dead end. The prices are still worth publishing - people compare them before installing.
+ */
+export function PlanPicker({
+  plans,
+  signedIn,
+  purchasable = true,
+}: {
+  plans: PlanView[];
+  signedIn: boolean;
+  purchasable?: boolean;
+}) {
   const [period, setPeriod] = useState<PlanPeriod>("week");
   const free = plans.find((p) => p.tier === "free");
   const paid = plans.filter((p) => p.period === period).sort((a, b) => a.priceGhs - b.priceGhs);
@@ -87,9 +100,9 @@ export function PlanPicker({ plans, signedIn }: { plans: PlanView[]; signedIn: b
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {free && <Card plan={free} signedIn={signedIn} featured={false} />}
+        {free && <Card plan={free} signedIn={signedIn} featured={false} purchasable={purchasable} />}
         {paid.map((p) => (
-          <Card key={p.code} plan={p} signedIn={signedIn} featured={p.tier === "pro"} />
+          <Card key={p.code} plan={p} signedIn={signedIn} featured={p.tier === "pro"} purchasable={purchasable} />
         ))}
       </div>
     </div>

@@ -28,6 +28,22 @@ function entries(connected: string[]): Entry[] {
   ];
 }
 
+/** Asked before anything about slips, because this is a football app first. */
+const FOOTBALL: Entry[] = [
+  {
+    q: "Which competitions does it cover?",
+    a: "Everything the data provider carries - roughly 1,300 fixtures a day, from every country that plays. The list leads with the competitions followed here, from the Champions League and the big five down, and search reaches any of the rest.",
+  },
+  {
+    q: "Is following football free?",
+    a: "Yes. Live scores, fixtures, results, form, head-to-head and following your teams cost nothing and always will. The paid plans are for chat, slips built from today's prices, screenshot reads and the daily picks.",
+  },
+  {
+    q: "How quickly do scores update?",
+    a: "Within about a minute of the provider publishing them, for as long as a match is in play: the app asks every thirty seconds and the server holds a live score for thirty seconds at most. Goals and the match minute come from the same feed, and nothing is estimated in between.",
+  },
+];
+
 const REST: Entry[] = [
   {
     q: "Do I need an account with every bookmaker?",
@@ -47,7 +63,7 @@ const REST: Entry[] = [
   },
   {
     q: "What does it cost?",
-    a: "Reading, converting and trimming a code is free, with no account needed to read one. Chat, slips built from today's prices, screenshot reads and the daily picks are on a plan, from a few cedis a day. Nothing renews on its own.",
+    a: "Following football is free, and so is reading, converting and trimming a booking code. Chat, slips built from today's prices, screenshot reads and the daily picks are on a plan, from a few cedis a day. Nothing renews on its own.",
   },
   {
     q: "How do I pay?",
@@ -69,21 +85,21 @@ const REST: Entry[] = [
 function androidAnswer(): string {
   const release = androidRelease();
   if (release.kind === "play") {
-    return "Yes - GameClaw is on Google Play for Android. It also runs in the browser, including on iPhone.";
+    return "Yes - GameClaw is on Google Play for Android. iPhone is not built yet.";
   }
   if (release.kind === "testing") {
-    return "The Android app is in testing and can be installed directly; it is not on Google Play yet. It also runs in the browser, including on iPhone.";
+    return "The Android app is in testing and can be installed directly; it is not on Google Play yet. iPhone is not built yet.";
   }
-  return "The Android app is on its way to Google Play. Until then it runs in the browser, and you can add it to your home screen so it opens full screen like an app.";
+  return "Not yet. The Android app is on its way to Google Play, and this site will carry the link the day it is listed. There is no browser version to sign in to in the meantime.";
 }
 
 export function Faq({ connected }: { connected: string[] }) {
-  const items = entries(connected);
+  const items = [...FOOTBALL, ...entries(connected)];
   return (
     <section aria-labelledby="faq" className="space-y-6">
       <div className="space-y-1">
-        <p className="text-xs font-medium tracking-widest text-primary uppercase">Before you paste anything</p>
-        <h2 id="faq" className="text-2xl font-semibold tracking-[-0.02em] text-balance sm:text-4xl">
+        <p className="text-xs font-medium tracking-widest text-primary uppercase">Straight answers</p>
+        <h2 id="faq" className="text-3xl font-semibold tracking-[-0.025em] text-balance sm:text-4xl">
           Fair questions.
         </h2>
       </div>

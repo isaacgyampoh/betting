@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { readViaApi } from "@/lib/services/remote-data";
 import type { PlanModel } from "@/lib/generated/prisma/models";
 
 /** Plan codes follow `<tier>_<period>` (e.g. pro_week); `free` has neither. */
@@ -23,7 +24,22 @@ export type PlanView = {
   allowDailyPicks: boolean;
 };
 
+/**
+ * The public plan list.
+ *
+ * On the website this is read from the API rather than from Postgres, for the reason set out in
+ * `remote-data.ts`: the Worker has no database connection, so `/pricing` rendered "Plans are
+ * temporarily unavailable" on gameclaw.win while the same data served fine from `/api/v1/plans`.
+ * The prices are public and identical for everyone, so there is nothing here to tailor and nothing
+ * that needs a token.
+ *
+ * `GC_DATA_API_BASE` is deliberately unset on Render, which is what stops `/api/v1/plans` - which
+ * is itself implemented by this function - from calling itself in a loop.
+ */
 export async function listActivePlans(): Promise<PlanView[]> {
+  const remote = await readViaApi<PlanView[]>("/plans");
+  if (remote) return remote;
+
   const plans = await db.plan.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } });
   return plans.map((p) => {
     const [tier, period] = p.code.split("_");

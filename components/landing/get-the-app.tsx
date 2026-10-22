@@ -1,27 +1,31 @@
-import Link from "next/link";
-import { Apple, ArrowRight, Download, Smartphone } from "lucide-react";
+import { ArrowRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { androidRelease } from "@/lib/release";
 
 /**
  * How a visitor gets GameClaw.
  *
- * Android is the product; the browser version is the fallback for everyone else. That ordering is
- * the point of the component - the site used to lead with "Open app", which opened the web build,
- * and a visitor on a phone never learned there was a real one.
+ * gameclaw.win is a marketing site. It does not sign anybody in and it is not a way to use the
+ * product - the app is the product - so nothing here offers a "use it in your browser" route. An
+ * earlier version of this page did, and the button led to a sign-in the site no longer operates.
  *
- * What it will not do is invent a destination. Until a Play listing exists the page says the app
- * is not out yet and offers the browser instead. A store button that 404s is worse than no store
- * button, and it is the easiest possible thing to add "for now" and then ship.
+ * That leaves one honest state while the app is unpublished: say so. It is rendered as a status
+ * pill rather than a button, because a primary-looking control that cannot be pressed is worse
+ * than no control - a visitor spends their one click on it and gets nothing.
+ *
+ * The moment `NEXT_PUBLIC_PLAY_URL` is set this becomes a real Play button with no code change,
+ * and `NEXT_PUBLIC_APK_URL` covers the tester window in between. Nothing here invents a
+ * destination: a store link for an app that has not been published 404s for everyone who taps it.
  */
-export function GetTheApp() {
+export function GetTheApp({ align = "start" }: { align?: "start" | "center" }) {
   const release = androidRelease();
+  const centred = align === "center";
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col justify-center gap-2 sm:flex-row lg:justify-start">
+    <div className={`space-y-3 ${centred ? "flex flex-col items-center" : ""}`}>
+      <div className={`flex flex-col gap-2 sm:flex-row ${centred ? "items-center justify-center" : "items-start"}`}>
         {release.kind === "play" && (
-          <Button asChild size="lg" className="h-12 px-6">
+          <Button asChild size="lg" className="h-12 px-7 text-base">
             <a href={release.url} rel="noreferrer">
               Get it on Google Play <ArrowRight data-icon="inline-end" />
             </a>
@@ -29,7 +33,7 @@ export function GetTheApp() {
         )}
 
         {release.kind === "testing" && (
-          <Button asChild size="lg" className="h-12 px-6">
+          <Button asChild size="lg" className="h-12 px-7 text-base">
             <a href={release.url} rel="noreferrer">
               <Download data-icon="inline-start" /> Download the test build
             </a>
@@ -37,30 +41,28 @@ export function GetTheApp() {
         )}
 
         {release.kind === "unreleased" && (
-          /* Deliberately not a link. There is nowhere honest for it to go yet. */
-          <div className="flex h-12 items-center justify-center gap-2 rounded-md border border-dashed px-6 text-sm text-muted-foreground">
-            <Smartphone className="size-4" aria-hidden />
-            Android app coming to Google Play
-          </div>
+          /* Deliberately not a link or a button. There is nowhere honest for it to go yet. */
+          <p className="inline-flex h-12 items-center gap-2.5 rounded-full border border-primary/35 bg-primary/10 px-5 text-sm font-medium text-foreground">
+            <span className="size-2 rounded-full bg-primary motion-safe:animate-pulse" aria-hidden />
+            Coming to Google Play
+          </p>
         )}
-
-        <Button asChild size="lg" variant="outline" className="h-12 px-6">
-          <Link href="/chat">Use it in your browser</Link>
-        </Button>
       </div>
 
       {release.kind === "testing" && (
-        <p className="text-xs text-muted-foreground">
+        <p className={`text-xs text-muted-foreground ${centred ? "text-center" : ""}`}>
           A test build, not the Play listing. Android will warn you about installing it, which is
           Android doing its job.
         </p>
       )}
 
-      <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground lg:justify-start">
-        <Apple className="size-3.5" aria-hidden />
-        {/* "Coming soon" about work nobody has started becomes a year old without anyone noticing. */}
-        iPhone isn&apos;t built yet. The browser version works on iOS today.
-      </p>
+      {release.kind === "unreleased" && (
+        <p className={`text-xs text-muted-foreground ${centred ? "text-center" : ""}`}>
+          {/* No date. "Coming soon" about work nobody has scheduled becomes a year old without
+              anyone noticing, and a promised week that slips is worse than no week at all. */}
+          Android first. iPhone isn&apos;t built yet.
+        </p>
+      )}
     </div>
   );
 }
