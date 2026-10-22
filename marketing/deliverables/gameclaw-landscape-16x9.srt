@@ -1,30 +1,29 @@
 1
-00:00:00,700 --> 00:00:02,143
+00:00:00,700 --> 00:00:02,209
 Every match has a story.
 
 2
-00:00:02,300 --> 00:00:04,578
+00:00:02,450 --> 00:00:04,888
 GameClaw helps you follow every moment.
 
 3
-00:00:05,200 --> 00:00:08,489
+00:00:05,400 --> 00:00:08,686
 Every result, from every competition
 that matters.
 
 4
-00:00:12,300 --> 00:00:16,199
+00:00:12,300 --> 00:00:16,375
 Open a match for form, statistics,
 and the full picture.
 
 5
-00:00:18,200 --> 00:00:20,900
-And when you want to move a slip
-between bookmakers,
+00:00:18,100 --> 00:00:20,753
+And when you want to move a slip between bookmakers,
 
 6
-00:00:20,900 --> 00:00:23,497
+00:00:20,753 --> 00:00:23,406
 GameClaw reads the code and rebuilds it.
 
 7
-00:00:27,000 --> 00:00:29,180
+00:00:27,000 --> 00:00:29,403
 Follow the game. Own your matchday.

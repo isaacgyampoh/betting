@@ -33,6 +33,30 @@ against production:
 Nothing is simulated or mocked up. No stadium stock footage is used, because none is licensed —
 the opening is typographic instead.
 
+## Voice
+
+Synthesised with `say`, then put through a broadcast chain in `build/voice.py` — high-pass,
+de-ess, low-mid cut, presence lift at 3.1kHz, compressor, exciter. Raw `say` output is flat and
+unprocessed and sounds like it; the chain is most of the difference.
+
+Two things it gets right that are easy to get wrong. Level is set by **RMS after a soft limiter**,
+not by peak: normalising to peak let the exciter's few transients scale the whole take down, and
+the result measured *less* dense than the raw synthesiser (crest factor 6.52 raw, 7.98 "processed").
+Referencing RMS instead brings it to 3.85, which is where it should sit. And the rate is 152, below
+the default — an advertisement read fast sounds like a disclaimer.
+
+Only six English voices are genuinely installed: Daniel (GB), Samantha (US), Karen (AU), Moira (IE),
+Tessa (ZA), Fred (US). `say -v Alex` and `say -v Tom` silently fall back to Samantha rather than
+failing, so those are not options. No Premium, Enhanced or Siri voices are present.
+
+`deliverables/voice-comparison.wav` has all four usable candidates reading the same two lines, in
+the order Daniel, Samantha, Karen, Tessa. Change the voice by re-running:
+
+```
+python3 build/voice.py Karen build/vo-Karen
+# point build/vo/master-s.tsv at that directory, then rebuild the mix and the films
+```
+
 ## Music
 
 The bed is **original and synthesised** — `build/music.py`, Python standard library only, no
@@ -41,20 +65,13 @@ pad, arranged to the cut rather than looped under it — pad and sub alone under
 drums in on the logo clear, a riser into the closing card, then drums out so the end can breathe.
 Nothing is licensed from anyone, so there is nothing to clear.
 
-It reads the same narration manifest the compositor uses, so the bed ducks to 34% under each
-spoken line with 140ms ramps, and the captions, the voice and the ducking all come from one set of
-numbers.
+It reads the narration manifest, so the bed ducks to 34% under each spoken line with 140ms ramps,
+and the captions, the voice and the ducking all come from one set of numbers — `build/srt.py`
+generates the SRT from that same manifest, so captions cannot drift from the voice.
 
 Mixed for handsets: an early version put 94% of its energy below 120Hz, which measures fine and
 disappears on a phone speaker. The arpeggio and pad sit two octaves up, the kick carries a 1.4kHz
 click, and the sub is held back.
-
-Regenerate with:
-
-```
-python3 build/music.py build/mix-master.wav 30.70 build/vo/master.tsv
-python3 build/music.py build/mix-teaser.wav 13.00 build/vo/teaser.tsv
-```
 
 ## Rebuilding
 
