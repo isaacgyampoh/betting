@@ -33,12 +33,28 @@ against production:
 Nothing is simulated or mocked up. No stadium stock footage is used, because none is licensed —
 the opening is typographic instead.
 
-## No music
+## Music
 
-The edit ships with narration and no music bed. Nothing on this machine can produce a broadcast
--quality original track, and using an unlicensed one is not an option. **Licence a track and lay it
-under the narration before publishing** — the VO sits at the timings in `build/vo/master.tsv`, so
-there is room to duck music around it.
+The bed is **original and synthesised** — `build/music.py`, Python standard library only, no
+samples and no loops. A D-minor progression at 128 BPM: kick, sub, hats, a plucked arpeggio and a
+pad, arranged to the cut rather than looped under it — pad and sub alone under the opening card,
+drums in on the logo clear, a riser into the closing card, then drums out so the end can breathe.
+Nothing is licensed from anyone, so there is nothing to clear.
+
+It reads the same narration manifest the compositor uses, so the bed ducks to 34% under each
+spoken line with 140ms ramps, and the captions, the voice and the ducking all come from one set of
+numbers.
+
+Mixed for handsets: an early version put 94% of its energy below 120Hz, which measures fine and
+disappears on a phone speaker. The arpeggio and pad sit two octaves up, the kick carries a 1.4kHz
+click, and the sub is held back.
+
+Regenerate with:
+
+```
+python3 build/music.py build/mix-master.wav 30.70 build/vo/master.tsv
+python3 build/music.py build/mix-teaser.wav 13.00 build/vo/teaser.tsv
+```
 
 ## Rebuilding
 
