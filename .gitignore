@@ -70,3 +70,20 @@ mobile/android/app/release/
 # request bodies and project identifiers.
 firebase-debug.log
 firebase-debug.*.log
+
+# Marketing media. Screen recordings, renders and synthesised narration are large binaries that
+# can be regenerated from marketing/build/*.swift and the app itself; the sources are tracked.
+marketing/raw/
+marketing/build/qa/
+marketing/build/vo/
+marketing/build/compose
+marketing/build/grab
+marketing/build/cover
+marketing/build/dur
+marketing/build/smoke
+marketing/build/tracks
+marketing/build/ttest
+marketing/build/*.swift.bak
+marketing/build/vo.aiff
+marketing/deliverables/*.mp4
+marketing/deliverables/*.png
