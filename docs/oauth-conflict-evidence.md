@@ -252,3 +252,46 @@ application created 17 Oct. Not used by the app, whose audience is `b4oh5at…`.
 Step 2 can equally be done by editing `r59d0h59`'s package from `win.gameclaw.app2` back to
 `win.gameclaw.app`, since it already carries the right fingerprint — but only after step 1, which
 is what has been rejecting that edit all along.
+
+
+---
+
+## 12. RESOLVED — verified on the release-signed build, 21 Oct 23:54
+
+The owner freed the unique pair by **renaming** rather than deleting: `t6c862s9` in the push
+project was moved to package `win.gameclaw.app3`, which released
+`(win.gameclaw.app, C9:B5:19:…:13:75)`, and `r59d0h59` in `game-claw` was then edited back to
+`win.gameclaw.app`. Better than the deletion this document proposed — nothing was destroyed, and
+both clients remain available to roll back.
+
+Confirmed by reading both clients afterwards:
+
+| Client | Project | Package | SHA-1 |
+|---|---|---|---|
+| `r59d0h59` | **game-claw** | **`win.gameclaw.app`** | `C9:B5:19:40:…:13:75` |
+| `t6c862s9` | push project | `win.gameclaw.app3` | `C9:B5:19:40:…:13:75` |
+
+The Android client and the audience `b4oh5at…` now live in the same project, which is what GMS
+requires.
+
+### Release-signed verification, on the Pixel
+
+Installed certificate read back off the device: `c9b5194033db5338ec3ee794a0d967b152001375`.
+
+| | Evidence |
+|---|---|
+| Google Sign-In | `[CompleteSignInOperation] Operation succeeded`, `Activity finished successfully`, **zero `28444`** |
+| Backend session | Profile reads "Signed in on this device" |
+| FCM registration | Match alerts toggle engaged; the production API delivered to this device |
+| Notification, foreground | delivered, channel `gameclaw_matches_v2` |
+| Notification, backgrounded | delivered with the launcher in front |
+| Custom sound | `RingtonePlayer: play uri=android.resource://win.gameclaw.app/raw/gameclaw_alert` — **no** `FileNotFoundException`, so `res/raw/keep.xml` holds under resource shrinking |
+| Channel | `mImportance=4`, `mSound=android.resource://win.gameclaw.app/raw/gameclaw_alert` |
+| Tap navigation | app was on **Profile**; tapping the notification opened the **Live Centre**, the payload's `/home` — so it navigated rather than merely resuming |
+| Match Centre / live scores | rendering, minutes advancing, `HT` label correct |
+
+The first tap test was inconclusive and is worth recording: the app resumed to Profile instead of
+navigating, which looked like a routing bug. It was not. Two notifications had been bundled into a
+group and the tap landed on the group summary, which carries no payload. Clearing the shade and
+repeating with a single notification — from Profile, so that "resumed where it was" could not be
+mistaken for success — navigated correctly.

@@ -90,6 +90,7 @@ case "$ACTION" in
     sleep 8
     echo "package now reads: $(field 1)"
     echo "any error on page: $(read_js "var m=document.body.innerText.match(/already exists|error|failed/i);m?m[0]:'none'")"
+
     ;;
 
   *)
