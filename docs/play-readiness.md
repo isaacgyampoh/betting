@@ -11,6 +11,23 @@ than a coding one.
 
 ## 1. The policy question, which outranks everything else
 
+> **Superseded, 22 Oct 2026 — read `play-policy-assessment.md` instead.**
+>
+> The section below cites two passages as general prohibitions. Both are in the policy's **ads**
+> section: they are conditions a non-gambling app must meet in order to *carry gambling ads*.
+> GameClaw carries no ads, so neither applies, and the "sports odds tracker" violation example is
+> a violation because of its integrated gambling ads linking to a betting site — GameClaw has
+> neither.
+>
+> Its conclusion, "Directing users to a betting site is the product", is also wrong about the
+> build: `url_launcher` is not a dependency and the app cannot open a URL at all. A booking code
+> reaches the user by clipboard or share sheet.
+>
+> The real exposure is narrower and is assessed properly in the new document: the general rule
+> that Play "doesn't allow content or services that enable or facilitate users' ability to wager",
+> against a feature that creates a bet slip at a bookmaker. Left below for the record.
+
+
 Google Play's *Real-Money Gambling, Games, and Contests* policy
 (<https://support.google.com/googleplay/android-developer/answer/9877032>) says Play "generally
 prohibits apps from facilitating real-money gambling", with an exception for licensed operators
