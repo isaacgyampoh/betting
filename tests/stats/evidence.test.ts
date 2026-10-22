@@ -28,17 +28,22 @@ function form(t: TeamRef, games: [number, number, boolean][]): TeamForm {
     goalsAgainst: ga,
     wasHome,
   }));
-  const s = {
-    played: matches.length,
-    won: matches.filter((m) => m.result === "W").length,
-    drawn: matches.filter((m) => m.result === "D").length,
-    lost: matches.filter((m) => m.result === "L").length,
-    goalsFor: matches.reduce((a, m) => a + m.goalsFor, 0),
-    goalsAgainst: matches.reduce((a, m) => a + m.goalsAgainst, 0),
-    bttsRate: matches.filter((m) => m.goalsFor > 0 && m.goalsAgainst > 0).length / (matches.length || 1),
-    over25Rate: matches.filter((m) => m.goalsFor + m.goalsAgainst > 2.5).length / (matches.length || 1),
+  const sum = (rows: typeof matches) => ({
+    played: rows.length,
+    won: rows.filter((m) => m.result === "W").length,
+    drawn: rows.filter((m) => m.result === "D").length,
+    lost: rows.filter((m) => m.result === "L").length,
+    goalsFor: rows.reduce((a, m) => a + m.goalsFor, 0),
+    goalsAgainst: rows.reduce((a, m) => a + m.goalsAgainst, 0),
+    bttsRate: rows.filter((m) => m.goalsFor > 0 && m.goalsAgainst > 0).length / (rows.length || 1),
+    over25Rate: rows.filter((m) => m.goalsFor + m.goalsAgainst > 2.5).length / (rows.length || 1),
+  });
+  return {
+    team: t,
+    matches,
+    summary: sum(matches),
+    splits: { home: sum(matches.filter((m) => m.wasHome)), away: sum(matches.filter((m) => !m.wasHome)) },
   };
-  return { team: t, matches, summary: s };
 }
 
 const detail = (home: TeamForm, away: TeamForm, h2h: MatchSummary[] = []): MatchDetail => ({

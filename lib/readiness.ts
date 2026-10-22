@@ -1,4 +1,5 @@
 // Which parts of the app are configured. Reports variable NAMES only, never values.
+import { routeStatus } from "@/lib/bookmakers/providers/routes";
 
 const REQUIRED = ["DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"] as const;
 
@@ -6,6 +7,14 @@ export type Readiness = {
   ready: boolean;
   missing: string[];
   features: { ai: boolean; payments: boolean; liveStats: boolean; push: boolean };
+  /**
+   * Third-party conversion routes, by id.
+   *
+   * These decide whether a booking code can move between the seven bookmakers our own adapters
+   * cannot book at. Without one, those pairs are refused - which is correct, but indistinguishable
+   * from a bug unless something says the route is simply not configured.
+   */
+  conversionRoutes: { id: string; configured: boolean }[];
 };
 
 const set = (name: string) => !!process.env[name]?.trim();
@@ -25,5 +34,6 @@ export function readiness(): Readiness {
       // identical to a notification that was sent and swallowed by the device.
       push: set("FCM_SERVICE_ACCOUNT"),
     },
+    conversionRoutes: routeStatus(),
   };
 }

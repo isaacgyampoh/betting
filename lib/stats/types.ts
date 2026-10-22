@@ -22,10 +22,32 @@ export type MatchSummary = {
 
 export type FormResult = "W" | "D" | "L";
 
+export type FormSummary = {
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  bttsRate: number;
+  over25Rate: number;
+};
+
 export type TeamForm = {
   team: TeamRef;
   matches: { match: MatchSummary; result: FormResult; goalsFor: number; goalsAgainst: number; wasHome: boolean }[];
-  summary: { played: number; won: number; drawn: number; lost: number; goalsFor: number; goalsAgainst: number; bttsRate: number; over25Rate: number };
+  summary: FormSummary;
+  /**
+   * The same figures split by where the games were played.
+   *
+   * Every row already knew whether the team was at home; nothing aggregated it, so a side that
+   * wins at home and loses away looked identical to a side that is mediocre everywhere. That
+   * split is one of the strongest signals in football and the match page already promises it.
+   *
+   * Both halves are computed from the same window as `summary`, so they add up to it, and either
+   * can legitimately have `played: 0` for a team whose recent run was all one way.
+   */
+  splits: { home: FormSummary; away: FormSummary };
 };
 
 export type StandingRow = {

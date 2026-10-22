@@ -85,7 +85,10 @@ export function asBookmakerError(err: unknown, slug: string, op: string): AppErr
 // --- Persistence -------------------------------------------------------------
 
 export const slipInclude = {
-  bookmaker: { select: { id: true, slug: true, name: true } },
+  // `country` travels with the slip because a conversion route addresses bookmakers as
+  // brand-and-country: SportyBet Ghana and SportyBet Nigeria are different fixtures at different
+  // prices, and a route must be able to refuse a pair it cannot place in one market.
+  bookmaker: { select: { id: true, slug: true, name: true, country: true } },
   selections: { orderBy: { position: "asc" }, include: { bookmakerEvent: { select: { externalId: true } } } },
   parent: {
     select: {

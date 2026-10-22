@@ -2,6 +2,8 @@ import "server-only";
 import type { AuthUser } from "@/lib/auth";
 import { mapWithConcurrency } from "@/lib/async";
 import { getAdapter } from "@/lib/bookmakers/registry";
+import { routeFor } from "@/lib/bookmakers/providers/routes";
+import { draftsFromRoute } from "@/lib/services/convert-via-route";
 import type { BookmakerAdapter, BookmakerSlug, RawMarket } from "@/lib/bookmakers/types";
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
@@ -124,6 +126,77 @@ export async function convertSelection(
  * finds the same market, books a new code, and keeps every game that couldn't be carried over
  * (with the reason) so nothing is silently dropped.
  */
+/**
+ * Convert through a third-party provider, for a pair our own adapters cannot serve.
+ *
+ * Returns null - not an error - when there is nothing to try: no configured route claims this
+ * pair, or the source slip has no booking code for a provider to read. The caller then falls
+ * through to the ordinary refusal, which explains the real situation better than anything this
+ * function could say.
+ *
+ * The provider books at the destination itself, so there is no second booking step here and no
+ * event linking: we never see the destination's fixture ids, and writing links from names we did
+ * not resolve ourselves would poison the alias index that the native route depends on.
+ */
+async function convertThroughProvider(opts: {
+  user: AuthUser;
+  sourceSlip: SlipRecord;
+  targetBookmaker: { id: string; name: string; country: string };
+  target: BookmakerSlug;
+  ipHash: string | null;
+}): Promise<SlipView | null> {
+  const { user, sourceSlip, targetBookmaker, target, ipHash } = opts;
+
+  // A provider converts a booking code. A slip we built rather than read has none, and there is
+  // nothing to hand over.
+  if (!sourceSlip.bookingCode) return null;
+
+  const from = { brand: sourceSlip.bookmaker.name, country: sourceSlip.bookmaker.country };
+  const to = { brand: targetBookmaker.name, country: targetBookmaker.country };
+  const route = routeFor(from, to);
+  if (!route) return null;
+
+  await enforceRateLimit({ userId: user.id, kind: "SLIP_CONVERT", ...SLIP_CONVERT_LIMIT });
+
+  const meta = { from: sourceSlip.bookmaker.slug, to: target, sourceSlipId: sourceSlip.id, route: route.id };
+  try {
+    // Stable per user-intent: the same user asking for the same slip at the same destination must
+    // reuse the provider's first result rather than paying for, and booking, a second code.
+    const result = await route.convert({
+      from,
+      to,
+      code: sourceSlip.bookingCode,
+      idempotencyKey: `${user.id}:${sourceSlip.id}:${target}`,
+    });
+
+    const selections = draftsFromRoute(sourceSlip, result);
+    const saved = await saveSlip({
+      userId: user.id,
+      bookmakerId: targetBookmaker.id,
+      kind: "CONVERTED",
+      code: result.targetCode,
+      parentSlipId: sourceSlip.id,
+      expiresAt: result.expiresAt,
+      selections,
+    });
+
+    const view = await withLogos(toSlipView(saved));
+    const converted = selections.filter((d) => d.status === "OK").length;
+    await logUsage({
+      userId: user.id,
+      ipHash,
+      kind: "SLIP_CONVERT",
+      success: true,
+      meta: { ...meta, total: selections.length, converted, code: result.targetCode },
+    });
+    logger.info("slips.converted_via_route", { ...meta, total: selections.length, converted });
+    return view;
+  } catch (err) {
+    await logUsage({ userId: user.id, ipHash, kind: "SLIP_CONVERT", success: false, errorCode: err instanceof AppError ? err.code : "INTERNAL", meta });
+    throw err;
+  }
+}
+
 export async function convertSlip(opts: {
   user: AuthUser;
   source: ConvertSource;
@@ -164,6 +237,17 @@ export async function convertSlip(opts: {
   // is turning us away.
   const targetAdapter = getAdapter(target);
   if (!targetAdapter.capabilities.createCode) {
+    /**
+     * A destination we cannot book at ourselves is exactly what a conversion provider is for.
+     *
+     * Seven of the nine bookmakers in the catalogue sit here, waiting on an authorised
+     * integration that is a commercial arrangement rather than a missing function. A configured
+     * provider route covers that pair in one call, so it is tried before the refusal - and when
+     * no route is configured, or none claims this pair, the refusal stands and says so plainly.
+     */
+    const viaRoute = await convertThroughProvider({ user, sourceSlip, targetBookmaker, target, ipHash });
+    if (viaRoute) return viaRoute;
+
     await targetAdapter.createCode([]).catch((err: unknown) => {
       throw err;
     });

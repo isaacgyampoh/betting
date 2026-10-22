@@ -9,6 +9,14 @@ export function matchInsights(d: MatchDetail): string[] {
     const s = f.summary;
     if (!s.played) continue;
     out.push(`${f.team.name}: ${s.won}W ${s.drawn}D ${s.lost}L in the last ${s.played}, scoring ${s.goalsFor} and conceding ${s.goalsAgainst}.`);
+    // The half of the split that applies to this fixture: the home side's home record, the
+    // visitor's away record. Only worth stating when the sample is big enough to mean anything,
+    // and only when it actually differs from the overall run.
+    const venue = side === "home" ? f.splits.home : f.splits.away;
+    const where = side === "home" ? "at home" : "away from home";
+    if (venue.played >= 3 && venue.played < s.played) {
+      out.push(`${where === "at home" ? "At home" : "Away from home"}, ${f.team.name} are ${venue.won}W ${venue.drawn}D ${venue.lost}L in ${venue.played}, scoring ${venue.goalsFor} and conceding ${venue.goalsAgainst}.`);
+    }
     if (s.bttsRate >= 0.6) out.push(`Both teams scored in ${Math.round(s.bttsRate * s.played)} of ${possessive(f.team.name)} last ${s.played} games.`);
     if (s.over25Rate >= 0.6) out.push(`${Math.round(s.over25Rate * s.played)} of ${possessive(f.team.name)} last ${s.played} games had over 2.5 goals.`);
     if (s.over25Rate <= 0.2 && s.played >= 4) out.push(`Only ${Math.round(s.over25Rate * s.played)} of ${possessive(f.team.name)} last ${s.played} games had over 2.5 goals.`);
