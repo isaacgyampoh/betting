@@ -92,9 +92,20 @@ class PushService {
     await _local.initialize(
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // iOS asks for the notification permission at initialise time unless told not to, and
+        // being asked on first launch - before anything has been explained - is the prompt most
+        // people refuse for ever. All three are false so the ask stays where Android's already
+        // is: in `requestPermission`, when the user turns alerts on.
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
       ),
       onDidReceiveNotificationResponse: (response) => _open(response.payload),
     );
+    // Null on iOS, where channels do not exist: the resolver returns the implementation only on
+    // the platform it belongs to, so this whole block is simply skipped there.
     final android = _local
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     // Retire the old channel first. Leaving it behind means a second "Match alerts" entry in
@@ -102,8 +113,11 @@ class PushService {
     await android?.deleteNotificationChannel(channelId: _retiredChannelId);
     await android?.createNotificationChannel(_channel);
 
-    // Android shows a notification itself only when the app is backgrounded. In the foreground
-    // the message arrives silently, so it is drawn here or the user sees nothing at all.
+    // Both platforms deliver to `onMessage` without drawing anything while the app is in the
+    // foreground - Android because it only posts when backgrounded, iOS because a foreground
+    // notification is suppressed unless presentation options are set. Drawing it here covers
+    // both, and is why those options are deliberately not set: the system and this would
+    // otherwise each post one, and the user would see the same goal twice.
     _foreground = FirebaseMessaging.onMessage.listen(_showForeground);
 
     // Tapped while the app was running in the background.
@@ -139,6 +153,16 @@ class PushService {
           // device below that reads it from here, and they must not differ.
           sound: const RawResourceAndroidNotificationSound('gameclaw_alert'),
         ),
+        // iOS plays its default alert sound. The custom one is deliberately not named here: on
+        // iOS a notification sound is a file inside the app bundle, `gameclaw_alert` is an
+        // Android raw resource, and naming a file that is not in the bundle makes iOS fall back
+        // to silence rather than to the default. Silence reads as a broken alert. Naming it here
+        // is the last step of bundling a .caf, not a substitute for it.
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
       ),
       payload: message.data['route'] as String?,
     );
@@ -154,10 +178,15 @@ class PushService {
     pendingRoute.dispose();
   }
 
-  /// Asks for the notification permission Android 13+ requires.
+  /// Asks for the notification permission, on both platforms.
   ///
-  /// Asked when the user turns alerts on, not at launch: a permission prompt on first open,
-  /// before anything has been explained, is the one most people refuse for ever.
+  /// Android 13+ requires it; iOS has always required it. Asked when the user turns alerts on,
+  /// not at launch: a permission prompt on first open, before anything has been explained, is
+  /// the one most people refuse for ever.
+  ///
+  /// On iOS this is also what triggers APNs registration, and the FCM token is not available
+  /// until APNs has handed one over - so on iOS `getToken()` before this returns null rather
+  /// than failing, which is why registration follows the permission rather than preceding it.
   Future<bool> requestPermission() async {
     final messaging = _messaging;
     if (messaging == null) return false;
