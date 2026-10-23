@@ -13,6 +13,7 @@ the things that cannot be done from here.
 | Deployment target | **15.5**, not the template's 15.0 (see below) |
 | `Info.plist` | display name `GameClaw`, photo-library usage string, `ITSAppUsesNonExemptEncryption=false` |
 | Notifications | `lib/data/push.dart` is platform-aware: Darwin init settings, Darwin notification details, permission prompt still deferred |
+| App icon | all 15 sizes rendered from the same mark the Play listing uses, by `scripts/ios-appicon.swift` |
 | `.metadata` | lists **both** platforms; `flutter create` had replaced `android` with `ios` |
 
 `flutter analyze` is clean and all 336 Flutter tests pass with the iOS project in the tree.
@@ -71,7 +72,13 @@ and the simulator are both unavailable. No iOS code here has been compiled, let 
    that is not bundled makes iOS fall back to silence rather than to the default sound, and a
    silent alert reads as a broken one.
 4. **Google Sign-In URL scheme** in `Info.plist`, once the iOS client exists.
-5. **Icons and launch screen.** The template's placeholders are still in place.
+5. **Launch screen.** The template's placeholder is still in place. The app icon is done:
+   `scripts/ios-appicon.swift` renders all 15 sizes from the same geometry as the advertisement
+   and the Play listing, opaque and unrounded because iOS applies its own mask and rejects an icon
+   that ships with alpha. It is drawn at 4x and downsampled - three tapered curves render as
+   stair-steps at 20pt otherwise - and flipped in y, because CoreGraphics' bottom-left origin
+   renders the mark mirrored and the icon has to be the same drawing as `play-assets/icon-512.png`,
+   not a reflection of it.
 6. Decide on iPad. The app is phone-shaped; the template enables iPad by default.
 
 ## What the website says
