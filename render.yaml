@@ -50,7 +50,12 @@ services:
     # install is a no-op and its scripts are skipped, so lib/generated/prisma never appears and
     # the build dies on module-not-found - which only happens on the second deploy onward, when
     # there is a cache to reuse.
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm db:generate && pnpm build
+    # `corepack enable` on its own stopped working: Render's image ships pnpm at /usr/bin/pnpm
+    # and mounts /usr/bin read-only, so corepack dies trying to replace it with its own shim -
+    # `EROFS: read-only file system, unlink '/usr/bin/pnpm'` - before a single dependency is
+    # fetched. Installing the shims somewhere writable and putting that first on PATH keeps the
+    # pnpm version pinned by `packageManager` without touching the system copy.
+    buildCommand: corepack enable --install-directory "$HOME/.corepack-bin" && export PATH="$HOME/.corepack-bin:$PATH" && pnpm install --frozen-lockfile && pnpm db:generate && pnpm build
     startCommand: pnpm start
     healthCheckPath: /api/v1/health
     envVars:
