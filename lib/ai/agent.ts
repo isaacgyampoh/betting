@@ -7,6 +7,8 @@ import type { SlipView } from "@/lib/slips/view";
 import { anthropic } from "@/lib/ai/client";
 import { addUsage, CHAT_MODEL, costMicroUsd, ZERO_USAGE, type TokenUsage } from "@/lib/ai/models";
 import { runTool, TOOLS, type ToolContext } from "@/lib/ai/tools";
+import { checkToolAgainstLock, lockContext, lockedTools, lockFromDetail, type MatchLock } from "@/lib/ai/match-lock";
+import { getMatchDetail } from "@/lib/services/stats";
 import { getAiAllowance, requireAiAllowance, type AiAllowance } from "@/lib/services/ai-quota";
 import { logUsage } from "@/lib/services/usage";
 
@@ -129,6 +131,23 @@ export async function runChat(opts: {
     throw new AppError("BAD_REQUEST", "The last message must be from the user.");
   }
 
+  /**
+   * The fixture this thread belongs to, resolved from its authoritative record rather than
+   * inferred from the conversation.
+   *
+   * A match id we cannot resolve is not a reason to answer about some other game: the lock stays
+   * null, the global tools stay available, and the thread behaves like Claw. That is the correct
+   * degradation, because an unresolvable id means we do not know which fixture to lock *to*.
+   */
+  let lock: MatchLock | null = null;
+  if (opts.matchId !== undefined) {
+    try {
+      lock = lockFromDetail(await getMatchDetail(user, opts.matchId));
+    } catch (err) {
+      logger.warn("ai.match_lock_unresolved", { matchId: opts.matchId, err: String(err).slice(0, 200) });
+    }
+  }
+
   const messages: Anthropic.MessageParam[] = history.map((t) => ({ role: t.role, content: t.content }));
   const ctx: ToolContext = { user, ipHash, slips: new Map(), seenSlipIds: new Set(opts.seenSlipIds ?? []) };
   let usage = ZERO_USAGE;
@@ -144,9 +163,11 @@ export async function runChat(opts: {
         cache_control: { type: "ephemeral" },
         system: [
           { type: "text", text: SYSTEM_PROMPT },
-          { type: "text", text: contextNote(opts.matchId) },
+          { type: "text", text: lock ? lockContext(lock) : contextNote(opts.matchId) },
         ],
-        tools: TOOLS,
+        // Removing the tools that reach other fixtures is the enforcement. A model cannot call a
+        // tool it was not given, and no amount of instruction is as reliable as that.
+        tools: lock ? lockedTools(TOOLS) : TOOLS,
         messages,
       });
       usage = addUsage(usage, usageOf(response.usage));
@@ -172,6 +193,15 @@ export async function runChat(opts: {
       // Parallel tool calls: run concurrently, return all results in one user message.
       const results = await Promise.all(
         toolUses.map(async (t): Promise<Anthropic.ToolResultBlockParam> => {
+          // Checked here as well as by withholding the tool: a model can name a tool it was not
+          // offered, and a cached prefix can outlive a change to the list.
+          if (lock) {
+            const check = checkToolAgainstLock(lock, t.name, t.input);
+            if (!check.ok) {
+              logger.warn("ai.tool_blocked_by_lock", { userId: user.id, tool: t.name, matchId: lock.matchId });
+              return { type: "tool_result", tool_use_id: t.id, content: check.reason, is_error: true };
+            }
+          }
           const r = await runTool(t.name, t.input, ctx);
           logger.info("ai.tool", { userId: user.id, tool: t.name, isError: r.isError });
           return { type: "tool_result", tool_use_id: t.id, content: r.content, is_error: r.isError };

@@ -24,7 +24,22 @@ API_BASE="https://gameclaw-api.onrender.com/api/v1"
 GOOGLE_SERVER_CLIENT_ID="400646694915-b4oh5athe842emcnga4913s1oq1igjh1.apps.googleusercontent.com"
 
 cd "$(dirname "$0")"
-exec flutter build "$TARGET" --release \
+
+# Resolve the SDK rather than assuming PATH. A non-interactive shell (CI, a hook, an agent) does
+# not read the profile that puts flutter on PATH, and the failure is otherwise a bare
+# "flutter: not found" after which an install command happily reinstalls the previous APK -
+# a stale build that looks like a successful one.
+FLUTTER="$(command -v flutter || true)"
+for candidate in "$HOME/dev/flutter/bin/flutter" "$HOME/flutter/bin/flutter" /opt/flutter/bin/flutter; do
+  [ -n "$FLUTTER" ] && break
+  [ -x "$candidate" ] && FLUTTER="$candidate"
+done
+if [ -z "$FLUTTER" ]; then
+  echo "flutter SDK not found. Put it on PATH or install it at ~/dev/flutter." >&2
+  exit 1
+fi
+
+exec "$FLUTTER" build "$TARGET" --release \
   --dart-define=GC_API_BASE="$API_BASE" \
   --dart-define=GC_AUTH_BASE="$API_BASE" \
   --dart-define=GC_GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"

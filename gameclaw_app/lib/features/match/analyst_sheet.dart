@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/providers.dart';
 import '../../domain/models.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
@@ -158,16 +159,27 @@ class _Handle extends StatelessWidget {
   );
 }
 
-class _Header extends StatelessWidget {
+/// The sheet's own header, including the follow control for this fixture.
+///
+/// The control is here because asking about a game and deciding to keep an eye on it are the same
+/// moment, and until now that meant closing the sheet to reach the bell behind it.
+///
+/// It reads and writes the same providers the Following screen does, so there is one source of
+/// truth: the state cannot drift between the two, a match cannot be followed twice, and unfollow
+/// is the same control pressed again. The write goes to the device first and is pushed to the
+/// server after, which is what makes it work with no signal - see `toggleFollowedMatchProvider`.
+class _Header extends ConsumerWidget {
   const _Header({required this.fixture});
 
   final Fixture fixture;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colours = gc(context);
+    final following = (ref.watch(followedMatchIdsProvider).value ?? const <int>{}).contains(fixture.id);
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.xs, GcSpace.gutter, GcSpace.md),
+      padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.xs, GcSpace.sm, GcSpace.md),
       child: Row(
         children: [
           Icon(Icons.insights_rounded, size: 18, color: colours.accent),
@@ -186,6 +198,15 @@ class _Header extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            onPressed: () => ref.read(toggleFollowedMatchProvider)(fixture),
+            icon: Icon(
+              following ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
+              size: 20,
+              color: following ? colours.accent : colours.inkMuted,
+            ),
+            tooltip: following ? 'Following this match' : 'Follow this match',
           ),
         ],
       ),
