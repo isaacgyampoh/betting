@@ -44,10 +44,20 @@ git check-ignore -v gameclaw_app/android/key.properties
 
 ```bash
 cd gameclaw_app
-flutter build appbundle --release \
-  --dart-define=GC_API_BASE=https://gameclaw-api.nanagyams99.workers.dev/api/v1 \
-  --dart-define=GC_SUPABASE_URL=... --dart-define=GC_SUPABASE_ANON_KEY=...
+./build-release.sh            # APK, for installing on a device
+./build-release.sh appbundle  # AAB, for uploading to Play
 ```
+
+Use the script rather than calling `flutter build` directly. The `--dart-define`s are not optional
+and their absence is **silent**: without `GC_API_BASE` the app falls back to
+`http://10.0.2.2:3000/api/v1`, the emulator's route to a developer's laptop, and the result signs,
+installs and launches perfectly while every screen reports "Something went wrong". Without
+`GC_AUTH_BASE` sign-in falls back to Supabase, whose project no longer exists.
+
+The command this replaced pointed `GC_API_BASE` at `gameclaw-api.nanagyams99.workers.dev`, which
+was retired when the API moved to Render, and passed the two Supabase defines instead of
+`GC_AUTH_BASE` and `GC_GOOGLE_SERVER_CLIENT_ID`. Following it produced a build that could reach
+neither the API nor sign-in.
 
 Without `key.properties` the release build **fails with an explanation**. That is on purpose.
 Gradle's own behaviour is to fall back to the debug key, which produces something that looks like

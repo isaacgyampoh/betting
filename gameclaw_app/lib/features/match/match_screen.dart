@@ -16,6 +16,7 @@ import '../../ui/components/gc_pitch.dart';
 import '../../ui/components/gc_skeleton.dart';
 import '../../ui/components/gc_states.dart';
 import '../../ui/components/gc_tabs.dart';
+import 'analyst_sheet.dart';
 
 /// One match, in as much depth as the competition actually publishes.
 ///
@@ -251,6 +252,13 @@ class _Detail extends StatelessWidget {
               icon: Icons.hourglass_empty_rounded,
             ),
           ),
+        // The one thing this screen could not do: ask a question about what is on it. The data
+        // behind every tab here - form, statistics, the timeline, head-to-head - is exactly what
+        // an answer needs, and until now it could only be read, never interrogated.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.sm, GcSpace.gutter, 0),
+          child: _AskAboutMatch(detail: detail),
+        ),
         const SizedBox(height: GcSpace.sm),
         if (tabs.length > 1) ...[
           GcTabBar(tabs: [for (final t in tabs) t.$1], index: index, onChanged: onTab),
@@ -1222,6 +1230,44 @@ class _PlayerList extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// The entry to the match analyst.
+///
+/// A row rather than a filled button: it sits directly under the scoreline, and a lime block
+/// there competes with the score for the first thing the eye lands on. The accent is carried by
+/// the icon alone, which is enough to read as the live, current action on the screen.
+class _AskAboutMatch extends StatelessWidget {
+  const _AskAboutMatch({required this.detail});
+
+  final MatchDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final colours = gc(context);
+    return InkWell(
+      onTap: () => showMatchAnalyst(context, detail),
+      borderRadius: BorderRadius.circular(GcRadius.md),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: GcSpace.md, vertical: GcSpace.md),
+        decoration: BoxDecoration(
+          color: colours.surface,
+          border: Border.all(color: colours.border),
+          borderRadius: BorderRadius.circular(GcRadius.md),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.insights_rounded, size: 18, color: colours.accent),
+            const SizedBox(width: GcSpace.sm),
+            Expanded(
+              child: Text('Ask about this match', style: GcType.body.copyWith(fontSize: 14.5)),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 18, color: colours.inkFaint),
+          ],
+        ),
+      ),
     );
   }
 }
