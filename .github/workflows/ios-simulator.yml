@@ -20,7 +20,19 @@ name: iOS simulator build
 
 on:
   # Manual, so a macOS runner is never spent without someone asking for it.
+  #
+  # This does nothing until the file reaches main. GitHub: "This event will only trigger a workflow
+  # run if the workflow file exists on the default branch" - so on a side branch there is no Run
+  # workflow button to press and no ref to dispatch against. Hence the push trigger below.
   workflow_dispatch:
+  # Scaffolding for the first run, and scoped as narrowly as it can be: the one branch this work
+  # happens on, and only the paths that can change an iOS build. Not every branch, and not every
+  # file. Once these commits reach main, workflow_dispatch starts working and this can go.
+  push:
+    branches: [render]
+    paths:
+      - "gameclaw_app/**"
+      - ".github/workflows/ios-simulator.yml"
   pull_request:
     branches: [main]
     # Only when something that can affect the iOS build changed. A backend-only pull request has
