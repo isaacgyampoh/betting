@@ -17,6 +17,34 @@ import { androidRelease } from "@/lib/release";
  * and `NEXT_PUBLIC_APK_URL` covers the tester window in between. Nothing here invents a
  * destination: a store link for an app that has not been published 404s for everyone who taps it.
  */
+/**
+ * The Google Play mark, drawn rather than fetched.
+ *
+ * Deliberately *not* a replica of the official "Get it on Google Play" badge. That badge means
+ * "this is on the store, press here", and Google's brand terms do not allow it to be altered -
+ * so a version reading "Coming soon" would be both a misuse of their asset and a promise the app
+ * cannot keep. This is the product mark used nominatively, next to our own words, which is what
+ * an announcement is allowed to do. It becomes the real badge on the day there is a listing.
+ */
+function GooglePlayMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={className}>
+      <defs>
+        <linearGradient id="gp-spine" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#00C3FF" />
+          <stop offset="1" stopColor="#00E676" />
+        </linearGradient>
+      </defs>
+      {/* The folded spine, blue at the top running to green at the foot. */}
+      <path d="M3 2 L13.8 12 L3 22 Z" fill="url(#gp-spine)" />
+      {/* Upper wing, lower wing, and the tip where the two meet. */}
+      <path d="M3 2 L17.1 8.7 L13.8 12 Z" fill="#FFCE00" />
+      <path d="M3 22 L13.8 12 L17.1 15.3 Z" fill="#FF3A44" />
+      <path d="M17.1 8.7 L20.6 12 L17.1 15.3 L13.8 12 Z" fill="#FF8E00" />
+    </svg>
+  );
+}
+
 export function GetTheApp({ align = "start" }: { align?: "start" | "center" }) {
   const release = androidRelease();
   const centred = align === "center";
@@ -41,10 +69,16 @@ export function GetTheApp({ align = "start" }: { align?: "start" | "center" }) {
         )}
 
         {release.kind === "unreleased" && (
-          /* Deliberately not a link or a button. There is nowhere honest for it to go yet. */
-          <p className="inline-flex h-12 items-center gap-2.5 rounded-full border border-primary/35 bg-primary/10 px-5 text-sm font-medium text-foreground">
-            <span className="size-2 rounded-full bg-primary motion-safe:animate-pulse" aria-hidden />
-            Coming to Google Play
+          /* Deliberately not a link or a button: there is nowhere honest for it to go yet, and a
+             control that cannot be pressed spends the visitor's one click on nothing. */
+          <p className="inline-flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 sm:px-5">
+            <GooglePlayMark className="size-7 shrink-0 sm:size-8" />
+            <span className="flex flex-col text-left">
+              <span className="text-[0.68rem] tracking-[0.14em] text-muted-foreground uppercase">
+                Coming soon on
+              </span>
+              <span className="text-base leading-tight font-semibold sm:text-lg">Google Play</span>
+            </span>
           </p>
         )}
       </div>
