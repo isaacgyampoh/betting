@@ -1,0 +1,190 @@
+# Compiles GameClaw for the iOS Simulator on a GitHub-hosted Mac.
+#
+# This exists because no Mac here can do it. The development machine has Command Line Tools only,
+# which carry the macOS SDKs and no iOS SDK, so `flutter build ios` cannot run locally at all and
+# the iOS code has never once been compiled. Installing Xcode is blocked on an Apple ID sign-in
+# that is not mine to complete. A hosted runner is the way around that, not a shortcut past it.
+#
+# It is a compile, and deliberately nothing more. No signing identity, no provisioning profile and
+# no Apple Developer membership: a simulator build needs none of them, which is the point - whether
+# the code builds is worth knowing separately from whether it can be shipped, and only the first
+# question can be answered today.
+#
+# What a green run does NOT prove, because these are runtime facts a compiler cannot see:
+#   * Push notifications work. There is no GoogleService-Info.plist in the repo yet, so
+#     FirebaseApp.configure() will fail at launch. firebase_core still compiles without it.
+#   * Google sign-in works. No iOS OAuth client exists yet, so GC_GOOGLE_IOS_CLIENT_ID is empty.
+#   * Sharing a slip into the app works. The share extension has sources but no Xcode target.
+# See docs/ios-setup.md for the state of each.
+name: iOS simulator build
+
+on:
+  # Manual, so a macOS runner is never spent without someone asking for it.
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    # Only when something that can affect the iOS build changed. A backend-only pull request has
+    # no business starting a Mac.
+    paths:
+      - "gameclaw_app/**"
+      - ".github/workflows/ios-simulator.yml"
+
+# Read-only. This compiles and uploads an artifact; it writes nothing back to the repository and
+# needs no deployment credentials.
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-simulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # macos-26 rather than macos-15, which still defaults to Xcode 16.4. This is Flutter 3.47 with
+    # Firebase 17 and google_sign_in 7; macos-26 defaults to Xcode 26.6.
+    #
+    # It is also arm64, like every current Mac, so it is the configuration that exposes the ML Kit
+    # simulator-slice problem the Podfile now works around rather than hiding it behind Rosetta.
+    runs-on: macos-26
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: gameclaw_app
+
+    steps:
+      - name: Check out
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Flutter
+        # subosito/flutter-action v2.23.0
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          # Pinned to a version, not a channel: the development machine reports
+          # "channel [user-branch]", which no channel on a runner reproduces.
+          flutter-version: 3.47.7
+          cache: true
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          echo "--- xcode ---"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i simulator || true
+          echo "--- flutter ---"
+          flutter --version
+          echo "--- cocoapods ---"
+          pod --version
+
+      - name: Resolve Dart dependencies
+        run: flutter pub get
+
+      # Checks the native configuration this repository claims to have. Each of these has been
+      # wrong at some point, and a build that is green for the wrong reason is worse than a red
+      # one, so they are assertions rather than comments.
+      - name: Verify iOS configuration
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER = win.gameclaw.app;' ios/Runner.xcodeproj/project.pbxproj \
+            || fail "bundle identifier is not win.gameclaw.app"
+          if grep -q 'gameclawApp' ios/Runner.xcodeproj/project.pbxproj; then
+            fail "the template bundle identifier win.gameclaw.gameclawApp is still present"
+          fi
+
+          # google_mlkit_commons and google_mlkit_text_recognition both declare 15.5, and
+          # CocoaPods refuses a target lower than a pod requires.
+          grep -q 'IPHONEOS_DEPLOYMENT_TARGET = 15.5;' ios/Runner.xcodeproj/project.pbxproj \
+            || fail "deployment target is not 15.5"
+          grep -q "platform :ios, '15.5'" ios/Podfile \
+            || fail "Podfile platform is not pinned to 15.5"
+
+          # The alert sound is loaded from the app bundle by name, so being in the repository is
+          # not enough - it has to be in the Resources build phase.
+          test -f ios/Runner/gameclaw_alert.caf || fail "gameclaw_alert.caf is missing"
+          grep -q 'gameclaw_alert.caf in Resources' ios/Runner.xcodeproj/project.pbxproj \
+            || fail "gameclaw_alert.caf is not in the Runner Resources build phase"
+
+          plutil -lint ios/Runner/Info.plist
+          icons=$(find ios/Runner/Assets.xcassets/AppIcon.appiconset -name '*.png' | wc -l | tr -d ' ')
+          test "$icons" = "15" || fail "expected 15 app icons, found $icons"
+
+          echo "iOS configuration checks passed."
+
+      # Says plainly what is missing, so the artifact is never mistaken for a complete app. These
+      # are notices, not failures: the build is expected to succeed without them.
+      - name: Report what is not wired up yet
+        if: always()
+        run: |
+          test -f ios/Runner/GoogleService-Info.plist \
+            || echo "::notice::No GoogleService-Info.plist. The iOS app is not registered in the gameclaw-push-notifications Firebase project, so Firebase will fail at launch and push notifications will not arrive."
+          grep -q 'Share Extension.*PBXNativeTarget' ios/Runner.xcodeproj/project.pbxproj \
+            || echo "::notice::The share extension has sources but no native Xcode target, so the built app cannot receive shared text. Creating the target needs Xcode."
+
+      - name: Install pods
+        run: |
+          # No Podfile.lock is committed: nothing has ever resolved these pods. The lock this
+          # produces is uploaded below so it can be committed and the build made reproducible.
+          pod install --project-directory=ios
+
+      - name: Build for the simulator
+        # `--simulator` builds debug against the simulator SDK. `--no-codesign` is deliberately
+        # absent - Flutter documents it as device-only, and a simulator build signs nothing anyway.
+        #
+        # The defines mirror build-release.sh, which stays the source of truth. All of these are
+        # public values, readable out of any installed APK, and none is a secret; no secret is
+        # needed to find out whether the code compiles. GC_GOOGLE_IOS_CLIENT_ID is empty on
+        # purpose: the iOS OAuth client does not exist yet, and when it is created it belongs in
+        # game-claw (400646694915), not in the Firebase project.
+        run: |
+          flutter build ios --simulator \
+            --dart-define=GC_API_BASE=https://gameclaw-api.onrender.com/api/v1 \
+            --dart-define=GC_AUTH_BASE=https://gameclaw-api.onrender.com/api/v1 \
+            --dart-define=GC_GOOGLE_SERVER_CLIENT_ID=400646694915-b4oh5athe842emcnga4913s1oq1igjh1.apps.googleusercontent.com \
+            --dart-define=GC_GOOGLE_IOS_CLIENT_ID=
+
+      - name: Confirm the binary is a simulator build for this architecture
+        run: |
+          set -euo pipefail
+          app=build/ios/iphonesimulator/Runner.app
+          test -d "$app" || { echo "::error::$app was not produced"; exit 1; }
+          file "$app/Runner"
+          lipo -archs "$app/Runner"
+          # The ML Kit relabel in the Podfile is what makes arm64 possible here. If it silently
+          # stopped working the build would still pass and produce something no current simulator
+          # can run, which is the failure this catches.
+          lipo -archs "$app/Runner" | grep -q arm64 \
+            || { echo "::error::Runner has no arm64 slice, so no Apple Silicon simulator can run it"; exit 1; }
+
+      # These run after the build on purpose. They are quick and they currently pass, but gating
+      # the build behind them would mean a stray lint error hides the one answer this workflow
+      # exists to produce.
+      - name: Analyze
+        if: always()
+        run: flutter analyze
+
+      - name: Flutter tests
+        if: always()
+        run: flutter test
+
+      - name: Simulator app
+        # actions/upload-artifact v7.0.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: Runner-iphonesimulator
+          path: gameclaw_app/build/ios/iphonesimulator/Runner.app
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Podfile.lock
+        # Uploaded even on failure: when the pods are what broke, the resolved lock is the first
+        # thing worth reading.
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: Podfile.lock
+          path: gameclaw_app/ios/Podfile.lock
+          retention-days: 7
+          if-no-files-found: warn

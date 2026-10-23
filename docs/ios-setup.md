@@ -69,6 +69,59 @@ Ruled out as causes, from Apple's own public lookup API rather than from guessin
 The App Store cache has stayed at **352 KB** and `storedownloadd` at **0.0% CPU** throughout, so
 nothing was ever part-downloaded and nothing is wedged. It is one click plus an Apple ID.
 
+## A fourth route: borrowing a Mac that already has Xcode
+
+The three routes above all try to put Xcode on *this* machine, and all three end at the same Apple
+ID prompt. Compiling does not actually require that, though — it requires a Mac with an iOS SDK,
+and GitHub rents those by the minute. `.github/workflows/ios-simulator.yml` uses one.
+
+It builds for the **simulator**, which is the whole reason it can work today: a simulator build is
+unsigned, so it needs no signing identity, no provisioning profile and no Apple Developer
+membership. That separates two questions that have been stuck together — *does the iOS code
+compile* and *can it be shipped* — and answers the first one now.
+
+| | |
+|---|---|
+| Runner | `macos-26`, which defaults to **Xcode 26.6** (`macos-15` is still on 16.4) |
+| Cost | **none.** This repository is public, and GitHub does not meter runners on public repositories |
+| Triggers | `workflow_dispatch`, and pull requests to `main` that touch `gameclaw_app/**` |
+| Produces | `Runner.app` and the first-ever `Podfile.lock`, both as artifacts, kept 7 days |
+
+It is manual and path-filtered on purpose. A macOS runner is ten times the cost of a Linux one on
+a private repository, and this one should never start because a backend file changed.
+
+### The one real obstacle it hit, and the fix
+
+Google's `GoogleMLKit` pods ship an `arm64-iphoneos` slice and an `x86_64-iphonesimulator` slice,
+and nothing else — they set `EXCLUDED_ARCHS[sdk=iphonesimulator*] = arm64` to say so outright. Up
+to iOS 18 that was survivable, because the iOS Simulator ran under Rosetta on Apple Silicon. From
+iOS 26 it does not, so an arm64 Mac building for an arm64 simulator finds no slice at all. Google
+has had the bug open since 2021: <https://issuetracker.google.com/issues/178965151>.
+
+That affects every current Mac, not just the runner, so working around it was not a CI concession.
+`google_mlkit_commons` ships an opt-in Podfile helper for exactly this — `ios/scripts/apple_silicon_simulator.rb`,
+exposing `mlkit_apple_silicon_simulator_patch(installer)` — which relabels the arm64 slice's
+`LC_BUILD_VERSION` platform per build. `ios/Podfile` now calls it from `post_install`. One `pod install` then
+serves both the simulator and a real device. The build asserts the result with `lipo -archs`,
+because if the relabel ever stops working the build would still pass and produce something no
+current simulator can run.
+
+One deviation from the plugin's README: it says to `require` the helper at the top of the Podfile.
+That path runs through `ios/.symlinks/plugins/`, which `flutter_install_all_ios_pods` creates while
+the Podfile is still being parsed — so at the top it does not exist yet on a first install, and a
+first install is the only kind this project has ever had. The `require` sits inside `post_install`
+instead.
+
+### What a green run does not prove
+
+The workflow emits these as notices rather than letting a passing build imply more than it should:
+
+| Compiles | But at runtime |
+|---|---|
+| `firebase_core`, `firebase_messaging` | there is no `GoogleService-Info.plist`, so Firebase fails at launch and no push arrives |
+| `google_sign_in` | no iOS OAuth client exists, so `GC_GOOGLE_IOS_CLIENT_ID` is empty |
+| `receive_sharing_intent` | the share extension has sources but no Xcode target, so nothing can be shared in |
+
 ## What cannot be done from this machine
 
 Nothing below is a judgement call about the product; each is a tool, an account or a credential
@@ -76,15 +129,17 @@ that is not present.
 
 | Blocker | What it costs | Needed for |
 |---|---|---|
-| **Xcode** | free, ~17 GB from the App Store, then `sudo xcode-select --switch` and `sudo xcodebuild -runFirstLaunch` | compiling anything for iOS |
-| **CocoaPods** | free, needs `sudo gem install cocoapods` | installing the plugin pods |
+| **Xcode** | free, ~17 GB from the App Store, then `sudo xcode-select --switch` and `sudo xcodebuild -runFirstLaunch` | compiling here, running a simulator, and creating the share-extension target. Compiling *somewhere* no longer needs it — see the cloud build above |
+| **CocoaPods** | free, needs `sudo gem install cocoapods` | installing the plugin pods here; the runner has it preinstalled |
 | **Apple Developer Program** | **$99/year** | push notifications, a device build lasting more than 7 days, TestFlight, the App Store |
 | **iOS OAuth client** | free, in Google Cloud — **in `game-claw`, not the Firebase project** | Google Sign-In; the reversed client id becomes a `CFBundleURLTypes` entry |
 | **`GoogleService-Info.plist`** | free, in Firebase (`gameclaw-push-notifications`) | Firebase on iOS |
 | **APNs auth key (.p8)** | needs the paid account | FCM delivering to iPhones at all |
 
 `flutter doctor` currently reports Xcode incomplete and CocoaPods missing, so `flutter build ios`
-and the simulator are both unavailable. No iOS code here has been compiled, let alone run.
+and the simulator are both unavailable **on this machine**. Nothing below has been run on a device
+or a simulator; the cloud build above is the only thing that can compile it, and compiling is not
+running.
 
 ## Still to do once the toolchain exists
 

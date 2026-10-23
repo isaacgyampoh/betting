@@ -44,4 +44,35 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
   end
+
+  # Lets the app build for an Apple Silicon simulator, which is the only kind GitHub's macOS
+  # runners have and the only kind a modern Mac has.
+  #
+  # Google's GoogleMLKit pods ship arm64-iphoneos and x86_64-iphonesimulator slices and nothing
+  # else, and they set EXCLUDED_ARCHS[sdk=iphonesimulator*] = arm64 to say so. Up to iOS 18 that
+  # was survivable because the simulator ran under Rosetta; from iOS 26 it does not, so an arm64
+  # host building for an arm64 simulator finds no slice and the build fails. Google has had the
+  # bug open since 2021: https://issuetracker.google.com/issues/178965151
+  #
+  # google_mlkit_commons ships this helper for exactly that, and it is opt-in, so nothing happens
+  # until these lines exist. It relabels the arm64 slice's LC_BUILD_VERSION platform per build to
+  # match whatever is being built, which means one `pod install` serves both the simulator and a
+  # real device - no revert when switching.
+  #
+  # Required here rather than at the top of the file, where the plugin's README puts it: the path
+  # runs through ios/.symlinks/plugins, which `flutter_install_all_ios_pods` creates while the
+  # Podfile is being parsed. At the top it does not exist yet on a first install, and a first
+  # install is the only kind this project has ever had.
+  mlkit_sim_patch = File.expand_path(
+    '.symlinks/plugins/google_mlkit_commons/ios/scripts/apple_silicon_simulator',
+    __dir__,
+  )
+  if File.exist?("#{mlkit_sim_patch}.rb")
+    require mlkit_sim_patch
+    mlkit_apple_silicon_simulator_patch(installer)
+  else
+    # Not fatal: a device build does not need the relabel. Staying quiet here would turn a
+    # missing helper into a link error with no stated cause.
+    Pod::UI.warn "google_mlkit_commons Apple Silicon simulator helper not found at #{mlkit_sim_patch}.rb - simulator builds on arm64 will fail to link ML Kit."
+  end
 end
