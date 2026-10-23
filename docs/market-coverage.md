@@ -6,33 +6,40 @@ from documentation, and nothing was booked.
 
 ## The headline
 
-**Football.com is the only source of market data we have.** Across six of today's fixtures from
-the five biggest European leagues, SportyBet returned **zero** — not an error, an empty result.
-Football.com returned roughly **3,500–3,700 offers per fixture** for four of them.
+**Both live bookmakers carry deep markets, and they carry nearly the same ones.** SportyBet and
+Football.com both run on the Hopegaming platform, which shows: roughly **3,500-4,300 offers per
+fixture** each, with near-identical market sets.
 
 | Fixture | SportyBet | Football.com |
 |---|---|---|
-| Ipswich v Nottingham Forest | not listed | 3,674 offers |
-| Alaves v Malaga | not listed | 3,537 offers |
-| Torino v Monza | not listed | 3,710 offers |
-| VfB Stuttgart v Mönchengladbach | not listed | 3,554 offers |
-| Stade Brestois 29 v Nice | not listed | **not listed** |
+| Ipswich v Nottingham Forest | 4,275 offers | 3,681 offers |
+| Alaves v Malaga | 3,572 offers | 3,534 offers |
+| Torino v Monza | 3,721 offers | 3,710 offers |
 
-The other seven adapters have no event data at all, which matches `/v1/bookmakers`.
+The other seven adapters return no event data, which matches `/v1/bookmakers`.
 
-### Two findings that need acting on
+### A correction, recorded because it nearly cost a day
 
-1. **SportyBet's `searchEvent` found none of six top-five-league fixtures.** It returns an empty
-   list rather than throwing, so nothing reports it as a failure. SportyBet is the bookmaker most
-   Ghanaian users hold an account with, and it is one of only two we can book at - if this is real
-   rather than a name-matching problem, converting a European slip *to* SportyBet cannot work.
-   This needs its own investigation before any market engine is built on it.
-2. **Football.com missed one fixture of five.** Coverage is deep but not total, so any feature
-   built on it must handle "this fixture has no prices" as an ordinary outcome, not an error.
+An earlier run of this probe reported that **SportyBet carried none of these fixtures**, and that
+conversion to SportyBet might therefore be broken for European football. That was false. The probe
+set `SPORTYBET_MODE ??= "live"`, and `.env.local` already sets it to `mock` for local development,
+so `??=` left the mock adapter in place and the probe measured a fixture generator rather than a
+bookmaker. The probe now forces the mode instead of defaulting it.
 
-## What Football.com returns for one fixture
+The lesson is in the shape of the bug, not the typo: a mock that returns plausible-looking empty
+results is indistinguishable from a live integration that is failing, and the thing being measured
+has to be pinned rather than assumed. Production sets `SPORTYBET_MODE: live` in both `render.yaml`
+and `wrangler.jsonc`; it was only ever local configuration.
 
-Ipswich v Nottingham Forest, 3,674 offers: 189 across markets our `Market` model already
+### What does need handling
+
+Coverage is deep but not total - an earlier run found neither bookmaker listing Stade Brestois 29
+v Nice. Any feature built on this must treat "this fixture has no prices" as an ordinary outcome,
+not an error.
+
+## What one fixture looks like
+
+Ipswich v Nottingham Forest on Football.com, 3,674 offers (SportyBet's set is near-identical): 189 across markets our `Market` model already
 understands, and **3,485 across 278 distinct market types it does not**.
 
 ### Already modelled
@@ -65,8 +72,8 @@ would have to be written against these names.
 ## What this means for a market engine
 
 - It can be built. Corners, cards, halves and player markets are real, priced and plentiful.
-- It rests on **one** bookmaker. That is a single point of failure and should be said out loud in
-  the product rather than discovered by a user whose fixture Football.com does not carry.
+- It rests on **two** bookmakers that share a platform, so their market vocabulary is one
+  vocabulary with one set of failure modes - redundancy in name more than in substance.
 - It cannot use our `Market` model for any of it. Either the model grows to cover these, or the
   engine reads raw names - and raw names are a bookmaker's private vocabulary that can change
   without notice, so whatever reads them has to fail closed.

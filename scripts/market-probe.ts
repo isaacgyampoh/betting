@@ -16,8 +16,14 @@
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
-process.env.SPORTYBET_MODE ??= "live";
-process.env.FOOTBALLCOM_MODE ??= "live";
+
+// Forced, not defaulted. `.env.local` sets SPORTYBET_MODE=mock for local development, so `??=`
+// silently left the mock adapter in place and the probe measured a fixture generator instead of
+// a bookmaker - reporting that SportyBet carried none of today's Premier League games, which was
+// false and would have sent someone hunting a production bug that does not exist.
+for (const k of ["SPORTYBET_MODE", "FOOTBALLCOM_MODE", "MSPORT_MODE", "BETWAY_MODE"]) {
+  process.env[k] = "live";
+}
 
 const API = process.env.GC_API_BASE ?? "https://gameclaw-api.onrender.com/api/v1";
 
