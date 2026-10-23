@@ -9,9 +9,26 @@ decision with a known rollback rather than a sequence to improvise.
 | | |
 |---|---|
 | Service | `srv-db9nfr4s728c73cbbjvg` (Render, Frankfurt) |
-| Live deploy | commit `073be1f7`, 17 Oct 2026 21:38 UTC |
-| `autoDeploy` | **off** — pushing to `render` changes nothing by itself |
-| Branch ahead by | the catalogue, the share feature, the billing guard, the R8 fix |
+| Live deploy | read it, never assume: `curl -s https://gameclaw-api.onrender.com/api/v1/health \| python3 -c "import json,sys;print(json.load(sys.stdin)['data']['commit'])"` |
+| `autoDeploy` | **off** — pushing changes nothing by itself, on either branch |
+| Branches | `main` and `render` are kept identical; `render` is fast-forwarded into `main` and both are pushed |
+
+## How to actually deploy
+
+Pushing is not deploying. The commit sits on GitHub until one of these happens:
+
+- **Dashboard** — the service → **Manual Deploy** → *Deploy latest commit*.
+- **API** — `POST https://api.render.com/v1/services/srv-db9nfr4s728c73cbbjvg/deploys` with a
+  valid `Authorization: Bearer` key.
+
+Then poll until the commit changes, rather than assuming a build takes a known time:
+
+```bash
+curl -s https://gameclaw-api.onrender.com/api/v1/health \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['data']['commit'])"
+```
+
+A commit that has not changed after ten minutes is not a slow build; nothing was triggered.
 
 ## What a deploy would change
 

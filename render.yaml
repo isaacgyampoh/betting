@@ -32,7 +32,17 @@ services:
     # product by two orders of magnitude.
     plan: starter
     region: frankfurt
+    # The live service tracks this branch. `main` and `render` are kept identical (render is
+    # fast-forwarded into main and both are pushed together), so either value is correct today -
+    # but the deployed commit has historically been one that existed only on `render`, so do not
+    # assume from this line alone which branch a given deploy came from. Check /api/v1/health.
     branch: main
+
+    # **Deploys are manual.** Pushing changes nothing: the commit sits on GitHub until somebody
+    # triggers a deploy from the dashboard or the API. This is declared rather than left to the
+    # default because its absence reads as "autoDeploy is on", and a push that silently does
+    # nothing looks exactly like a deploy that failed. See docs/deployment-and-rollback.md.
+    autoDeploy: false
     # db:generate explicitly, not as a side effect of postinstall. With a warm pnpm store the
     # install is a no-op and its scripts are skipped, so lib/generated/prisma never appears and
     # the build dies on module-not-found - which only happens on the second deploy onward, when

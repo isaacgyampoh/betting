@@ -163,6 +163,22 @@ export function lockContext(lock: MatchLock, now: Date = new Date()): string {
     "",
     statusGuidance(lock),
     "",
+    // The failure this targets, observed on a real device against the old build: asked "what are
+    // the main risks either way?" on Brest v Nice, the assistant replied "I need to know which
+    // match you're asking about"; asked "what changed after half-time?" it replied "I need to
+    // know which slip you're asking about". It already had the id in both cases. The general
+    // instructions are written for the slip assistant, where "the user means the most recent
+    // slip" is the right default; inside a match conversation it is the wrong one, and it turns
+    // a direct question into an interrogation.
+    "Never ask the user which match they mean. You already know: it is the fixture above, and it",
+    "does not change. Never ask for a booking code or a slip id in order to answer a question",
+    "about this match - form, statistics, risks, half-time, markets and head-to-head are all",
+    "questions about the fixture above, never about a slip. The rule in your general instructions",
+    "that the user means their most recent slip does NOT apply in this conversation.",
+    "",
+    "Answer the question that was asked, directly, using the data you have. If a section needed to",
+    "answer it is absent, say which one and answer with what remains.",
+    "",
     // The assistant has no tool that changes the app, so it must never report having used one.
     // "Added to your favourites" with nothing added is the single most corrosive thing a chat can
     // say: it is confidently wrong about the user's own data, and they find out days later.

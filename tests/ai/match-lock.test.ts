@@ -178,3 +178,27 @@ describe("app actions the assistant cannot perform", () => {
     expect(lockContext(lock())).toContain("bell at the top of this sheet");
   });
 });
+
+// The two failures seen on a real device against the pre-lock build. Both had the match id and
+// asked for it anyway, which is the difference between an analyst and a form.
+describe("asking the user what it already knows", () => {
+  it("is forbidden for the match", () => {
+    expect(lockContext(lock())).toContain("Never ask the user which match they mean");
+  });
+
+  it("is forbidden for a booking code", () => {
+    const text = lockContext(lock());
+    expect(text).toContain("Never ask for a booking code or a slip id");
+    expect(text).toContain("never about a slip");
+  });
+
+  it("switches off the slip-first default from the general instructions", () => {
+    expect(lockContext(lock())).toContain("does NOT apply in this conversation");
+  });
+
+  it("names half-time and risks as match questions, since both were refused in the field", () => {
+    const text = lockContext(lock());
+    expect(text).toContain("half-time");
+    expect(text).toContain("risks");
+  });
+});
