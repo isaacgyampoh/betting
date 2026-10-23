@@ -182,6 +182,25 @@ export async function sendToUser(userId: string, message: PushMessage): Promise<
                 defaultVibrateTimings: true,
               },
             },
+            /**
+             * iOS takes none of the above.
+             *
+             * Everything in `android` is ignored on an iPhone, so without this block a
+             * backgrounded notification arrives with the system default sound while the same
+             * alert in the foreground plays ours - the app would sound different depending on
+             * whether it happened to be open, which reads as a bug rather than a setting.
+             *
+             * The file is `ios/Runner/gameclaw_alert.caf`, bundled as a resource of the Runner
+             * target. APNs names it with its extension, unlike Android's resource name, and a
+             * name that is not in the bundle plays silence rather than the default.
+             *
+             * `apns-collapse-id` is the APNs equivalent of Android's collapseKey: a goal
+             * confirmed twice replaces its own notification instead of stacking.
+             */
+            apns: {
+              headers: message.collapseKey ? { "apns-collapse-id": message.collapseKey } : undefined,
+              payload: { aps: { sound: "gameclaw_alert.caf" } },
+            },
           },
         }),
       },

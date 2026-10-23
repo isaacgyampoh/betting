@@ -153,15 +153,20 @@ class PushService {
           // device below that reads it from here, and they must not differ.
           sound: const RawResourceAndroidNotificationSound('gameclaw_alert'),
         ),
-        // iOS plays its default alert sound. The custom one is deliberately not named here: on
-        // iOS a notification sound is a file inside the app bundle, `gameclaw_alert` is an
-        // Android raw resource, and naming a file that is not in the bundle makes iOS fall back
-        // to silence rather than to the default. Silence reads as a broken alert. Naming it here
-        // is the last step of bundling a .caf, not a substitute for it.
+        // The same alert, converted from the Android asset and bundled as a resource of the
+        // Runner target - iOS reads a notification sound from the app bundle, not from Flutter's
+        // assets, so `ios/Runner/gameclaw_alert.caf` is listed in the Xcode project rather than
+        // in pubspec.yaml. Naming a file that is not bundled makes iOS fall silent rather than
+        // fall back to the default, which reads as a broken alert, so the name and the build
+        // phase have to move together.
+        //
+        // This covers the notification drawn here, in the foreground. One arriving while the app
+        // is backgrounded is drawn by iOS from the APNs payload, and takes its sound from there.
         iOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          sound: 'gameclaw_alert.caf',
         ),
       ),
       payload: message.data['route'] as String?,

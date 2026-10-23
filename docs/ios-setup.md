@@ -14,6 +14,9 @@ the things that cannot be done from here.
 | `Info.plist` | display name `GameClaw`, photo-library usage string, `ITSAppUsesNonExemptEncryption=false` |
 | Notifications | `lib/data/push.dart` is platform-aware: Darwin init settings, Darwin notification details, permission prompt still deferred |
 | App icon | all 15 sizes rendered from the same mark the Play listing uses, by `scripts/ios-appicon.swift` |
+| Alert sound | `ios/Runner/gameclaw_alert.caf`, converted from the Android `.wav`, listed in the Xcode Resources phase |
+| APNs payload | `lib/services/fcm.ts` now sends an `apns` block; without it iOS used the default sound |
+| `Podfile` | written from Flutter's own template, platform pinned to 15.5 |
 | `.metadata` | lists **both** platforms; `flutter create` had replaced `android` with `ios` |
 
 `flutter analyze` is clean and all 336 Flutter tests pass with the iOS project in the tree.
@@ -67,10 +70,21 @@ and the simulator are both unavailable. No iOS code here has been compiled, let 
 2. **Share extension.** `receive_sharing_intent` needs a second Xcode target plus an App Group for
    slips shared *into* GameClaw from a bookmaker's app. That is the Android feature with the
    largest iOS-side gap and it cannot be scaffolded from the command line.
-3. **The alert sound.** `gameclaw_alert` is an Android raw resource. iOS needs a `.caf` in the app
-   bundle, and `DarwinNotificationDetails` deliberately does **not** name one yet: naming a file
-   that is not bundled makes iOS fall back to silence rather than to the default sound, and a
-   silent alert reads as a broken one.
+3. ~~The alert sound.~~ **Done.** `afconvert` produced `ios/Runner/gameclaw_alert.caf` from the
+   Android `.wav` (48 kHz mono Int16, 0.67 s - well inside the 30 s iOS allows), and it is listed
+   in the Runner target's Resources build phase so it is copied into the bundle. iOS reads a
+   notification sound from the app bundle, not from Flutter's assets, which is why it is in the
+   Xcode project rather than `pubspec.yaml`.
+
+   The server needed the other half: `lib/services/fcm.ts` sent an `android` block and nothing
+   else, and iOS ignores all of it. A backgrounded alert would have used the system default while
+   the same alert in the foreground played ours - the app sounding different depending on whether
+   it happened to be open, which reads as a bug rather than a setting. It now sends an `apns`
+   block naming `gameclaw_alert.caf` (with the extension, unlike Android's resource name) and an
+   `apns-collapse-id` so a goal confirmed twice replaces its own notification.
+
+   **Not verified.** Remote push on iOS needs APNs credentials this account does not have. Local
+   notification code is in place; nothing has been delivered to an iPhone.
 4. **Google Sign-In URL scheme** in `Info.plist`, once the iOS client exists.
 5. **Launch screen.** The template's placeholder is still in place. The app icon is done:
    `scripts/ios-appicon.swift` renders all 15 sizes from the same geometry as the advertisement
@@ -80,6 +94,34 @@ and the simulator are both unavailable. No iOS code here has been compiled, let 
    renders the mark mirrored and the icon has to be the same drawing as `play-assets/icon-512.png`,
    not a reflection of it.
 6. Decide on iPad. The app is phone-shaped; the template enables iPad by default.
+
+## Apple's rules are not Google's
+
+Read from the current App Review Guidelines, quoted rather than recalled.
+
+**5.3.4** — "Apps that offer real money gaming (such as sports betting, poker, casino games, horse
+racing) or lotteries must have necessary licensing and permissions in the locations where the app
+is used, must be geo-restricted to those locations, and must be free on the App Store. Illegal
+gambling aids, including card counters, are not permitted on the App Store."
+
+The trigger is **"offer real money gaming"**, which is narrower than Google's "enable or facilitate
+users' ability to wager". GameClaw offers no gaming, takes no stake and holds no money, so on its
+face 5.3.4 is not engaged the way the Play prohibition is. "Illegal gambling aids" is the phrase to
+watch, and the aid here is to a slip at a licensed bookmaker, not to an illegal one.
+
+**5.1.1(ix)** — "Apps that provide services in highly regulated fields (such as banking and
+financial services, healthcare, gambling, legal cannabis use, air travel and crypto exchanges) or
+that require sensitive user information should be submitted by a legal entity that provides the
+services, and not by an individual developer."
+
+**This is the harder one, and it is a different problem from Play's.** It is about *who submits*,
+not what the app does. An individual developer account may be refused for a gambling-adjacent app
+whatever the app's functionality, and no change to the product fixes that - it needs a company and
+an Apple Developer Program enrolment as an organisation, which requires a D-U-N-S number.
+
+So the two stores are uncertain for unrelated reasons: Play over whether conversion is
+"facilitating", Apple over whether an individual may publish in this field at all. Neither has been
+put to its review team. Nothing here says either will approve.
 
 ## What the website says
 
