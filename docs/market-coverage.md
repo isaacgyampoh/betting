@@ -31,11 +31,38 @@ results is indistinguishable from a live integration that is failing, and the th
 has to be pinned rather than assumed. Production sets `SPORTYBET_MODE: live` in both `render.yaml`
 and `wrangler.jsonc`; it was only ever local configuration.
 
-### What does need handling
+### The real gap: names, not coverage
 
-Coverage is deep but not total - an earlier run found neither bookmaker listing Stade Brestois 29
-v Nice. Any feature built on this must treat "this fixture has no prices" as an ordinary outcome,
-not an error.
+Of six fixtures measured in live mode, both bookmakers listed three. The other two reported "not
+listed at SportyBet" - and that was **also** wrong, for a different reason.
+
+SportyBet carries them. In the same session Claw quoted Stuttgart at 1.39 and Brest v Nice both
+teams to score at 1.61, both from SportyBet. The bookmaker was never the problem; the name
+comparison was:
+
+| Stats provider | SportyBet | Similarity | Threshold 0.8 |
+|---|---|---|---|
+| Ipswich | Ipswich Town | 0.880 | pass |
+| VfB Stuttgart | Stuttgart | 1.000 | pass |
+| Borussia Mönchengladbach | Borussia M´gladbach | **0.417** | fail |
+| Stade Brestois 29 | Brest | **0.617** | fail |
+
+`bestMatch` scores a fixture as the *minimum* of the two sides, so one abbreviated club name loses
+the whole game.
+
+This only affects one direction. Claw starts from a bookmaker's own fixture list and never
+compares names across sources, which is why it priced those fixtures happily. The match analyst
+starts from the fixture the user tapped - an API-Football record - and has to find that same game
+at a bookmaker, so it meets this on every fixture whose names differ.
+
+Pinned by `tests/matching/cross-source-names.test.ts`. The threshold is deliberately **not**
+lowered to make them pass: the same comparison decides which fixture a slip converts to, and a
+false match there books a bet on the wrong game. Closing this needs aliases or a matcher that
+understands abbreviation, with its own evidence.
+
+Until it is closed, `get_match_markets` under-reports: it will say a bookmaker does not list a
+fixture that it does list. That is the safe direction to fail in - it withholds a price rather
+than quoting the wrong one - but it is not the truth, and the product should not pretend it is.
 
 ## What one fixture looks like
 
