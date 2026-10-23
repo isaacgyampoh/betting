@@ -95,6 +95,30 @@ and the simulator are both unavailable. No iOS code here has been compiled, let 
    not a reflection of it.
 6. Decide on iPad. The app is phone-shaped; the template enables iPad by default.
 
+## Audit of what else assumes Android
+
+Checked rather than assumed, because "it is Flutter, it will just work" is how a platform launch
+goes wrong quietly.
+
+**No Supabase at runtime.** `pubspec.yaml` has no Supabase package; the only trace is a class
+still *named* `SupabaseConfig`, which now holds either Supabase or GameClaw configuration.
+`build-release.sh` passes `GC_AUTH_BASE`, so `isGameClaw` is true and the shipped build talks to
+GameClaw's own API. The deleted project is not reachable from a correct build.
+
+One real defect found there and fixed: the sign-in screen's "no sign-in configured" note said the
+build was missing *"the Supabase flags"*. That stopped being true when auth moved, and it is a
+message that sends whoever sees it hunting for credentials to a project that no longer exists.
+Whoever meets it is building by hand rather than through the script - most likely on the first
+`flutter run` from Xcode - so it now names `GC_AUTH_BASE` and points at the script.
+
+**No deep links to port.** The Android manifest carries exactly two intent filters:
+`MAIN`/`LAUNCHER`, and `ACTION_SEND` with `text/plain`. There is no custom URL scheme and no app
+link, so there is no `apple-app-site-association` to host and no associated-domains entitlement to
+add. The whole of the iOS sharing gap is the share extension.
+
+**No `Platform.is` branches anywhere in `lib/`.** The only code that assumed Android was the
+notification setup, which is handled.
+
 ## Apple's rules are not Google's
 
 Read from the current App Review Guidelines, quoted rather than recalled.

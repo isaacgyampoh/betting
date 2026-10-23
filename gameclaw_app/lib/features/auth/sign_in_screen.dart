@@ -156,9 +156,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   ),
                   if (!configured) ...[
                     const SizedBox(height: GcSpace.lg),
+                    // Names the flags that are actually missing. It used to say "the Supabase
+                    // flags", which stopped being true when sign-in moved to GameClaw's own API
+                    // and sends anyone who sees it looking for credentials to a project that no
+                    // longer exists. Whoever meets this message is building by hand rather than
+                    // through build-release.sh - likely the first iOS build from Xcode - and the
+                    // one thing it owes them is the right name.
                     const GcNote(
-                      'This build has no sign-in configured. It was built without the Supabase '
-                      'flags, so the form below cannot work.',
+                      'This build has no sign-in configured. It was built without '
+                      'GC_AUTH_BASE, so the form below cannot work. Use ./build-release.sh, '
+                      'which passes it.',
                       icon: Icons.warning_amber_rounded,
                     ),
                   ],
