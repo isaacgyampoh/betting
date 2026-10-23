@@ -2,41 +2,49 @@
  * What markets the live bookmaker adapters actually return, for a real fixture.
  *
  * Read-only: it searches for a fixture and reads that fixture's markets. It never books, never
- * creates a code and never sends money anywhere. Run before building anything that claims to
- * analyse corners, cards, handicaps or player markets - the question "does SportyBet give us
- * corner lines for a Premier League game" has an answer, and it is not in any documentation.
+ * creates a code and never spends anything. Run before building anything that claims to analyse
+ * corners, cards, handicaps or player markets - "does SportyBet give us corner lines for a
+ * Premier League game" has an answer, and it is not in any documentation.
  *
  *   npx tsx --tsconfig tsconfig.scripts.json scripts/market-probe.ts [YYYY-MM-DD]
  *
- * Needs API_FOOTBALL_KEY, the adapters in live mode, **and a reachable Postgres**: both the stats
- * provider and the live adapters cache through `db.statsCache` (lib/bookmakers/live/cached-get.ts).
- * `gameclaw-db` permits no external connections, so this cannot be run from a laptop against
- * production - it has to run where the database is reachable, i.e. on Render, or against a local
- * Postgres with API_FOOTBALL_KEY set. Attempting it locally fails at the first cache write with
- * `tenant/user ... not found`, which is the dead Supabase URL in .env.local, not a bug here.
+ * Fixtures come from the deployed API over HTTP, not from `listMatches`: the stats provider caches
+ * through `db.statsCache` unguarded, and `gameclaw-db` takes no external connections, so calling it
+ * from a laptop dies on the first cache write. The bookmaker adapters have no such problem - their
+ * cache is explicitly "an optimisation, never a dependency" and both sides are try/caught - so they
+ * run here perfectly well, just without a cache.
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
 process.env.SPORTYBET_MODE ??= "live";
 process.env.FOOTBALLCOM_MODE ??= "live";
 
+const API = process.env.GC_API_BASE ?? "https://gameclaw-api.onrender.com/api/v1";
+
+type Fixture = {
+  id: number;
+  kickoffAt: string;
+  status: string;
+  league: { name: string; country: string };
+  home: { name: string };
+  away: { name: string };
+};
+
 async function main() {
   const { connectedBookmakers } = await import("@/lib/bookmakers/registry");
-  const { listMatches } = await import("@/lib/services/stats");
-
   const date = process.argv[2] ?? new Date().toISOString().slice(0, 10);
 
-  function describe(market: { type: string; period: string; outcome: string; line: number | null } | null) {
-    if (!market) return null;
-    return `${market.type}${market.period && market.period !== "FULL_TIME" ? `/${market.period}` : ""}:${market.outcome}${market.line === null ? "" : ` ${market.line}`}`;
-  }
+  const res = await fetch(`${API}/matches?date=${date}`, { headers: { accept: "application/json" } });
+  if (!res.ok) throw new Error(`fixtures: HTTP ${res.status}`);
+  const body = (await res.json()) as { data: { groups: { matches: Fixture[] }[] } };
+  const fixtures = body.data.groups
+    .flatMap((g) => g.matches)
+    .filter((m) => m.status === "SCHEDULED")
+    .slice(0, Number(process.env.N ?? 1));
 
-  const day = await listMatches(date);
-  // The biggest competitions first, which is the order listMatches already returns.
-  const fixtures = day.groups.flatMap((g) => g.matches).filter((m) => m.status === "SCHEDULED").slice(0, 3);
   if (fixtures.length === 0) {
     console.log(`No scheduled fixtures on ${date}.`);
-      return;
+    return;
   }
 
   const live = connectedBookmakers().filter((b) => b.capabilities.events);
@@ -53,23 +61,27 @@ async function main() {
         }
         const { offers } = await adapter.getEventMarkets(found[0].externalId);
         const modelled = new Map<string, number>();
-        const unmodelled = new Map<string, number>();
+        const raw = new Map<string, number>();
         for (const o of offers) {
-          const key = describe(o.market as never);
-          if (key) modelled.set(key.split(":")[0], (modelled.get(key.split(":")[0]) ?? 0) + 1);
-          else unmodelled.set(o.raw.marketName ?? o.raw.marketId, (unmodelled.get(o.raw.marketName ?? o.raw.marketId) ?? 0) + 1);
+          if (o.market) modelled.set(o.market.type, (modelled.get(o.market.type) ?? 0) + 1);
+          else {
+            const name = o.raw.marketName ?? `id:${o.raw.marketId}`;
+            raw.set(name, (raw.get(name) ?? 0) + 1);
+          }
         }
         console.log(`  ${adapter.slug.padEnd(12)} ${offers.length} offers`);
-        if (modelled.size) {
-          console.log(`    modelled   ${[...modelled].map(([k, n]) => `${k}(${n})`).join(" ")}`);
-        }
-        if (unmodelled.size) {
-          // These are the ones an engine would have to read raw, and the ones most likely to be
-          // corners, cards and player markets.
-          console.log(`    unmodelled ${[...unmodelled].slice(0, 14).map(([k, n]) => `${k}(${n})`).join(" ")}${unmodelled.size > 14 ? ` …+${unmodelled.size - 14}` : ""}`);
+        if (modelled.size) console.log(`    modelled  ${[...modelled].map(([k, n]) => `${k}(${n})`).join(" ")}`);
+        if (raw.size) {
+          // These are the ones an engine would have to read raw, and where corners, cards and
+          // player markets are if they are offered at all. Printed in full rather than sampled:
+          // the whole point of running this is to find out what is in the long tail.
+          console.log(`    raw (${raw.size} distinct)`);
+          for (const [name, n] of [...raw].sort((a, b) => b[1] - a[1])) {
+            console.log(`      ${String(n).padStart(3)}  ${name}`);
+          }
         }
       } catch (err) {
-        console.log(`  ${adapter.slug.padEnd(12)} ERROR ${String(err).slice(0, 120)}`);
+        console.log(`  ${adapter.slug.padEnd(12)} ERROR ${String(err).slice(0, 140)}`);
       }
     }
     console.log("");
