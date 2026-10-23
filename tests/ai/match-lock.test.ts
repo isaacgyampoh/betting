@@ -94,6 +94,14 @@ describe("tools that can reach another fixture", () => {
     expect(names).toEqual(["get_match_stats", "analyze_match", "load_slip", "convert_slip"]);
   });
 
+  it("withholds the slip builder, which can only ask for a code it does not need", () => {
+    expect(lockedTools(ALL.concat(tool("build_target_slip"))).map((t) => t.name)).not.toContain(
+      "build_target_slip",
+    );
+    const check = checkToolAgainstLock(lock(), "build_target_slip", { slip_id: "x", target: 2 });
+    expect(check.ok).toBe(false);
+  });
+
   it("are refused even if the model calls one anyway", () => {
     const check = checkToolAgainstLock(lock(), "build_slip_from_fixtures", { target: 2 });
     expect(check.ok).toBe(false);
@@ -200,5 +208,20 @@ describe("asking the user what it already knows", () => {
     const text = lockContext(lock());
     expect(text).toContain("half-time");
     expect(text).toContain("risks");
+  });
+});
+
+// Observed in production after the lock shipped: the fixture stayed correct, but "give me a good
+// two odds selection for this game" was answered with "I need a booking code to build a slip for
+// you". Right match, wrong answer - the user asked about a fixture, not about a slip.
+describe("being asked for a selection on this match", () => {
+  it("says there are no odds to quote rather than asking for a code", () => {
+    const text = lockContext(lock());
+    expect(text).toContain("no tool that prices a single fixture");
+    expect(text).toContain("Do NOT ask for a booking");
+  });
+
+  it("still answers the part it can", () => {
+    expect(lockContext(lock())).toContain("which outcomes the evidence leans towards");
   });
 });

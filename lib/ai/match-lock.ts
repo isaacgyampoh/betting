@@ -76,7 +76,16 @@ export function lockFromDetail(detail: MatchDetail, now: Date = new Date()): Mat
  * Both are the right tools in Claw, where the user is asking about football in general, and both
  * are the wrong tools in a conversation about one game.
  */
-const GLOBAL_SEARCH_TOOLS = new Set(["build_slip_from_fixtures", "find_matches"]);
+const GLOBAL_SEARCH_TOOLS = new Set([
+  "build_slip_from_fixtures",
+  "find_matches",
+  // Not a global search, but withheld for the same reason: it can only build from a slip_id, so
+  // in a match conversation its sole effect is to make the model ask for a booking code it does
+  // not need. Observed in production - "give me a good two odds selection for this game" was
+  // answered with "I need a booking code to build a slip for you", which is the exact behaviour
+  // this lock exists to prevent.
+  "build_target_slip",
+]);
 
 /** Tools that name a fixture by id, and so must name *this* one. */
 const MATCH_SCOPED_TOOLS = new Set(["get_match_stats", "analyze_match"]);
@@ -178,6 +187,12 @@ export function lockContext(lock: MatchLock, now: Date = new Date()): string {
     "",
     "Answer the question that was asked, directly, using the data you have. If a section needed to",
     "answer it is absent, say which one and answer with what remains.",
+    "",
+    "If the user asks you to build or suggest a priced selection for this match - \"a two odds\",",
+    "\"a good bet\", \"the best pick\" - you have no tool that prices a single fixture's markets, so",
+    "there are no odds for you to quote. Say that in one sentence, then answer the part you can:",
+    "which outcomes the evidence leans towards and the counts behind them. Do NOT ask for a booking",
+    "code - a booking code is for converting a slip the user already holds, not for answering this.",
     "",
     // The assistant has no tool that changes the app, so it must never report having used one.
     // "Added to your favourites" with nothing added is the single most corrosive thing a chat can
