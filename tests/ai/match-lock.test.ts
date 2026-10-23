@@ -4,6 +4,7 @@ import {
   lockContext,
   lockedTools,
   lockFromDetail,
+  unlockedTools,
   type MatchLock,
 } from "@/lib/ai/match-lock";
 import type { MatchDetail, MatchStatus, MatchSummary, TeamForm, TeamRef } from "@/lib/stats/types";
@@ -215,13 +216,41 @@ describe("asking the user what it already knows", () => {
 // two odds selection for this game" was answered with "I need a booking code to build a slip for
 // you". Right match, wrong answer - the user asked about a fixture, not about a slip.
 describe("being asked for a selection on this match", () => {
-  it("says there are no odds to quote rather than asking for a code", () => {
+  it("sends it to the tool that reads real prices, not to a booking code", () => {
     const text = lockContext(lock());
-    expect(text).toContain("no tool that prices a single fixture");
-    expect(text).toContain("Do NOT ask for a booking");
+    expect(text).toContain("call get_match_markets");
+    expect(text).toContain("Do NOT ask for a booking code");
   });
 
-  it("still answers the part it can", () => {
-    expect(lockContext(lock())).toContain("which outcomes the evidence leans towards");
+  it("forbids quoting a price the tool did not return", () => {
+    const text = lockContext(lock());
+    expect(text).toContain("Quote only prices it returned");
+    expect(text).toContain("do not estimate a price");
+  });
+
+  it("allows naming the unpriced market groups but never their prices", () => {
+    const text = lockContext(lock());
+    expect(text).toContain("offered but NOT");
+    expect(text).toContain("never what they pay");
+  });
+});
+
+// The tool reads the fixture from the lock and takes no arguments, so there is no id to get
+// wrong - but it is meaningless outside a locked conversation and would only throw there.
+describe("the market tool's availability", () => {
+  const WITH = ALL.concat(tool("get_match_markets"));
+
+  it("is offered inside a locked conversation", () => {
+    expect(lockedTools(WITH).map((t) => t.name)).toContain("get_match_markets");
+  });
+
+  it("is withheld outside one, rather than left to throw", () => {
+    expect(unlockedTools(WITH).map((t) => t.name)).not.toContain("get_match_markets");
+  });
+
+  it("leaves the global search tools alone when unlocked", () => {
+    const names = unlockedTools(WITH).map((t) => t.name);
+    expect(names).toContain("build_slip_from_fixtures");
+    expect(names).toContain("find_matches");
   });
 });

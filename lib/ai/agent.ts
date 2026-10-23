@@ -7,7 +7,7 @@ import type { SlipView } from "@/lib/slips/view";
 import { anthropic } from "@/lib/ai/client";
 import { addUsage, CHAT_MODEL, costMicroUsd, ZERO_USAGE, type TokenUsage } from "@/lib/ai/models";
 import { runTool, TOOLS, type ToolContext } from "@/lib/ai/tools";
-import { checkToolAgainstLock, lockContext, lockedTools, lockFromDetail, type MatchLock } from "@/lib/ai/match-lock";
+import { checkToolAgainstLock, lockContext, lockedTools, lockFromDetail, unlockedTools, type MatchLock } from "@/lib/ai/match-lock";
 import { getMatchDetail } from "@/lib/services/stats";
 import { getAiAllowance, requireAiAllowance, type AiAllowance } from "@/lib/services/ai-quota";
 import { logUsage } from "@/lib/services/usage";
@@ -149,7 +149,7 @@ export async function runChat(opts: {
   }
 
   const messages: Anthropic.MessageParam[] = history.map((t) => ({ role: t.role, content: t.content }));
-  const ctx: ToolContext = { user, ipHash, slips: new Map(), seenSlipIds: new Set(opts.seenSlipIds ?? []) };
+  const ctx: ToolContext = { user, ipHash, slips: new Map(), seenSlipIds: new Set(opts.seenSlipIds ?? []), lock: lock ?? undefined };
   let usage = ZERO_USAGE;
   let reply = "";
   let toolCalls = 0;
@@ -167,7 +167,7 @@ export async function runChat(opts: {
         ],
         // Removing the tools that reach other fixtures is the enforcement. A model cannot call a
         // tool it was not given, and no amount of instruction is as reliable as that.
-        tools: lock ? lockedTools(TOOLS) : TOOLS,
+        tools: lock ? lockedTools(TOOLS) : unlockedTools(TOOLS),
         messages,
       });
       usage = addUsage(usage, usageOf(response.usage));

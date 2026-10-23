@@ -90,9 +90,20 @@ const GLOBAL_SEARCH_TOOLS = new Set([
 /** Tools that name a fixture by id, and so must name *this* one. */
 const MATCH_SCOPED_TOOLS = new Set(["get_match_stats", "analyze_match"]);
 
+/**
+ * Only meaningful inside a locked conversation: it reads the fixture from the lock and takes no
+ * arguments, so outside one there is nothing for it to price.
+ */
+const LOCK_ONLY_TOOLS = new Set(["get_match_markets"]);
+
 /** The tool list a locked conversation is given. Removal is the enforcement; the rest is belt. */
 export function lockedTools(tools: Anthropic.Tool[]): Anthropic.Tool[] {
   return tools.filter((t) => !GLOBAL_SEARCH_TOOLS.has(t.name));
+}
+
+/** The tool list everywhere else: the lock-only tools are withheld rather than left to throw. */
+export function unlockedTools(tools: Anthropic.Tool[]): Anthropic.Tool[] {
+  return tools.filter((t) => !LOCK_ONLY_TOOLS.has(t.name));
 }
 
 export type LockCheck = { ok: true } | { ok: false; reason: string };
@@ -188,11 +199,14 @@ export function lockContext(lock: MatchLock, now: Date = new Date()): string {
     "Answer the question that was asked, directly, using the data you have. If a section needed to",
     "answer it is absent, say which one and answer with what remains.",
     "",
-    "If the user asks you to build or suggest a priced selection for this match - \"a two odds\",",
-    "\"a good bet\", \"the best pick\" - you have no tool that prices a single fixture's markets, so",
-    "there are no odds for you to quote. Say that in one sentence, then answer the part you can:",
-    "which outcomes the evidence leans towards and the counts behind them. Do NOT ask for a booking",
-    "code - a booking code is for converting a slip the user already holds, not for answering this.",
+    "If the user asks what this match is worth, what the odds are, which markets exist, or for a",
+    "selection - \"a two odds\", \"a good bet\", \"the best pick\" - call get_match_markets. It returns",
+    "the real prices the bookmakers are showing for THIS fixture. Quote only prices it returned,",
+    "name the bookmaker they came from, and say they move. If it reports the fixture is not listed",
+    "anywhere, say that plainly and give the evidence-based answer instead; do not estimate a price.",
+    "Market groups it lists under alsoOffers (corners, cards, player markets) are offered but NOT",
+    "priced here - you may say they exist, never what they pay. Do NOT ask for a booking code: a",
+    "booking code is for converting a slip the user already holds, not for answering this.",
     "",
     // The assistant has no tool that changes the app, so it must never report having used one.
     // "Added to your favourites" with nothing added is the single most corrosive thing a chat can

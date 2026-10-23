@@ -6,6 +6,8 @@ import { BOOKMAKER_SLUGS } from "@/lib/bookmakers/types";
 import { AppError } from "@/lib/errors";
 import type { EditOp } from "@/lib/slips/edit";
 import type { SlipView } from "@/lib/slips/view";
+import type { MatchLock } from "@/lib/ai/match-lock";
+import { marketsForLock } from "@/lib/services/match-markets";
 import { analyzeMatch } from "@/lib/ai/analysis";
 import { compactMatch, compactMatchDetail, compactSlip } from "@/lib/ai/compact";
 import { buildToTarget } from "@/lib/services/build-slip";
@@ -106,6 +108,12 @@ export const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object", properties: { team: { type: "string" }, opponent: { type: "string" } }, required: ["team"] },
   },
   {
+    name: "get_match_markets",
+    description:
+      "Real bookmaker prices for the match this conversation is about. Returns each bookmaker that lists the fixture, the markets our model understands with their actual odds, and the names of other market groups it offers (corners, cards, player markets) WITHOUT prices. Use whenever the user asks what a match is worth, what the odds are, or what markets exist. Never quote a price that did not come from this tool.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
     name: "get_match_stats",
     description: "Recent form, head-to-head, standings and key numbers for a match_id. Use for any stats question. Pass date (YYYY-MM-DD of the kickoff from find_matches) when known.",
     input_schema: { type: "object", properties: { match_id: { type: "integer" }, date: { type: "string" } }, required: ["match_id"] },
@@ -165,6 +173,7 @@ const SCHEMAS = {
   build_target_slip: z.object({ slip_id: uuid, target: z.number().min(1.01).max(100_000), max_games: z.number().int().min(1).max(12).optional() }),
   list_recent_slips: z.object({}),
   find_matches: z.object({ team: z.string().min(2).max(60), opponent: z.string().max(60).optional() }),
+  get_match_markets: z.object({}),
   get_match_stats: z.object({ match_id: z.number().int().positive(), date: z.iso.date().optional() }),
   stats_for_slip_game: z.object({ home: z.string().min(1), away: z.string().min(1), kickoff: z.iso.datetime({ offset: true }) }),
   analyze_match: z.object({ match_id: z.number().int().positive(), date: z.iso.date().optional() }),
@@ -178,6 +187,13 @@ export type ToolContext = {
   slips: Map<string, SlipView>;
   /** Slip ids already shown earlier in this conversation; those cards aren't repeated. */
   seenSlipIds?: Set<string>;
+  /**
+   * The fixture a match conversation is locked to.
+   *
+   * `get_match_markets` reads it from here rather than taking a match_id, which is what makes the
+   * tool incapable of being pointed at another fixture: there is no argument to get wrong.
+   */
+  lock?: MatchLock;
 };
 
 async function toEditOp(input: z.infer<(typeof SCHEMAS)["edit_slip"]>, ctx: ToolContext): Promise<EditOp> {
@@ -346,6 +362,12 @@ async function execute(name: ToolName, input: unknown, ctx: ToolContext): Promis
       const i = input as z.infer<(typeof SCHEMAS)["find_matches"]>;
       const matches = await searchMatches(i.team, i.opponent);
       return matches.length ? matches.map(compactMatch) : { found: 0, note: "No matching fixtures in the next few days." };
+    }
+    case "get_match_markets": {
+      if (!ctx.lock) {
+        throw new AppError("BAD_REQUEST", "Prices can only be read inside a conversation about one match.");
+      }
+      return marketsForLock(ctx.lock);
     }
     case "get_match_stats":
       const i = input as { match_id: number; date?: string };
