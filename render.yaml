@@ -32,11 +32,14 @@ services:
     # product by two orders of magnitude.
     plan: starter
     region: frankfurt
-    # The live service tracks this branch. `main` and `render` are kept identical (render is
-    # fast-forwarded into main and both are pushed together), so either value is correct today -
-    # but the deployed commit has historically been one that existed only on `render`, so do not
-    # assume from this line alone which branch a given deploy came from. Check /api/v1/health.
-    branch: main
+    # Read from the live service, not assumed: `GET /v1/services/srv-db9nfr4s728c73cbbjvg`
+    # reports `branch: render`. This file said `main` for months while every deploy came from
+    # `render`, which is how a deployed commit ended up being one that did not exist on main at
+    # all - and why a merge to main looked like it should ship something and did not.
+    #
+    # `main` is kept identical anyway (render is fast-forwarded into it and both are pushed), so
+    # the two cannot drift, but this line now says what the service actually does.
+    branch: render
 
     # **Deploys are manual.** Pushing changes nothing: the commit sits on GitHub until somebody
     # triggers a deploy from the dashboard or the API. This is declared rather than left to the
