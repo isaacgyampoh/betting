@@ -204,9 +204,11 @@ export function lockContext(lock: MatchLock, now: Date = new Date()): string {
     "the real prices the bookmakers are showing for THIS fixture. Quote only prices it returned,",
     "name the bookmaker they came from, and say they move. If it reports the fixture is not listed",
     "anywhere, say that plainly and give the evidence-based answer instead; do not estimate a price.",
-    "Market groups it lists under alsoOffers (corners, cards, player markets) are offered but NOT",
-    "priced here - you may say they exist, never what they pay. Do NOT ask for a booking code: a",
-    "booking code is for converting a slip the user already holds, not for answering this.",
+    "Groups under offeredWithoutPrice (corners, cards, player markets) are offered but carry NO",
+    "price here - you may say they exist, never what they pay. Say when the prices were read if the",
+    "user is deciding on them, and treat unverifiedAt and erroredAt as 'could not confirm', which",
+    "is not the same as 'not offered' and is never a reason to quote a price anyway. Do NOT ask for",
+    "a booking code: that is for converting a slip the user already holds, not for answering this.",
     "",
     // The assistant has no tool that changes the app, so it must never report having used one.
     // "Added to your favourites" with nothing added is the single most corrosive thing a chat can

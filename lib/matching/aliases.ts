@@ -25,4 +25,19 @@ export const ALIAS_GROUPS: string[][] = [
   ["berekum chelsea", "berekum"],
   ["nations", "nations fc"],
   ["karela united", "karela utd", "karela"],
+
+  // Added 23 Oct 2026 from the providers' own records, not from memory. Both fixtures were
+  // carried by SportyBet and priced by Claw while the match analyst reported them "not listed",
+  // because the analyst is the one path that compares names across two sources.
+  //
+  //   API-Football            SportyBet              Football.com
+  //   Borussia Mönchengladbach  Borussia M´gladbach    Borussia Monchengladbach
+  //   Stade Brestois 29         Brest                  Brest
+  //
+  // The SportyBet spelling normalises to "borussia m gladbach" - the acute accent is stripped as
+  // punctuation, leaving a stray single letter - so that exact form is listed rather than guessed.
+  ["borussia monchengladbach", "borussia m gladbach", "borussia mgladbach", "borussia moenchengladbach", "monchengladbach", "gladbach"],
+  // "brest" alone is the French club at every provider we read. Dynamo Brest normalises to
+  // "dynamo brest", a different string, so it does not land in this group.
+  ["stade brestois 29", "stade brestois", "brest"],
 ];

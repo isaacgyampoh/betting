@@ -55,14 +55,18 @@ compares names across sources, which is why it priced those fixtures happily. Th
 starts from the fixture the user tapped - an API-Football record - and has to find that same game
 at a bookmaker, so it meets this on every fixture whose names differ.
 
-Pinned by `tests/matching/cross-source-names.test.ts`. The threshold is deliberately **not**
-lowered to make them pass: the same comparison decides which fixture a slip converts to, and a
-false match there books a bet on the wrong game. Closing this needs aliases or a matcher that
-understands abbreviation, with its own evidence.
+**Closed on 23 October 2026** with aliases read from the providers' own fixture lists, not from
+memory - the SportyBet spelling normalises to `borussia m gladbach`, because the acute accent is
+stripped as punctuation and leaves a stray single letter, so that exact form is listed rather than
+guessed. Both pairs now score 0.980 through the alias index.
 
-Until it is closed, `get_match_markets` under-reports: it will say a bookmaker does not list a
-fixture that it does list. That is the safe direction to fail in - it withholds a price rather
-than quoting the wrong one - but it is not the truth, and the product should not pretend it is.
+The threshold was deliberately **not** lowered. The same comparison decides which fixture a slip
+converts to, and a false match there books a bet on the wrong game; an alias is a claim about two
+specific names, a lower threshold is a claim about every pair of names there will ever be.
+
+`tests/matching/cross-source-names.test.ts` pins the fix and, just as importantly, that the
+aliases dragged nothing in with them: Dynamo Brest, Borussia Dortmund and Ipswich Town U21 are all
+still refused.
 
 ## What one fixture looks like
 

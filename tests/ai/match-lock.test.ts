@@ -219,7 +219,8 @@ describe("being asked for a selection on this match", () => {
   it("sends it to the tool that reads real prices, not to a booking code", () => {
     const text = lockContext(lock());
     expect(text).toContain("call get_match_markets");
-    expect(text).toContain("Do NOT ask for a booking code");
+    expect(text).toContain("Do NOT ask for");
+    expect(text).toContain("booking code");
   });
 
   it("forbids quoting a price the tool did not return", () => {
@@ -230,7 +231,7 @@ describe("being asked for a selection on this match", () => {
 
   it("allows naming the unpriced market groups but never their prices", () => {
     const text = lockContext(lock());
-    expect(text).toContain("offered but NOT");
+    expect(text).toContain("offeredWithoutPrice");
     expect(text).toContain("never what they pay");
   });
 });

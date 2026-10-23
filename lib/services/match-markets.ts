@@ -3,6 +3,7 @@ import { mapWithConcurrency } from "@/lib/async";
 import { connectedBookmakers } from "@/lib/bookmakers/registry";
 import { logger } from "@/lib/logger";
 import { marketLabel, pickLabel } from "@/lib/markets/labels";
+import { MATCH_THRESHOLD, teamSimilarity } from "@/lib/matching/similarity";
 import type { MatchLock } from "@/lib/ai/match-lock";
 
 /**
@@ -35,10 +36,22 @@ export type BookmakerQuote = {
   bookmaker: string;
   /** The fixture as that bookmaker names it, so a mismatch is visible rather than assumed. */
   listedAs: string;
+  /**
+   * How confidently the bookmaker's fixture was identified as ours, worst side first.
+   *
+   * Reported rather than kept private: a quote is only as trustworthy as the match behind it, and
+   * 0.98 (resolved through an alias) is a different claim from 1.0 (the same name).
+   */
+  matchConfidence: number;
   markets: QuotedMarket[];
-  /** Market groups offered but not modelled - named so they can be mentioned, never priced. */
-  alsoOffers: string[];
+  /**
+   * Market groups this bookmaker offers but which carry no price here. Named so they can be
+   * mentioned truthfully; being offered is not the same as having a verified current price.
+   */
+  offeredWithoutPrice: string[];
   totalOffers: number;
+  /** When these prices were read. Odds move; a quote without a time is a quote without a claim. */
+  pricesReadAt: string;
 };
 
 export type MatchMarkets = {
@@ -46,6 +59,14 @@ export type MatchMarkets = {
   quotes: BookmakerQuote[];
   /** Bookmakers that are connected but do not list this fixture. Said plainly, not hidden. */
   notListedAt: string[];
+  /**
+   * Bookmakers that returned a fixture we could not confirm is this one, and bookmakers that
+   * errored. Kept apart from `notListedAt` because they mean different things: one is "they do
+   * not have this game", the other is "we could not be sure", and the second is not a reason to
+   * quote a price anyway.
+   */
+  unverifiedAt: string[];
+  erroredAt: string[];
   fetchedAt: string;
 };
 
@@ -64,6 +85,8 @@ export async function marketsForLock(lock: MatchLock, now: Date = new Date()): P
   const fixture = `${lock.home.name} v ${lock.away.name}`;
   const adapters = connectedBookmakers().filter((b) => b.capabilities.events);
   const notListedAt: string[] = [];
+  const unverifiedAt: string[] = [];
+  const erroredAt: string[] = [];
 
   const quotes = await mapWithConcurrency(adapters, 3, async (adapter): Promise<BookmakerQuote | null> => {
     try {
@@ -73,6 +96,31 @@ export async function marketsForLock(lock: MatchLock, now: Date = new Date()): P
         return null;
       }
       const event = found[0];
+
+      /**
+       * Checked again here, against the fixture this conversation is locked to.
+       *
+       * `searchEvent` already matched, but it matched against the names *it* was handed, and this
+       * is the one place where quoting the wrong fixture's prices would be invisible: the answer
+       * would read perfectly and describe another game. Re-deriving the score from the lock costs
+       * nothing and means a price is never reported unless both sides of the fixture were
+       * independently confirmed.
+       */
+      const confidence = Math.min(
+        teamSimilarity(lock.home.name, event.home),
+        teamSimilarity(lock.away.name, event.away),
+      );
+      if (confidence < MATCH_THRESHOLD) {
+        logger.warn("match_markets.unverified", {
+          bookmaker: adapter.slug,
+          matchId: lock.matchId,
+          wanted: `${lock.home.name} v ${lock.away.name}`,
+          got: `${event.home} v ${event.away}`,
+          confidence,
+        });
+        unverifiedAt.push(adapter.name);
+        return null;
+      }
       const { offers } = await adapter.getEventMarkets(event.externalId);
 
       const byMarket = new Map<string, QuotedPick[]>();
@@ -97,14 +145,17 @@ export async function marketsForLock(lock: MatchLock, now: Date = new Date()): P
       return {
         bookmaker: adapter.name,
         listedAs: `${event.home} v ${event.away}`,
+        matchConfidence: Number(confidence.toFixed(3)),
         markets,
-        alsoOffers: [...tail].sort(),
+        offeredWithoutPrice: [...tail].sort(),
         totalOffers: offers.length,
+        pricesReadAt: now.toISOString(),
       };
     } catch (err) {
       // A bookmaker being unreachable is not the same as it not listing the fixture, and the
       // difference matters to anyone reading the answer.
       logger.warn("match_markets.failed", { bookmaker: adapter.slug, matchId: lock.matchId, err: String(err).slice(0, 200) });
+      erroredAt.push(adapter.name);
       return null;
     }
   });
@@ -113,6 +164,8 @@ export async function marketsForLock(lock: MatchLock, now: Date = new Date()): P
     fixture,
     quotes: quotes.filter((q): q is BookmakerQuote => q !== null),
     notListedAt,
+    unverifiedAt,
+    erroredAt,
     fetchedAt: now.toISOString(),
   };
 }

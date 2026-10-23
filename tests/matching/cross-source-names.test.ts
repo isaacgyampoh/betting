@@ -2,49 +2,44 @@ import { describe, expect, it } from "vitest";
 import { MATCH_THRESHOLD, teamSimilarity } from "@/lib/matching/similarity";
 
 /**
- * Where cross-source fixture matching currently fails, pinned deliberately.
+ * Cross-source fixture matching, and the gap that used to be here.
  *
- * Two directions exist in the product and only one of them needs this. Claw starts from a
- * bookmaker's own fixture list, so it never compares names across sources and never hits this.
- * The match analyst starts from API-Football - the fixture the user tapped - and has to find that
- * same game at a bookmaker, which means comparing one source's club names with another's.
+ * Two directions exist and only one needs this. Claw starts from a bookmaker's own fixture list,
+ * so it never compares names across sources. The match analyst starts from the fixture the user
+ * tapped - an API-Football record - and has to find that same game at a bookmaker.
  *
- * Observed on 23 October 2026: SportyBet carried both fixtures below and priced them (Claw quoted
- * Stuttgart at 1.39 and Brest v Nice BTTS at 1.61 from SportyBet in the same session), while
- * `get_match_markets` reported them "not listed at SportyBet". The bookmaker was never the
- * problem; the name comparison was.
+ * On 23 October 2026 that failed for two fixtures SportyBet was actually carrying: it priced
+ * Stuttgart at 1.39 and Brest v Nice both teams to score at 1.61 while the analyst reported both
+ * "not listed". The scores were 0.417 and 0.617 against a 0.8 threshold, and `bestMatch` takes the
+ * minimum of the two sides, so one abbreviated name lost the whole fixture.
  *
- * These assert the gap rather than hide it. The threshold is NOT lowered to make them pass: the
- * same comparison decides which fixture a slip converts to, and a false match there books a bet on
- * the wrong game. Closing this needs aliases or a matcher that understands abbreviation, with its
- * own evidence - not a looser number.
+ * It was fixed with aliases read from the providers' own records rather than by lowering the
+ * threshold - the same comparison decides which fixture a slip converts to, and a false match
+ * there books a bet on the wrong game. These assert the fix and, just as importantly, that the
+ * aliases did not drag anything else in with them.
  */
 describe("club names that differ between the stats provider and the bookmaker", () => {
-  it("matches when one name merely adds a word", () => {
+  it("matches when one name merely adds or drops a word", () => {
     expect(teamSimilarity("Ipswich", "Ipswich Town")).toBeGreaterThanOrEqual(MATCH_THRESHOLD);
     expect(teamSimilarity("VfB Stuttgart", "Stuttgart")).toBeGreaterThanOrEqual(MATCH_THRESHOLD);
+    expect(teamSimilarity("Malaga", "Malaga CF")).toBeGreaterThanOrEqual(MATCH_THRESHOLD);
   });
 
-  it("KNOWN GAP: an abbreviated club name does not match", () => {
-    // "Borussia M´gladbach" is how SportyBet writes Borussia Mönchengladbach.
-    const score = teamSimilarity("Borussia Mönchengladbach", "Borussia M´gladbach");
-    expect(score).toBeLessThan(MATCH_THRESHOLD);
-    // Pinned so a matcher change shows up here as a deliberate improvement, not a silent one.
-    expect(score).toBeCloseTo(0.417, 2);
+  it("matches the abbreviation SportyBet writes, which used to score 0.417", () => {
+    expect(teamSimilarity("Borussia Mönchengladbach", "Borussia M´gladbach")).toBeGreaterThanOrEqual(MATCH_THRESHOLD);
   });
 
-  it("KNOWN GAP: a short form of a longer club name does not match", () => {
-    // API-Football says "Stade Brestois 29"; SportyBet says "Brest".
-    const score = teamSimilarity("Stade Brestois 29", "Brest");
-    expect(score).toBeLessThan(MATCH_THRESHOLD);
-    expect(score).toBeCloseTo(0.617, 2);
+  it("matches the short form both bookmakers write, which used to score 0.617", () => {
+    expect(teamSimilarity("Stade Brestois 29", "Brest")).toBeGreaterThanOrEqual(MATCH_THRESHOLD);
   });
 
-  it("one failing side is enough to lose the fixture, because the score is the minimum", () => {
-    // Nice matches perfectly; Brest does not. bestMatch takes min(home, away), so the pair fails.
-    const home = teamSimilarity("Stade Brestois 29", "Brest");
-    const away = teamSimilarity("Nice", "Nice");
-    expect(away).toBe(1);
-    expect(Math.min(home, away)).toBeLessThan(MATCH_THRESHOLD);
+  it("still refuses two different clubs that share a word", () => {
+    expect(teamSimilarity("Borussia Mönchengladbach", "Borussia Dortmund")).toBeLessThan(MATCH_THRESHOLD);
+    expect(teamSimilarity("Stade Brestois 29", "Dynamo Brest")).toBeLessThan(MATCH_THRESHOLD);
+    expect(teamSimilarity("Inter", "Milan")).toBeLessThan(MATCH_THRESHOLD);
+  });
+
+  it("still refuses a senior side and its youth team", () => {
+    expect(teamSimilarity("Ipswich Town", "Ipswich Town U21")).toBeLessThan(MATCH_THRESHOLD);
   });
 });
