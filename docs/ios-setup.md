@@ -79,8 +79,8 @@ that is not present.
 | **Xcode** | free, ~17 GB from the App Store, then `sudo xcode-select --switch` and `sudo xcodebuild -runFirstLaunch` | compiling anything for iOS |
 | **CocoaPods** | free, needs `sudo gem install cocoapods` | installing the plugin pods |
 | **Apple Developer Program** | **$99/year** | push notifications, a device build lasting more than 7 days, TestFlight, the App Store |
-| **iOS OAuth client** | free, in Google Cloud | Google Sign-In; the reversed client id becomes a `CFBundleURLTypes` entry |
-| **`GoogleService-Info.plist`** | free, in Firebase | Firebase on iOS |
+| **iOS OAuth client** | free, in Google Cloud — **in `game-claw`, not the Firebase project** | Google Sign-In; the reversed client id becomes a `CFBundleURLTypes` entry |
+| **`GoogleService-Info.plist`** | free, in Firebase (`gameclaw-push-notifications`) | Firebase on iOS |
 | **APNs auth key (.p8)** | needs the paid account | FCM delivering to iPhones at all |
 
 `flutter doctor` currently reports Xcode incomplete and CocoaPods missing, so `flutter build ios`
@@ -132,6 +132,36 @@ and the simulator are both unavailable. No iOS code here has been compiled, let 
    renders the mark mirrored and the icon has to be the same drawing as `play-assets/icon-512.png`,
    not a reflection of it.
 6. Decide on iPad. The app is phone-shaped; the template enables iPad by default.
+
+## Two Google projects, and the trap between them
+
+This is the single thing most likely to cost a day on iOS, so it is written down before anyone
+meets it.
+
+| Project | Number | What it holds |
+|---|---|---|
+| `game-claw` | **400646694915** | every OAuth client, including the web client `b4oh5at…` whose id the API checks a token's audience against |
+| `gameclaw-push-notifications` | **569032239509** | Firebase: FCM, and the `google-services.json` the Android app ships |
+
+They are not the same project and neither can stand in for the other. `google-services.json`
+carries **no** `oauth_client` entries at all, because sign-in has never gone through Firebase here.
+
+The trap is specific to iOS. Android names no OAuth client in code - its client is matched by
+package name and signing fingerprint. iOS has no equivalent, so the app must say which client it
+is, and when it says nothing `google_sign_in_ios` reads `CLIENT_ID` out of
+`GoogleService-Info.plist` (`GoogleSignInPlugin.swift`, `clientIdKey`). That plist comes from the
+**Firebase** project. So the default behaviour is to sign in with a client from the project that
+does not own the audience, and the API rejects the token - the same failure, from the same cause,
+as the `[28444]` conflict in `oauth-conflict-evidence.md`.
+
+Handled: `GC_GOOGLE_IOS_CLIENT_ID` is passed explicitly as `clientId`, so the plist is never
+consulted for it. The value does not exist yet and is deliberately not invented;
+`build-release.sh` reads it from the environment and passes empty until there is one. Empty is
+safe on Android, which ignores it.
+
+**When creating it: the iOS client goes in `game-claw` (400646694915).** Creating it in the
+Firebase project is exactly the mistake that produced `[28444]`, and it will look correct until a
+real sign-in fails.
 
 ## Audit of what else assumes Android
 

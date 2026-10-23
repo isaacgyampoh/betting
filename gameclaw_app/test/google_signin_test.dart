@@ -59,7 +59,7 @@ void main() {
       final client = AuthClient(config: configured());
       await expectLater(
         client.signInWithGoogle(
-          source: (_) =>
+          source: (_, __) =>
               throw const GoogleSignInException(code: GoogleSignInExceptionCode.canceled),
         ),
         throwsA(isA<CancelledFailure>()),
@@ -70,7 +70,7 @@ void main() {
       final client = AuthClient(config: configured());
       await expectLater(
         client.signInWithGoogle(
-          source: (_) => throw const GoogleSignInException(
+          source: (_, __) => throw const GoogleSignInException(
             code: GoogleSignInExceptionCode.canceled,
             description: '[16] Account reauth failed.',
           ),
@@ -90,7 +90,7 @@ void main() {
       final client = AuthClient(config: configured());
       await expectLater(
         client.signInWithGoogle(
-          source: (_) => throw const GoogleSignInException(
+          source: (_, __) => throw const GoogleSignInException(
             code: GoogleSignInExceptionCode.canceled,
             description: '   ',
           ),
@@ -119,7 +119,7 @@ void main() {
         'user': {'email': 'someone@gmail.com'},
       });
 
-      final session = await client.signInWithGoogle(source: (_) async => 'google-id-token');
+      final session = await client.signInWithGoogle(source: (_, __) async => 'google-id-token');
 
       expect(session.accessToken, 'at');
       expect(session.email, 'someone@gmail.com');
@@ -141,13 +141,17 @@ void main() {
         'user': {'email': 'someone@gmail.com'},
       });
       String? seen;
+      String? seenIos;
       await client.signInWithGoogle(
-        source: (id) async {
+        source: (id, iosId) async {
           seen = id;
+          seenIos = iosId;
           return 'tok';
         },
       );
       expect(seen, 'web-client-id.apps.googleusercontent.com');
+      // Empty unless a build supplies GC_GOOGLE_IOS_CLIENT_ID; Android never does.
+      expect(seenIos, '');
     });
 
     // Google authenticated the person but gave nothing Supabase can verify. In practice that
@@ -156,7 +160,7 @@ void main() {
     test('says which piece is wrong when Google returns no id token', () async {
       final client = clientReturning(200, {});
       await expectLater(
-        client.signInWithGoogle(source: (_) async => null),
+        client.signInWithGoogle(source: (_, __) async => null),
         throwsA(
           isA<UnknownFailure>().having((e) => e.message, 'message', contains('Web client id')),
         ),
@@ -169,7 +173,7 @@ void main() {
         'msg': 'Unacceptable audience in id_token',
       });
       await expectLater(
-        client.signInWithGoogle(source: (_) async => 'x'),
+        client.signInWithGoogle(source: (_, __) async => 'x'),
         throwsA(
           isA<ServerFailure>().having(
             (e) => e.message,

@@ -23,6 +23,19 @@ API_BASE="https://gameclaw-api.onrender.com/api/v1"
 # here produces a token the API rejects. See docs/release-signing.md.
 GOOGLE_SERVER_CLIENT_ID="400646694915-b4oh5athe842emcnga4913s1oq1igjh1.apps.googleusercontent.com"
 
+# The iOS OAuth client, which does not exist yet and is deliberately not invented here. It must
+# be created in **game-claw (400646694915)** - the project that owns the web client above - and
+# NOT in the Firebase project, gameclaw-push-notifications (569032239509). Those are two separate
+# projects: the API checks a token's audience against the web client, so a client issued by the
+# other project produces a token it rejects.
+#
+# Left empty, the app passes no clientId and google_sign_in_ios falls back to CLIENT_ID in
+# GoogleService-Info.plist - which comes from the Firebase project, i.e. the wrong one. Android is
+# unaffected either way: its client is matched by package and signing fingerprint, never named.
+#
+#   GC_GOOGLE_IOS_CLIENT_ID=400646694915-xxxx.apps.googleusercontent.com ./build-release.sh ios
+GOOGLE_IOS_CLIENT_ID="${GC_GOOGLE_IOS_CLIENT_ID:-}"
+
 cd "$(dirname "$0")"
 
 # Resolve the SDK rather than assuming PATH. A non-interactive shell (CI, a hook, an agent) does
@@ -42,4 +55,5 @@ fi
 exec "$FLUTTER" build "$TARGET" --release \
   --dart-define=GC_API_BASE="$API_BASE" \
   --dart-define=GC_AUTH_BASE="$API_BASE" \
-  --dart-define=GC_GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+  --dart-define=GC_GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
+  --dart-define=GC_GOOGLE_IOS_CLIENT_ID="$GOOGLE_IOS_CLIENT_ID"

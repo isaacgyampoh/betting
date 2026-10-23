@@ -18,12 +18,14 @@ import 'api_client.dart';
 class SupabaseConfig {
   const SupabaseConfig({required this.url, required this.anonKey})
     : googleServerClientId = '',
+      googleIosClientId = '',
       authBase = '';
 
   const SupabaseConfig.withGoogle({
     required this.url,
     required this.anonKey,
     required this.googleServerClientId,
+    this.googleIosClientId = '',
   }) : authBase = '';
 
   static const _url = String.fromEnvironment('GC_SUPABASE_URL');
@@ -48,21 +50,49 @@ class SupabaseConfig {
   /// has to hand over. Supplying the Android id here produces a token Supabase rejects.
   static const _googleServerClientId = String.fromEnvironment('GC_GOOGLE_SERVER_CLIENT_ID');
 
-  const SupabaseConfig.gameclaw({required this.authBase, required this.googleServerClientId})
-    : url = '',
-      anonKey = '';
+  /// The **iOS** OAuth client id, which is a different thing again from both of the above.
+  ///
+  /// Android needs no such value: its client is matched by package name and signing fingerprint
+  /// and is never named in code. iOS has no equivalent, so the app has to say which client it is.
+  ///
+  /// Supplied explicitly rather than left to the plugin, and that is the whole point of it. Given
+  /// nothing, `google_sign_in_ios` reads `CLIENT_ID` out of `GoogleService-Info.plist`
+  /// (GoogleSignInPlugin.swift, `clientIdKey`). That plist comes from the Firebase project,
+  /// `gameclaw-push-notifications` / 569032239509, and every OAuth client this product uses lives
+  /// in a *different* project, `game-claw` / 400646694915 - which is the one whose web client the
+  /// API checks the token's audience against. Letting the plist answer would sign in with a
+  /// client from the wrong project and the API would reject the token, which is the same failure,
+  /// from the same cause, as the `[28444]` conflict documented in docs/oauth-conflict-evidence.md.
+  ///
+  /// So: create the iOS client in `game-claw`, pass its id here, and leave the plist to Firebase.
+  static const _googleIosClientId = String.fromEnvironment('GC_GOOGLE_IOS_CLIENT_ID');
+
+  const SupabaseConfig.gameclaw({
+    required this.authBase,
+    required this.googleServerClientId,
+    this.googleIosClientId = '',
+  }) : url = '',
+       anonKey = '';
 
   factory SupabaseConfig.fromEnvironment() => _authBase.isNotEmpty
-      ? SupabaseConfig.gameclaw(authBase: _authBase, googleServerClientId: _googleServerClientId)
+      ? SupabaseConfig.gameclaw(
+          authBase: _authBase,
+          googleServerClientId: _googleServerClientId,
+          googleIosClientId: _googleIosClientId,
+        )
       : const SupabaseConfig.withGoogle(
           url: _url,
           anonKey: _anonKey,
           googleServerClientId: _googleServerClientId,
+          googleIosClientId: _googleIosClientId,
         );
 
   final String url;
   final String anonKey;
   final String googleServerClientId;
+
+  /// Empty on Android, where the client is matched by package and fingerprint instead.
+  final String googleIosClientId;
 
   /// Empty on a Supabase build.
   final String authBase;
@@ -152,11 +182,16 @@ class SignUpResult {
 /// A seam, so the exchange with Supabase can be tested without the platform plugin, which cannot
 /// run outside a device. The production implementation is [_googleIdToken]; everything that can
 /// actually be reasoned about lives on the other side of it.
-typedef GoogleIdTokenSource = Future<String?> Function(String serverClientId);
+typedef GoogleIdTokenSource = Future<String?> Function(String serverClientId, String iosClientId);
 
-Future<String?> _googleIdToken(String serverClientId) async {
+Future<String?> _googleIdToken(String serverClientId, String iosClientId) async {
   final google = GoogleSignIn.instance;
-  await google.initialize(serverClientId: serverClientId);
+  await google.initialize(
+    // Null rather than empty on Android, where the platform ignores it anyway and an empty
+    // string would be a value the plugin has to decide what to do with.
+    clientId: iosClientId.isEmpty ? null : iosClientId,
+    serverClientId: serverClientId,
+  );
   if (!google.supportsAuthenticate()) {
     throw const GoogleSignInException(
       code: GoogleSignInExceptionCode.unknownError,
@@ -220,7 +255,10 @@ class AuthClient {
 
     final String? idToken;
     try {
-      idToken = await (source ?? _googleIdToken)(_config.googleServerClientId);
+      idToken = await (source ?? _googleIdToken)(
+        _config.googleServerClientId,
+        _config.googleIosClientId,
+      );
     } on GoogleSignInException catch (error) {
       throw switch (error.code) {
         // Backing out of the account chooser is a decision, not a fault, and gets no red message.

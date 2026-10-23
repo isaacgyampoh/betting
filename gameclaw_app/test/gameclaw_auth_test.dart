@@ -58,7 +58,7 @@ void main() {
 
   test('Google sign-in posts the id token to /google', () async {
     final (client, rec) = clientWith({'/google': (200, _session)});
-    final session = await client.signInWithGoogle(source: (_) async => 'an-id-token');
+    final session = await client.signInWithGoogle(source: (_, __) async => 'an-id-token');
 
     expect(rec.sent.single.path, '/google');
     expect(jsonDecode(rec.sent.single.data as String), {'id_token': 'an-id-token'});
@@ -70,7 +70,7 @@ void main() {
     // Supabase returns the token object bare; GameClaw wraps it. Reading the wrapper as the
     // session would produce a null access token and a "no session came back" error.
     final (client, _) = clientWith({'/google': (200, _session)});
-    final session = await client.signInWithGoogle(source: (_) async => 'an-id-token');
+    final session = await client.signInWithGoogle(source: (_, __) async => 'an-id-token');
     expect(session.accessToken, 'the-access-token');
   });
 
@@ -108,7 +108,7 @@ void main() {
       }),
     });
     await expectLater(
-      client.signInWithGoogle(source: (_) async => 'a-bad-token'),
+      client.signInWithGoogle(source: (_, __) async => 'a-bad-token'),
       throwsA(
         isA<ServerFailure>().having(
           (e) => e.message,
