@@ -47,6 +47,28 @@ project. `firebase_core`, `firebase_messaging`, `flutter_local_notifications`, `
 There are **no** `Platform.is` branches anywhere in `lib/`, so no Dart code assumed Android other
 than the notification setup, which is now handled.
 
+## Getting Xcode: three routes, all gated on the same thing
+
+Tried in order, each diagnosed rather than assumed:
+
+| Route | Result |
+|---|---|
+| App Store, driven by AppleScript | `osascript is not allowed assistive access (-1719)` — UI scripting needs osascript added to Privacy & Security → Accessibility, which is a security prompt only a person can answer |
+| `developer.apple.com/download/all/` | HTTP **302** to `idmsa.apple.com/IDMSWebAuth/signin.html` — Apple ID wall |
+| Any CLI installer (`mas`, `xcodes`) | needs Homebrew, which needs `sudo`, and an Apple ID either way |
+
+Ruled out as causes, from Apple's own public lookup API rather than from guessing:
+
+| | |
+|---|---|
+| Xcode | **27.1**, released 2026-10-15 |
+| Minimum macOS | **26.6** — this Mac is 26.6.2, so it qualifies |
+| Size | **3.1 GB**, free, present in the GH storefront |
+| Disk free | 236 GB |
+
+The App Store cache has stayed at **352 KB** and `storedownloadd` at **0.0% CPU** throughout, so
+nothing was ever part-downloaded and nothing is wedged. It is one click plus an Apple ID.
+
 ## What cannot be done from this machine
 
 Nothing below is a judgement call about the product; each is a tool, an account or a credential
@@ -67,9 +89,25 @@ and the simulator are both unavailable. No iOS code here has been compiled, let 
 ## Still to do once the toolchain exists
 
 1. `pod install`, and fix whatever the first real build says. Nothing below has been compiled.
-2. **Share extension.** `receive_sharing_intent` needs a second Xcode target plus an App Group for
-   slips shared *into* GameClaw from a bookmaker's app. That is the Android feature with the
-   largest iOS-side gap and it cannot be scaffolded from the command line.
+2. **Share extension.** Sources are written and valid; the target is not, because creating one is
+   an Xcode operation and faking it by hand-editing `project.pbxproj` is how a project file gets
+   quietly corrupted.
+
+   Ready in `ios/Share Extension/`:
+   - `ShareViewController.swift` — subclasses `RSIShareViewController` and returns **true** from
+     `shouldAutoRedirect()`. The plugin's example returns false, which shows a caption field and a
+     Send button; that suits sharing a photo, not a booking code someone has just copied out of a
+     bookmaker's app. Android hands the text straight to the app and so does this.
+   - `Info.plist` — **text and one web URL only**. The example also accepts images, movies and
+     files, which would put GameClaw in the share sheet for every photo on the phone and then
+     leave it with nothing to say. This mirrors the Android filter, which is `text/plain` alone.
+     The App Group is `$(CUSTOM_GROUP_ID)`, a build setting, so it is named in one place.
+
+   In Xcode, once it exists: File → New → Target → Share Extension, named **Share Extension** so
+   it picks these files up; set its deployment target to 15.5 to match Runner; add the plugin to
+   the extension target via Swift Package Manager; add the App Group capability to both targets
+   and set `CUSTOM_GROUP_ID`. **The App Group has to be registered on the Apple Developer
+   account first** — it will not sign otherwise, which is why no identifier is hardcoded here.
 3. ~~The alert sound.~~ **Done.** `afconvert` produced `ios/Runner/gameclaw_alert.caf` from the
    Android `.wav` (48 kHz mono Int16, 0.67 s - well inside the 30 s iOS allows), and it is listed
    in the Runner target's Resources build phase so it is copied into the bundle. iOS reads a
