@@ -88,6 +88,23 @@ jobs:
           echo "--- cocoapods ---"
           pod --version
 
+      # Run #2 reached the compile and then xcodebuild refused to resolve Swift packages:
+      #
+      #   firebase_messaging 17.0.1 -> firebase-ios-sdk 13.1.1
+      #   google_sign_in_ios 6.3.8  -> googlesignin-ios 9.2.0 -> gtm-session-fetcher 3.3.0..<4.0.0
+      #
+      # and firebase-ios-sdk 13.1.1 wants a different gtm-session-fetcher than googlesignin-ios
+      # will accept. SPM resolution is all-or-nothing, so nothing compiled at all.
+      #
+      # Flutter 3.47 turns Swift Package Manager on by default. CocoaPods is still fully supported,
+      # this project already has a Podfile carrying the ML Kit arm64 simulator fix, and CocoaPods
+      # resolves per-pod rather than solving one global version graph - so a pairing SPM rejects
+      # outright may well install. Whether it does is exactly what this run establishes; if
+      # CocoaPods refuses the same pairing it will say so in its own words, which is a far more
+      # useful failure than a package graph that never resolved.
+      - name: Resolve iOS dependencies with CocoaPods, not Swift Package Manager
+        run: flutter config --no-enable-swift-package-manager
+
       - name: Resolve Dart dependencies
         run: flutter pub get
 
