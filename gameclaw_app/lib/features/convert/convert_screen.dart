@@ -427,6 +427,36 @@ class _Loaded extends StatelessWidget {
 }
 
 /// The outcome, stated precisely.
+/// What the banner says underneath the "Booked on ..." headline.
+///
+/// A top-level function rather than a method on the widget that shows it, because the widget is
+/// private and this sentence is the part worth testing.
+///
+/// The `sameCode` clause exists because of a real result that reads like a failure. SportyBet and
+/// Football.com are separate sites running one platform, and they share the booking-code
+/// namespace - the code one issues resolves on the other. Converting between them therefore hands
+/// back the code that was pasted in, and a user who pastes AP6S8A and is shown AP6S8A has no way
+/// to tell a successful conversion from nothing happening at all. Confirmed against both sites'
+/// `orders/share` endpoint: the same code returns the same selection on each.
+String convertOutcomeLine({
+  required int carried,
+  required int total,
+  required String sourceBookmaker,
+  required String destinationBookmaker,
+  required bool sameCode,
+}) {
+  final line = StringBuffer('$carried of $total selections carried across.');
+  final lost = total - carried;
+  if (lost > 0) line.write(' $lost could not be.');
+  if (sameCode) {
+    line.write(
+      ' The code is unchanged: $sourceBookmaker and $destinationBookmaker share a booking '
+      'platform, so this one opens on both.',
+    );
+  }
+  return line.toString();
+}
+
 class _Result extends StatelessWidget {
   const _Result({
     required this.source,
@@ -500,8 +530,13 @@ class _Result extends StatelessWidget {
                             const SizedBox(height: GcSpace.xxs),
                             Text(
                               booked
-                                  ? '$carried of ${result.selections.length} selections carried across.'
-                                        '${lost > 0 ? ' $lost could not be.' : ''}'
+                                  ? convertOutcomeLine(
+                                      carried: carried,
+                                      total: result.selections.length,
+                                      sourceBookmaker: source.bookmakerName,
+                                      destinationBookmaker: result.bookmakerName,
+                                      sameCode: result.code == source.code,
+                                    )
                                   : 'The destination issued no booking code, so there is nothing to '
                                         'enter at the counter.',
                               style: GcType.caption,
