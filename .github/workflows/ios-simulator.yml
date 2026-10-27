@@ -134,12 +134,12 @@ jobs:
           grep -q 'Share Extension.*PBXNativeTarget' ios/Runner.xcodeproj/project.pbxproj \
             || echo "::notice::The share extension has sources but no native Xcode target, so the built app cannot receive shared text. Creating the target needs Xcode."
 
-      - name: Install pods
-        run: |
-          # No Podfile.lock is committed: nothing has ever resolved these pods. The lock this
-          # produces is uploaded below so it can be committed and the build made reproducible.
-          pod install --project-directory=ios
-
+      # There is deliberately no `pod install` step. Run #1 failed here in one second, because
+      # the Podfile raises during parsing unless ios/Flutter/Generated.xcconfig exists - and that
+      # file is gitignored, so it never reaches a runner. `flutter pub get` does not write it
+      # either; only a build does. `flutter build ios` generates it and then runs pod install
+      # itself (flutter_tools/lib/src/ios/mac.dart:393, processPodsIfNeeded), which is why
+      # installing pods by hand beforehand was both premature and unnecessary.
       - name: Build for the simulator
         # `--simulator` builds debug against the simulator SDK. `--no-codesign` is deliberately
         # absent - Flutter documents it as device-only, and a simulator build signs nothing anyway.
