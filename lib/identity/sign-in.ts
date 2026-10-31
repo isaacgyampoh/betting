@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
+import { verifyAppleIdToken } from "@/lib/identity/apple";
 import { verifyGoogleIdToken } from "@/lib/identity/google";
 import { issueSession, type IssuedSession } from "@/lib/identity/session";
 
@@ -31,10 +32,78 @@ export async function signInWithGoogle(
 ): Promise<IssuedSession & { isNew: boolean }> {
   const audience = env().GOOGLE_WEB_CLIENT_ID ?? "";
   const google = await verifyGoogleIdToken(idToken, audience);
+  return signInWithIdentity(
+    {
+      provider: "google",
+      subject: google.subject,
+      email: google.email,
+      emailVerified: google.emailVerified,
+      displayName: google.name,
+      avatarUrl: google.picture,
+    },
+    userAgent,
+  );
+}
+
+/**
+ * Turning a verified Apple identity into a GameClaw session.
+ *
+ * The audience is the iOS bundle identifier, because Apple stamps `aud` with it for a native app.
+ *
+ * One behaviour worth knowing before it surprises somebody. If a person already has an account
+ * from Google and then signs in with Apple choosing **Hide My Email**, Apple issues a per-app
+ * relay address that matches nothing we hold, so case 2 cannot fire and they get a second,
+ * separate account. That is not a bug we can fix: the whole point of the relay is that the real
+ * address is never disclosed, so there is nothing to match on. Choosing to share the real address
+ * links the accounts as expected. Apple requires the hide option to be offered, so both paths have
+ * to be acceptable.
+ */
+export async function signInWithApple(
+  idToken: string,
+  userAgent?: string | null,
+  rawNonce?: string | null,
+): Promise<IssuedSession & { isNew: boolean }> {
+  const audience = env().APPLE_BUNDLE_ID ?? "";
+  const apple = await verifyAppleIdToken(idToken, audience, rawNonce);
+  return signInWithIdentity(
+    {
+      provider: "apple",
+      subject: apple.subject,
+      email: apple.email,
+      // A relay address is verified by Apple exactly as a real one is, and is unique to this app
+      // and this person, so matching on it is as safe as matching a Google address.
+      emailVerified: apple.emailVerified,
+      displayName: null,
+      avatarUrl: null,
+    },
+    userAgent,
+  );
+}
+
+type ProviderIdentity = {
+  provider: "google" | "apple";
+  subject: string;
+  email: string | null;
+  emailVerified: boolean;
+  displayName: string | null;
+  avatarUrl: string | null;
+};
+
+/**
+ * The three cases, shared by every provider.
+ *
+ * Shared rather than copied because case 2 is the one that must be got right, and two copies of a
+ * security decision are two chances to get it wrong in only one of them.
+ */
+async function signInWithIdentity(
+  identity: ProviderIdentity,
+  userAgent?: string | null,
+): Promise<IssuedSession & { isNew: boolean }> {
+  const { provider } = identity;
 
   // 1. Known identity.
   const existing = await db.identity.findUnique({
-    where: { provider_subject: { provider: "google", subject: google.subject } },
+    where: { provider_subject: { provider, subject: identity.subject } },
     include: { profile: { select: { id: true, email: true, role: true, suspendedAt: true } } },
   });
 
@@ -45,7 +114,7 @@ export async function signInWithGoogle(
     await db.$transaction([
       db.identity.update({
         where: { id: existing.id },
-        data: { lastSeenAt: new Date(), email: google.email },
+        data: { lastSeenAt: new Date(), email: identity.email },
       }),
       db.profile.update({
         where: { id: existing.profileId },
@@ -62,9 +131,9 @@ export async function signInWithGoogle(
   }
 
   // 2. Known email, verified by Google, not yet linked.
-  if (google.email && google.emailVerified) {
+  if (identity.email && identity.emailVerified) {
     const byEmail = await db.profile.findFirst({
-      where: { email: { equals: google.email, mode: "insensitive" } },
+      where: { email: { equals: identity.email, mode: "insensitive" } },
       select: { id: true, email: true, role: true, suspendedAt: true },
     });
     if (byEmail) {
@@ -73,14 +142,14 @@ export async function signInWithGoogle(
         db.identity.create({
           data: {
             profileId: byEmail.id,
-            provider: "google",
-            subject: google.subject,
-            email: google.email,
+            provider,
+            subject: identity.subject,
+            email: identity.email,
           },
         }),
         db.profile.update({ where: { id: byEmail.id }, data: { lastSignInAt: new Date() } }),
       ]);
-      logger.info("identity.linked", { profileId: byEmail.id, provider: "google" });
+      logger.info("identity.linked", { profileId: byEmail.id, provider });
       return {
         ...(await issueSession(
           { id: byEmail.id, email: byEmail.email, role: byEmail.role },
@@ -95,17 +164,17 @@ export async function signInWithGoogle(
   const profile = await db.profile.create({
     data: {
       id: crypto.randomUUID(),
-      email: google.email,
-      displayName: google.name,
-      avatarUrl: google.picture,
+      email: identity.email,
+      displayName: identity.displayName,
+      avatarUrl: identity.avatarUrl,
       lastSignInAt: new Date(),
       identities: {
-        create: { provider: "google", subject: google.subject, email: google.email },
+        create: { provider, subject: identity.subject, email: identity.email },
       },
     },
     select: { id: true, email: true, role: true },
   });
-  logger.info("identity.created", { profileId: profile.id, provider: "google" });
+  logger.info("identity.created", { profileId: profile.id, provider });
 
   return {
     ...(await issueSession(profile, userAgent)),

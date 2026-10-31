@@ -36,6 +36,14 @@ const serverSchema = z.object({
    * missing one must reject rather than skip the check.
    */
   GOOGLE_WEB_CLIENT_ID: z.string().min(1).optional(),
+  /**
+   * The audience for Sign in with Apple: the iOS bundle identifier, because Apple stamps `aud`
+   * with it for a native app rather than issuing a separate client id. Comma-separated, for the
+   * same reason GOOGLE_WEB_CLIENT_ID is - a value baked into shipped builds cannot be swapped
+   * without rejecting every copy already installed. Absent means Apple sign-in is refused, which
+   * is the correct behaviour for a server that has not been told what to accept.
+   */
+  APPLE_BUNDLE_ID: z.string().min(1).optional(),
   /** Web push (notifications when daily picks are ready). Generate with: npx web-push generate-vapid-keys */
   NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().min(1).optional(),
   VAPID_PUBLIC_KEY: z.string().min(1).optional(),
