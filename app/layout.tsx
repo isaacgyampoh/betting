@@ -49,8 +49,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {children}
           <Toaster position="top-center" />
         </ThemeProvider>
-        {/* SessionKeeper lives in the app shell, not here: it pulls in the Supabase auth client
-            (about 250 KB), and a signed-out visitor reading the marketing pages never needs it. */}
         <ServiceWorkerRegister />
         <ReferralCapture />
       </body>

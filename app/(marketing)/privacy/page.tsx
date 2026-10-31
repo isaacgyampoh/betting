@@ -70,7 +70,8 @@ export default function PrivacyPage() {
       <h2>Who we share it with</h2>
       <ul>
         <li><strong>Render</strong> — hosting and the database.</li>
-        <li><strong>Supabase</strong> — sign-in for the web app.</li>
+        <li><strong>Google</strong> — verifying your identity when you sign in with Google.</li>
+        <li><strong>Apple</strong> — verifying your identity when you sign in with Apple.</li>
         <li><strong>Cloudflare</strong> — hosting for this website.</li>
         <li><strong>Google Firebase</strong> — delivering push notifications to your device.</li>
         <li><strong>Anthropic</strong> — processing the messages you send to the assistant.</li>

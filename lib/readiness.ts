@@ -1,7 +1,7 @@
 // Which parts of the app are configured. Reports variable NAMES only, never values.
 import { routeStatus } from "@/lib/bookmakers/providers/routes";
 
-const REQUIRED = ["DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"] as const;
+const REQUIRED = ["DATABASE_URL"] as const;
 
 export type Readiness = {
   ready: boolean;

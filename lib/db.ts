@@ -75,7 +75,12 @@ function getClient(): PrismaClient {
   if (cf) {
     let client = perRequest.get(cf.ctx);
     if (!client) {
-      // Hyperdrive when bound; otherwise the pooled Supabase URL (DATABASE_URL secret).
+      // Hyperdrive if a binding exists, otherwise DATABASE_URL - and on Cloudflare neither one
+      // reaches the database. The website Worker's Hyperdrive binding was removed when /api/v1 was
+      // moved behind the forwarder in worker.ts, and gameclaw-db accepts no external connections
+      // anyway, so a query from the edge fails whichever branch it takes. That is the intent:
+      // nothing on the edge should arrive here. The branch survives for the gameclaw-api Worker in
+      // wrangler.api.jsonc, which still binds one.
       client = createClient(cf.env.HYPERDRIVE?.connectionString ?? env().DATABASE_URL);
       perRequest.set(cf.ctx, client);
     }

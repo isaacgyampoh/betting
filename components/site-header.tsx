@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { AuthButton } from "@/components/auth-button";
 import { DesktopNav } from "@/components/desktop-nav";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -14,7 +13,6 @@ export function SiteHeader() {
         <DesktopNav />
         <div className="flex items-center gap-1">
           <ThemeToggle />
-          <AuthButton />
         </div>
       </div>
     </header>

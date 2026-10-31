@@ -1,6 +1,5 @@
 import "server-only";
 import { cache } from "react";
-import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
 import { readAccessToken } from "@/lib/identity/session";
 import { AppError } from "@/lib/errors";
@@ -10,35 +9,29 @@ import type { UserRole } from "@/lib/generated/prisma/enums";
 export type AuthUser = { id: string; email: string | null };
 
 /**
- * Resolves the signed-in user from a bearer token, or the Supabase cookie on the website.
+ * Resolves the signed-in user from a bearer token.
  *
- * A bearer token is GameClaw's own, verified locally with our signing secret - no network call and
- * no third party. This is what every session gets.
+ * The token is GameClaw's own, verified locally with our signing secret - no network call and no
+ * third party.
  *
- * There used to be a second issuer here: a Supabase fallback, so sessions from before the cutover
- * kept working rather than everybody being signed out the moment it deployed. The Supabase project
- * has since been deleted, which ends that argument - a token it issued cannot be verified by
- * anyone now. What the fallback still did was spend a network round trip to a host that no longer
- * resolves, on every request carrying a token we had already declined, before returning the null
- * it was always going to return.
+ * There was a second issuer here until this commit: a Supabase cookie fallback, kept so that
+ * sessions predating the cutover survived the deploy instead of everybody being signed out at
+ * once. That argument has expired on its own terms. The Supabase project has been deleted, so a
+ * token it issued can no longer be verified by anybody; its access tokens were short-lived, so
+ * nothing it signed has been valid for weeks. What the branch still did was spend a round trip to
+ * a hostname that no longer resolves, on every cookie-bearing request, before returning the null
+ * it was always going to return. The comment it carried said the branch and the dependency would
+ * go once that was true. It is, so they have.
  *
- * Ours is tried first because it is the cheap one: a local HS256 verification against a token we
- * issued, versus a call into the Supabase client. Once no Supabase-issued token can still be
- * valid - their access tokens are short-lived, so that is hours rather than weeks after the
- * Flutter app stops asking Supabase for them - the second branch and the whole dependency go.
+ * The consequence, stated plainly because it is easy to miss: a request with no bearer token now
+ * has no identity at all. Nothing authenticates by cookie any more except the admin dashboard,
+ * which reads `gc_admin_session` through lib/identity/admin.ts and never came through here.
  */
 export const getAuthUser = cache(async (authorization?: string | null): Promise<AuthUser | null> => {
   const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
-
-  if (bearer) {
-    const own = await readAccessToken(bearer);
-    return own ? { id: own.id, email: own.email } : null;
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.getClaims();
-  if (error || !data) return null;
-  return { id: data.claims.sub, email: (data.claims.email as string | undefined) ?? null };
+  if (!bearer) return null;
+  const own = await readAccessToken(bearer);
+  return own ? { id: own.id, email: own.email } : null;
 });
 
 export async function requireUser(authorization?: string | null): Promise<AuthUser> {
@@ -65,8 +58,10 @@ export async function requireUser(authorization?: string | null): Promise<AuthUs
  * production build, and Hyperdrive is not serving stale reads (checked on the live site: a
  * subscription written straight to the database shows up on the very next request). So the reason
  * this is a write is that reads here have been seen to be wrong in production, and nobody has
- * explained it. scripts/smoke-live.mjs is the check that caught it; run it before trusting a change
- * to this function.
+ * explained it. The check that caught it was a browser walk-through in scripts/smoke-live.mjs that
+ * signed up a throwaway Supabase user; both the user source and the web app it walked are gone, so
+ * that script now verifies the live site differently and no longer exercises this path. A change
+ * to this function needs a deliberate test against production data.
  */
 export const getProfile = cache(async (user: AuthUser) => {
   let row: ProfileRow | undefined;
@@ -77,12 +72,16 @@ export const getProfile = cache(async (user: AuthUser) => {
       returning *
     `;
   } catch (err) {
-    // 23503 is a foreign key violation, and profiles.id references auth.users.id. The only way to
-    // get here is a token for a user who no longer exists: the signature is still valid and the
-    // expiry has not passed, but the account behind it was deleted. That is an unauthorised
-    // request, not a server fault, and answering 500 makes the app retry it four times and show
-    // "something went wrong" to someone whose real problem is that they need to sign in again.
-    // Found with a token held by a phone across an account deletion.
+    // 23503 is a foreign key violation. What it guarded was `profiles.id -> auth.users.id`, which
+    // 20261030120000_drop_supabase_coupling removed because it was rejecting every new signup -
+    // nothing writes to auth.users now, so an invented UUID had nothing to reference. The insert
+    // above therefore cannot raise 23503 any more.
+    //
+    // Kept rather than deleted, because the translation it performs is still the right one if any
+    // future constraint does fire here: it means a token for a row that cannot exist, which is a
+    // request to sign in again rather than a server fault. Answering 500 makes the app retry four
+    // times and then show "something went wrong" to somebody whose actual problem is that their
+    // account is gone. Found with a token held by a phone across an account deletion.
     if (typeof err === "object" && err !== null && (err as { code?: string }).code === "P2003") {
       throw new AppError("UNAUTHORIZED", "Please sign in again.", { cause: err });
     }

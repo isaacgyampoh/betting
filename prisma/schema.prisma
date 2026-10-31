@@ -20,7 +20,12 @@ enum UserRole {
   ADMIN
 }
 
-/// One row per Supabase auth user. `id` equals auth.users.id and is created by a DB trigger.
+/// One row per person. `id` is a UUID the application generates in lib/identity/sign-in.ts.
+///
+/// It used to be one row per Supabase auth user, mirrored in by the `on_auth_user_created`
+/// trigger and held to auth.users by a foreign key. 20261030120000_drop_supabase_coupling
+/// removed both: the trigger could never fire again, and the foreign key was rejecting every
+/// new signup. Rows created before that still have ids matching the old auth.users rows.
 model Profile {
   id               String    @id @db.Uuid
   email            String?
@@ -41,7 +46,7 @@ model Profile {
   remindersOn      Boolean   @default(false) @map("reminders_on")
   /// Self-exclusion: blocks sign-in features until this time passes. Cannot be shortened.
   excludedUntil    DateTime? @map("excluded_until") @db.Timestamptz
-  /// Set on every successful sign-in. Supabase kept this in auth.users, which we are leaving.
+  /// Set on every successful sign-in. Supabase kept this in auth.users, which we have left.
   lastSignInAt     DateTime? @map("last_sign_in_at") @db.Timestamptz
   /// An administrator has blocked this account. Sign-in and refresh both refuse while it is set.
   suspendedAt      DateTime? @map("suspended_at") @db.Timestamptz

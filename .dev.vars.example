@@ -1,5 +1,7 @@
 # Local secrets for `pnpm cf:preview` (wrangler dev). Copy to .dev.vars. Never commit .dev.vars.
-DATABASE_URL=postgresql://postgres.PROJECT:PASSWORD@aws-1-eu-west-1.pooler.supabase.com:6543/postgres
+# The website Worker has no database binding and should never query Postgres - worker.ts
+# forwards /api/v1 to the API. This is here for `wrangler dev` against a local database.
+DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/gameclaw
 IP_HASH_SALT=
 CRON_SECRET=
 ANTHROPIC_API_KEY=

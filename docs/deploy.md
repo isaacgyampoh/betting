@@ -1,6 +1,16 @@
-# Deploying gameclaw (Cloudflare Workers + Supabase)
+# Deploying gameclaw (Cloudflare Workers + Render)
 
-**Production:** https://gameclaw.win. This is the Cloudflare Worker `gameclaw`, built with `@opennextjs/cloudflare`. Supabase Postgres is in eu-west-1 (Ireland).
+**Production:** two deployments of the same Next application, and which one owns the database is the
+thing to keep straight.
+
+| | Serves | Database |
+|---|---|---|
+| Cloudflare Worker `gameclaw` | https://gameclaw.win — the marketing site | **none.** `/api/v1` is forwarded to the API (`worker.ts`) |
+| Render `gameclaw-api` | https://gameclaw-api.onrender.com — the API the phone apps call, and `/admin` | `gameclaw-db`, Postgres 17 in Frankfurt |
+
+Render Postgres is the only production database. It accepts no external connections, which is why
+the Worker has no binding and forwards instead — see the comment at the end of `wrangler.jsonc`.
+Supabase was retired; `docs/supabase-retirement.md` has the history.
 
 Plan: **Workers Paid ($5/month) is required.** The Worker is ~4.9 MiB gzipped (the free limit is 3 MiB), and the free plan's 10 ms CPU per request is too little for server-rendered Next.js. The paid plan includes Hyperdrive, Cron Triggers and Workers Logs.
 
@@ -31,20 +41,20 @@ For local preview secrets, copy `.dev.vars.example` to `.dev.vars` (git-ignored)
 ## Configuration
 
 ### Public values: `wrangler.jsonc` → `vars` (committed)
-`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`, `SPORTYBET_MODE`, `BETWAY_MODE` and `STATS_MODE`. These are safe to publish: the anon key is protected by RLS, and `pk_` keys are public by design.
+`NEXT_PUBLIC_SITE_URL`, `GC_DATA_API_BASE`, `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`, `SPORTYBET_MODE`, `MSPORT_MODE`, `FOOTBALLCOM_MODE`, `BETWAY_MODE`, `STATS_MODE` and `ALLOW_SAMPLE_DATA`. These are safe to publish: `pk_` keys are public by design and the rest are switches, not secrets.
 
 ### Secrets: `npx wrangler secret put <NAME>` (server-only, never committed)
 
 | Secret | Value |
 |---|---|
-| `DATABASE_URL` | Supabase transaction pooler, port 6543. Used if Hyperdrive isn't bound. |
+| `DATABASE_URL` | Only used off Cloudflare. The website Worker must not query Postgres — `worker.ts` forwards `/api/v1` to the API. |
 | `IP_HASH_SALT` | `openssl rand -hex 32` |
 | `CRON_SECRET` | `openssl rand -hex 32` |
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys |
 | `PAYSTACK_SECRET_KEY` | Paystack → Settings → API Keys (`sk_live_…`) |
 | `API_FOOTBALL_KEY` | optional; dashboard.api-football.com |
 
-The Supabase service_role key is never used. Don't add it.
+All database access goes through Prisma. There is no Supabase project, so no Supabase key belongs anywhere here.
 
 ### Rotating any of these
 
@@ -63,37 +73,47 @@ GitHub → repo → Settings → Secrets and variables → Actions holds three s
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | restricted token **gameclaw-deploy (GitHub Actions)**: Workers Scripts/Routes edit, Hyperdrive read, Tail read, account/user read. Not the Global API Key. |
 | `CLOUDFLARE_ACCOUNT_ID` | `d5c6a14614d6735d517c542ca2c15611` |
-| `DIRECT_URL` | Supabase session pooler (port 5432), for migrations |
+| `DIRECT_URL` | `gameclaw-db`, for `prisma migrate deploy`. The external Frankfurt hostname from CI. |
 
 Pull requests run the checks but never deploy. For a manual deploy from your machine, run `CLOUDFLARE_API_TOKEN=… pnpm cf:deploy`.
 
-### Hyperdrive (recommended)
-Without it, every request opens a new TLS connection to Ireland. With it, pooled connections sit next to the database.
-```bash
-npx wrangler hyperdrive create gameclaw-db --caching-disabled \
-  --connection-string="postgresql://postgres.qefedcphkmxuxjetmtqw:<PASSWORD>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
-```
-It's already created (`gameclaw-db`, query caching **disabled** so fresh reads are never stale) and bound as `HYPERDRIVE` in `wrangler.jsonc`. `lib/db.ts` uses it automatically.
+### Hyperdrive: removed, on purpose
+
+There was a Hyperdrive binding (`673d415bb1174f8092e5649a5675516a`) pointing at the Supabase
+project. When that project was deleted every `/api/v1` route on gameclaw.win began answering 500 or
+503 while the identical route on Render answered correctly, and both cron jobs failed silently every
+morning.
+
+It was not re-pointed at `gameclaw-db`, because Hyperdrive egresses from Cloudflare's shared address
+ranges: allowing it in means opening the database to ranges every Cloudflare customer shares.
+`worker.ts` forwards an allowlisted set of `/api/v1` paths to the API instead, which already has a
+private connection. One process talks to Postgres.
+
+Consequence worth knowing: `opennextjs-cloudflare deploy` no longer needs
+`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` set to resolve a binding.
 
 ### Checking a deploy from outside
 
 `/api/v1/health` reports the commit it is serving, so "it is up" and "it is the new one" are
 different questions. CI's smoke test waits for its own sha.
 
-Nothing in the test suites can see Workers, Hyperdrive or the browser, and all three have broken
-the live site while every test passed. After a deploy that touches auth, the database layer or the
-root layout, be a user:
+Nothing in the test suites can see the deployed Worker, and that gap has broken the live site while
+every test passed. After any deploy, run:
 
 ```bash
-SERVICE_KEY=... node scripts/smoke-live.mjs
+node scripts/smoke-live.mjs
 ```
 
-It signs up a throwaway account, confirms 18+, walks every tab on a phone-sized viewport, fails on
-any browser error, and deletes the account. `SERVICE_KEY` is the Supabase service-role key.
+No credentials, nothing written. It checks the marketing pages, that `/api/v1/health` comes back
+`ok` — which only happens if the request reached Render, since the Worker has no database of its own
+— that the paths outside the allowlist are refused with 404 rather than served as a 500, and that
+the redirects still hold. It checks the API directly last, so a failure can be attributed to one
+side or the other.
 
-For `pnpm cf:preview`, point the binding at a real database:
+Before deploying the Worker, confirm the allowlist in `worker.ts` still matches real routes:
+
 ```bash
-export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="$(grep ^DIRECT_URL= .env.local | cut -d= -f2-)"
+GC_LIVE=1 pnpm vitest run tests/worker/api-forward.live.test.ts
 ```
 
 ## Domain: gameclaw.win
@@ -109,15 +129,16 @@ Cutover from Vercel is done (30 Sep 2026): both hostnames are Worker custom doma
 
 ## Third-party settings for gameclaw.win
 
-**Supabase → Authentication → URL Configuration**
-- Site URL: `https://gameclaw.win`
-- Redirect URLs: `https://gameclaw.win/**`, `http://localhost:3000/**`, `http://localhost:8787/**`
+Sign-in is GameClaw's own: the client obtains an ID token from Google or Apple and posts it to
+`/api/v1/auth/google` or `/api/v1/auth/apple`, which verifies it against the provider's JWKS and
+issues our session. There is no auth provider to configure, and no redirect URL — the native flows
+do not use one.
 
 **Google Cloud → Credentials → OAuth client**
-- Authorized JavaScript origins: `https://gameclaw.win`
-- Authorized redirect URIs: `https://qefedcphkmxuxjetmtqw.supabase.co/auth/v1/callback`
+- Authorized JavaScript origins: `https://gameclaw.win` (for the admin dashboard's Google button)
+- Authorized redirect URIs: none needed; the ID token flow does not redirect
 - OAuth consent screen:
-  - Authorized domains: `gameclaw.win` and `supabase.co`
+  - Authorized domains: `gameclaw.win`
   - Homepage `https://gameclaw.win`; privacy `https://gameclaw.win/privacy`; terms `https://gameclaw.win/terms`
   - Then **Publish app**.
 
@@ -136,10 +157,10 @@ Cutover from Vercel is done (30 Sep 2026): both hostnames are Worker custom doma
    | TXT | `resend._domainkey` | the DKIM value from Resend |
    | TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:dmarc@gameclaw.win` |
 
-3. Once verified, go to Supabase → Authentication → **SMTP Settings**:
-   - Host `smtp.resend.com`, port `465`, username `resend`, password = the Resend API key
-   - Sender `noreply@gameclaw.win`, name `gameclaw`
-4. Raise the email rate limit to about 100 per hour.
+3. Nothing in the application sends email. This domain setup exists for replies from
+   `support@gameclaw.win`, which Cloudflare Email Routing forwards — the application has no SMTP
+   configuration and no transactional email, because sign-in is an ID token rather than a magic
+   link.
 
 ## After each deploy
 
@@ -208,7 +229,8 @@ done
 ```bash
 flutter build apk --debug \
   --dart-define=GC_API_BASE=https://gameclaw-api.<subdomain>.workers.dev/api/v1 \
-  --dart-define=GC_SUPABASE_URL=... --dart-define=GC_SUPABASE_ANON_KEY=...
+  --dart-define=GC_AUTH_BASE=https://gameclaw-api.onrender.com/api/v1 \
+  --dart-define=GC_GOOGLE_SERVER_CLIENT_ID=...
 ```
 
 ### Cost
@@ -236,5 +258,6 @@ The app calls exactly seven, all under `/api/v1`:
 | `GET /ai/allowance` | bearer + 18+ |
 | `POST /ai/chat` | bearer + 18+ |
 
-Auth is `Authorization: Bearer <Supabase access token>`, verified in `lib/auth.ts` against the
-project's JWKS. The app holds nothing else.
+Auth is `Authorization: Bearer <GameClaw access token>`, issued by `/api/v1/auth/google` or
+`/api/v1/auth/apple` and verified locally in `lib/auth.ts` with our own signing secret — no network
+call and no third party. The app holds nothing else.

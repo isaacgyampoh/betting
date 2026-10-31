@@ -127,9 +127,3 @@ services:
         sync: false
       - key: NEXT_PUBLIC_SITE_URL
         sync: false
-      # Still required by lib/env.ts while the Supabase fallback in lib/auth.ts is in place, so
-      # that sessions issued before the cutover keep working. Both go when that branch does.
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false
-      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
-        sync: false
