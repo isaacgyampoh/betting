@@ -57,6 +57,37 @@ services:
     # pnpm version pinned by `packageManager` without touching the system copy. The mkdir is not
     # optional: corepack lstats the directory before writing and exits ENOENT if it is absent.
     buildCommand: mkdir -p "$HOME/.corepack-bin" && corepack enable --install-directory "$HOME/.corepack-bin" && export PATH="$HOME/.corepack-bin:$PATH" && pnpm install --frozen-lockfile && pnpm db:generate && pnpm build
+    # Migrations run here, as part of the deploy, over Render's private network.
+    #
+    # They used to run in GitHub Actions, which cannot reach the private network and so connected
+    # to the database's **public** hostname with secrets.DIRECT_URL. That is the only reason
+    # `gameclaw-db` needs to accept connections from the internet at all - and by default it accepts
+    # them from everywhere, which it still does: a bare TCP connect to
+    # dpg-db9n7d7btjjs73cbok6g-a.frankfurt-postgres.render.com:5432 from an arbitrary machine is
+    # answered, and the server offers TLS. Credentials are still required, so this is exposure
+    # rather than compromise, but port 5432 is open to every host on the internet.
+    #
+    # A pre-deploy command closes that gap without any new infrastructure. It runs after
+    # buildCommand and before startCommand, in this service's own environment and region, so
+    # DIRECT_URL below resolves to the database's internal hostname and the connection never leaves
+    # Render's network. It is Render's documented recommendation for migrations, and Prisma's.
+    #
+    # It fails safe, which is the reason to prefer it to a start-command migration: if it fails or
+    # times out (30 minutes) the deploy fails, later steps do not run, and the service keeps serving
+    # its last successful deploy with zero downtime. It also runs once per deploy rather than once
+    # per instance, so two instances cannot race the same migration.
+    #
+    # The binary directly, not `pnpm db:migrate`: buildCommand installs corepack shims into
+    # $HOME/.corepack-bin and puts them on PATH for its own shell only, and the pre-deploy command
+    # runs on a separate instance that does not inherit that PATH. Calling node_modules/.bin/prisma
+    # needs no package manager and fails loudly if the dependency is missing rather than silently
+    # fetching a different version the way `npx` would.
+    #
+    # Cost: pre-deploy commands draw on the same build pipeline minutes the buildCommand already
+    # uses (500/month included, then $5 per 1,000). `prisma migrate deploy` with nothing pending
+    # takes seconds, and deploys here are manual, so this adds no new charge and no new service.
+    preDeployCommand: node_modules/.bin/prisma migrate deploy
+
     startCommand: pnpm start
     healthCheckPath: /api/v1/health
     envVars:
