@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -171,10 +173,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   ],
                   if (configured && !google) ...[
                     const SizedBox(height: GcSpace.lg),
-                    const GcNote(
-                      'Continue with Google is not available in this build. It needs a Web OAuth '
-                      'client id, and an Android OAuth client registered against this app\'s '
-                      'package name and signing fingerprint.',
+                    GcNote(
+                      // Named per platform, because the missing piece differs and a message that
+                      // sends someone hunting for an Android fingerprint on an iPhone is worse
+                      // than none at all.
+                      Platform.isIOS
+                          ? 'Continue with Google is not available in this build. It needs an iOS '
+                                'OAuth client id passed as GC_GOOGLE_IOS_CLIENT_ID, and the '
+                                'matching reversed client id as a CFBundleURLTypes entry.'
+                          : 'Continue with Google is not available in this build. It needs a Web '
+                                'OAuth client id, and an Android OAuth client registered against '
+                                'this app\'s package name and signing fingerprint.',
                       icon: Icons.info_outline_rounded,
                     ),
                   ],

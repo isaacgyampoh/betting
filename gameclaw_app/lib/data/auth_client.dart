@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:dio/dio.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -106,7 +107,34 @@ class SupabaseConfig {
 
   /// Whether this build can offer Google at all. False is a configuration fact, not a failure,
   /// and the screen says which piece is missing rather than showing a button that dead-ends.
-  bool get hasGoogle => isConfigured && googleServerClientId.isNotEmpty;
+  ///
+  /// iOS needs a second value, and without it the button does worse than dead-end: it takes the
+  /// app down. google_sign_in_ios resolves its client id from the one passed in, falling back to
+  /// CLIENT_ID in GoogleService-Info.plist (GoogleSignInPlugin.swift). With neither, it builds no
+  /// GIDConfiguration, and the Google SDK raises an uncaught Objective-C exception the moment a
+  /// sign-in is attempted - which on a device is not an error dialog, it is the app disappearing.
+  /// Observed on an iPhone 12 Pro Max: tapping Continue with Google returned the user to the home
+  /// screen with the process gone.
+  ///
+  /// Android needs no equivalent, because its client is matched by package name and signing
+  /// fingerprint rather than named in the build.
+  bool get hasGoogle => googleAvailable(
+    configured: isConfigured,
+    serverClientId: googleServerClientId,
+    iosClientId: googleIosClientId,
+    isIOS: Platform.isIOS,
+  );
+
+  /// The rule behind [hasGoogle], as a plain function so it can be tested on both platforms.
+  /// A test runs on the Dart VM, where `Platform.isIOS` is always false, so the branch that
+  /// matters most is the one a test could never otherwise reach.
+  static bool googleAvailable({
+    required bool configured,
+    required String serverClientId,
+    required String iosClientId,
+    required bool isIOS,
+  }) =>
+      configured && serverClientId.isNotEmpty && (!isIOS || iosClientId.isNotEmpty);
 }
 
 /// A signed-in session.

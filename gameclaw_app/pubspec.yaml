@@ -56,10 +56,33 @@ dependencies:
   share_plus: ^13.3.1
 
   # The other direction: receiving a slip shared *into* GameClaw from a bookmaker's app.
-  receive_sharing_intent: ^1.9.0
+  #
+  # Pinned to 1.8.1, and not casually. 1.9.0 removed the CocoaPods podspec and went Swift Package
+  # Manager only, which forces the whole iOS build onto SPM - and SPM cannot resolve this app's
+  # plugins. It solves one global version graph, so it takes firebase-ios-sdk 13.x whole, including
+  # FirebaseAuth's GTMSessionFetcher 4.x, which collides with googlesignin-ios 9.x capped below
+  # 4.0.0. CocoaPods pulls only the subspecs actually used, and FirebaseMessaging 13.1.1 does not
+  # depend on GTMSessionFetcher at all, so on that side there is no conflict to resolve.
+  #
+  # So this pin is what keeps firebase_messaging and google_sign_in at the versions the shipped
+  # Android release is built and tested against. The alternative was downgrading Firebase to the
+  # 12.x line to satisfy SPM, which would have changed the push stack under a working Android app
+  # to fix an iOS toolchain problem.
+  #
+  # What 1.9.0 would have bought is iOS-only: a rebuilt share-extension compose UI and the UIScene
+  # migration. Nothing in lib/ uses either. `ReceiveSharingIntent.instance`, `getInitialMedia`,
+  # `getMediaStream` and `SharedMediaFile` are all present in 1.8.1, as is the
+  # `shouldAutoRedirect()` hook ios/Share Extension/ShareViewController.swift overrides.
+  receive_sharing_intent: 1.8.1
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  # Drives the real app on a real device. XCUITest cannot: Flutter paints its whole UI into one
+  # FlutterView, so UIKit exposes no buttons or labels to query and XCUITest can assert little
+  # beyond "it launched". integration_test runs in-process with the widget tree, so it can find a
+  # tab by its label and know whether a screen actually rendered.
+  integration_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to

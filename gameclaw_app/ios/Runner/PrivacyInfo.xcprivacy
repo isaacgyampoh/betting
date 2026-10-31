@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  GameClaw's own privacy manifest.
+
+  Apple requires one per binary that collects data or calls a required-reason API. Every third-party
+  framework in this app already ships its own - Flutter, FirebaseMessaging, GoogleSignIn,
+  flutter_secure_storage, flutter_local_notifications, ML Kit and the rest, 18 in all - and those
+  cover what those SDKs do. This file covers only what GameClaw itself does.
+
+  Every entry below was read out of the code rather than guessed, and the omissions are as
+  deliberate as the entries:
+
+    * No tracking. There is no analytics SDK, no crash reporter, no advertising SDK and no
+      attribution SDK in pubspec.yaml. NSPrivacyTracking is false and the tracking-domains list is
+      empty because there is nothing to put in it.
+
+    * Photos are NOT collected. The slip scanner opens the photo library, but the image never
+      leaves the device: google_mlkit_text_recognition reads the text on-device and only that text
+      is sent. There is no multipart upload anywhere in lib/. Declaring photo collection here would
+      be inaccurate in the direction that looks more cautious, which is still inaccurate.
+
+    * No required-reason API types are declared, because the Runner target and the compiled Dart
+      call none directly. Where a plugin uses one - shared_preferences reaching UserDefaults, for
+      instance - that plugin declares it in its own manifest, which is the binary Apple asks.
+
+  Keep this in step with the code. A manifest that drifts is worse than one that is missing,
+  because it is a statement to Apple and to users that has stopped being true.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<!-- From Google Sign-In, and only so an account exists to attach slips and chat to. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeEmailAddress</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+
+		<!--
+		  The display name Google supplies, written when a profile is first created
+		  (lib/identity/sign-in.ts). I nearly left this out: the sign-in path only updates email on
+		  a returning user, so a quick read suggests name is never stored. It is - on the create
+		  branch - and the privacy policy already said so.
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeName</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+
+		<!--
+		  The Google profile picture, stored as the URL Google hosts rather than the image itself,
+		  which is why this is Other Data and not Photos or Videos. Photos the user picks for slip
+		  scanning are a separate matter and are never collected at all - see the note above.
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherDataTypes</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+
+		<!-- The account identifier the API issues. Needed to return the right person's data. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+
+		<!--
+		  What the user types into Claw, and the slips and booking codes that come back. Sent to
+		  GameClaw's API because the conversation and the slips are server-side; the model needs the
+		  question and the bookmaker needs the selections.
+		-->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array/>
+</dict>
+</plist>

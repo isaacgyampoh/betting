@@ -34,7 +34,7 @@ GOOGLE_SERVER_CLIENT_ID="400646694915-b4oh5athe842emcnga4913s1oq1igjh1.apps.goog
 # unaffected either way: its client is matched by package and signing fingerprint, never named.
 #
 #   GC_GOOGLE_IOS_CLIENT_ID=400646694915-xxxx.apps.googleusercontent.com ./build-release.sh ios
-GOOGLE_IOS_CLIENT_ID="${GC_GOOGLE_IOS_CLIENT_ID:-}"
+GOOGLE_IOS_CLIENT_ID="${GC_GOOGLE_IOS_CLIENT_ID:-400646694915-hm7av2f3dgs60k955igeasok409g6hh5.apps.googleusercontent.com}"
 
 cd "$(dirname "$0")"
 

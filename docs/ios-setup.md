@@ -188,6 +188,75 @@ running.
    not a reflection of it.
 6. Decide on iPad. The app is phone-shaped; the template enables iPad by default.
 
+## Running it again: the seven-day clock
+
+The free Personal Team signs builds with a provisioning profile that lasts **seven days**. When it
+lapses the app does not warn anybody - the icon stays on the Home screen and tapping it does
+nothing, because iOS refuses to launch an app whose profile has expired. Nothing is broken and
+nothing needs diagnosing. The app has to be built again from this Mac.
+
+```bash
+cd gameclaw_app
+./ios-dev-install.sh
+```
+
+That is the whole recovery. The script renews the profile, rebuilds, reinstalls and launches,
+and prints the new expiry date when it finishes.
+
+### Why a script rather than one flutter command
+
+`flutter build ios` asks Xcode for a provisioning profile but never offers to create one. The
+first build after expiry therefore fails with:
+
+```
+No profiles for 'win.gameclaw.app' were found
+```
+
+which reads like a misconfiguration and is not - it means no profile exists yet and nobody has
+been given permission to make one. Only `xcodebuild -allowProvisioningUpdates` can mint or renew
+it, and Flutter does not pass that flag. So the script runs that first, every time; when the
+profile is still valid it costs a few seconds and changes nothing.
+
+It also checks the two things that fail silently:
+
+- **an unsigned app**, which installs happily and then refuses to launch;
+- **an unresolved `$(GOOGLE_REVERSED_CLIENT_ID)`**, which ships the literal placeholder. That
+  looks correct in the source and breaks Google sign-in on the device with nothing in the log.
+
+And it retries the install once. Transfers drop with `device disconnected immediately after
+connecting` often enough to matter, and the failure is easy to miss: the launch that follows
+starts the *previous* build and looks like success. That happened during the first install and
+cost a confusing ten minutes.
+
+### What it needs, and what it does not
+
+| Needs | |
+|---|---|
+| Xcode at `/Applications/Xcode.app` | the Command Line Tools carry no iOS SDK |
+| CocoaPods | `brew install cocoapods` |
+| The iPhone plugged in, unlocked and trusted | a charge-only cable will not do |
+| Developer Mode on the iPhone | Settings › Privacy & Security › Developer Mode |
+
+**No credential has to change.** Not the OAuth client ids, not the Firebase project or its package
+versions, nothing under `android/`, and nothing on the production backend. The signing identity is
+the only credential involved, it is the free Personal Team's, and renewing it costs nothing and
+needs no password once the Apple Account is in Xcode.
+
+A rebuild is therefore unattended: plug the phone in, run the script.
+
+### If the certificate itself expires
+
+The provisioning profile lapses after seven days; the **Apple Development certificate** behind it
+lasts a year. If that one expires, or the Apple Account is signed out of Xcode, the script fails at
+the provisioning step. Re-add the account in Xcode › Settings › Accounts and run it again - the
+certificate is reissued automatically.
+
+### What this does not buy
+
+Push notifications and the share extension stay out of reach regardless of how often the app is
+rebuilt. Both need capabilities Apple issues only to the paid Developer Program: `aps-environment`
+for push, an App Group for the extension. See the table above.
+
 ## Two Google projects, and the trap between them
 
 This is the single thing most likely to cost a day on iOS, so it is written down before anyone

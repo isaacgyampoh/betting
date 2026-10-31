@@ -87,3 +87,6 @@ marketing/build/*.swift.bak
 marketing/build/vo.aiff
 marketing/deliverables/*.mp4
 marketing/deliverables/*.png
+
+# Editor-local settings.
+.vscode/

@@ -1,1 +1,21 @@
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
+
+// Signing. Set here rather than in project.pbxproj so that `pod install`, which rewrites the
+// project file, cannot drop it - and so the team id is visible in one obvious place.
+//
+// H388VA2V7X is the free Personal Team that comes with an ordinary Apple Account. Free
+// provisioning signs a build for a device the account owns; it does not need the paid Developer
+// Program. Two limits come with it: the profile expires after 7 days, and a device holds at most
+// three such apps at once.
+DEVELOPMENT_TEAM = H388VA2V7X
+
+// The reversed iOS OAuth client id, which Info.plist references as $(GOOGLE_REVERSED_CLIENT_ID)
+// to register the URL scheme Google redirects back through after sign-in. Without the scheme the
+// redirect has nowhere to land and sign-in hangs rather than failing.
+//
+// The forward form of this same client is passed to Dart as GC_GOOGLE_IOS_CLIENT_ID; see
+// build-release.sh. Both are public values - a client id ships inside every copy of the app - and
+// neither is a secret. The client lives in game-claw (400646694915), the project whose web client
+// the API checks the token audience against, NOT in gameclaw-push-notifications.
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.400646694915-hm7av2f3dgs60k955igeasok409g6hh5
