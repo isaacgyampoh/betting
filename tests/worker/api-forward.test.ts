@@ -314,6 +314,23 @@ describe("what it does with Render's answer", () => {
     expect(await res.text()).toBe("{}");
   });
 
+  // Seen on the live site after the first deploy: these arrived under gameclaw.win and named the
+  // infrastructure behind it.
+  it("does not pass on Render's own infrastructure headers", async () => {
+    reply = () => new Response("{}", {
+      headers: {
+        "x-render-origin-server": "Render",
+        "rndr-id": "6eacd7e6-803e-466d",
+        "x-request-id": "kept",
+      },
+    });
+    const res = await hit("/api/v1/health");
+    expect(res.headers.get("x-render-origin-server")).toBeNull();
+    expect(res.headers.get("rndr-id")).toBeNull();
+    // Still a pass-through for everything else, so this stays a narrow exclusion.
+    expect(res.headers.get("x-request-id")).toBe("kept");
+  });
+
   it("reports an unreachable API as 502 rather than pretending there is no data", async () => {
     reply = () => { throw new TypeError("network error"); };
     const res = await hit("/api/v1/matches");
@@ -353,7 +370,7 @@ describe("the rest of the Worker still behaves", () => {
   });
 
   it("still redirects the app-only routes home", async () => {
-    for (const path of ["/chat", "/login", "/account", "/convert", "/slip/abc", "/welcome", "/auth/callback"]) {
+    for (const path of ["/chat", "/account", "/convert", "/slip/abc", "/welcome", "/auth/callback"]) {
       const res = await hit(path);
       expect(res.status, path).toBe(302);
       expect(res.headers.get("location"), path).toBe("https://gameclaw.win/");
@@ -370,8 +387,18 @@ describe("the rest of the Worker still behaves", () => {
     }
   });
 
+  // /login is served, not redirected. It was redirected while it was a Supabase form that could
+  // not work; it now explains that accounts live in the app, which is worth showing to somebody who
+  // arrives on an old link, and two page guards plus the checkout button still point at it.
+  it("serves /login rather than bouncing it home", async () => {
+    const res = await hit("/login?next=%2Fslip");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("reached the next handler");
+    expect(calls, "/login needs no API call").toHaveLength(0);
+  });
+
   it("still serves the marketing pages from this build", async () => {
-    for (const path of ["/", "/pricing", "/support", "/track-record"]) {
+    for (const path of ["/", "/pricing", "/support", "/track-record", "/login"]) {
       const res = await hit(path);
       expect(res.status, path).toBe(200);
       expect(await res.text()).toContain("reached the next handler");

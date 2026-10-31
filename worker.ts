@@ -26,8 +26,13 @@ const CRON_TARGET = "https://gameclaw-api.onrender.com/api/v1";
  * Routes that belong to the app, not to the marketing site.
  *
  * gameclaw.win signs nobody in. The web app's sign-in ran through a Supabase project that no
- * longer exists, so /chat, /login and /account were still served here and still answered - with a
- * sign-in form that cannot work. A visitor who found one spent their attempt on a dead end.
+ * longer exists, so /chat and /account were still served here and still answered - as screens that
+ * cannot load. A visitor who found one spent their attempt on a dead end.
+ *
+ * /login is deliberately NOT in this list, though it was. It was here because it served a Supabase
+ * form that could not sign anybody in, and bouncing people home was better than that. The form is
+ * gone: the page now says accounts live in the app and links to it. That is a better answer than a
+ * redirect for somebody arriving on an old link, and it needs no session and no database.
  *
  * They are redirected rather than 404'd: the pages are reachable from old links and search
  * results, and the home page is a better answer than "not found" for someone looking for the
@@ -42,7 +47,7 @@ const CRON_TARGET = "https://gameclaw-api.onrender.com/api/v1";
  * is a great deal of exposure for one operator's convenience. It already works on Render, which
  * has the database: https://gameclaw-api.onrender.com/admin
  */
-const APP_ONLY = ["/chat", "/login", "/account", "/convert", "/slip", "/picks", "/matches", "/welcome", "/auth", "/admin"];
+const APP_ONLY = ["/chat", "/account", "/convert", "/slip", "/picks", "/matches", "/welcome", "/auth", "/admin"];
 
 function isAppOnly(pathname: string): boolean {
   return APP_ONLY.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -135,8 +140,27 @@ const FORWARD_HEADERS = [
   "x-paystack-signature",
 ];
 
-/** Headers that describe the upstream connection rather than the body, so must not be re-sent. */
-const DROP_RESPONSE_HEADERS = ["set-cookie", "content-encoding", "content-length", "transfer-encoding"];
+/**
+ * Response headers that are not re-sent.
+ *
+ * The first four describe the upstream connection rather than the body: passing on a
+ * `content-length` or `content-encoding` measured against a body the runtime has already decoded is
+ * how a truncated or unreadable response happens, and `set-cookie` is dropped because nothing in
+ * PROXIED sets one and a cookie landing on this origin would land next to the admin session.
+ *
+ * The last two are Render's own: `x-render-origin-server` and the `rndr-id` request id were
+ * reaching browsers and naming the infrastructure behind the site. Not credentials, and not a
+ * vulnerability, but they are somebody else's internal detail arriving under our hostname, and the
+ * forwarder is the right place to stop them.
+ */
+const DROP_RESPONSE_HEADERS = [
+  "set-cookie",
+  "content-encoding",
+  "content-length",
+  "transfer-encoding",
+  "x-render-origin-server",
+  "rndr-id",
+];
 
 /**
  * The error body, in the shape lib/api.ts `fail()` produces.
