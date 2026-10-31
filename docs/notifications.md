@@ -44,9 +44,12 @@ A Firebase project. Nothing below can be done from this repository.
    private key**. That file is a credential: do not commit it, and do not paste it anywhere. It
    goes in as a Worker secret:
 
-   ```bash
-   npx wrangler secret put FCM_SERVICE_ACCOUNT --config wrangler.api.jsonc < ~/Downloads/<file>.json
-   ```
+   It belongs on Render, which is what sends them — Render dashboard → `gameclaw-api` →
+   *Environment* → `FCM_SERVICE_ACCOUNT`, pasting the file's contents as the value. It is declared
+   in `render.yaml` with `sync: false`, so the blueprint never carries the value.
+
+   Not a Worker secret any more: the Cloudflare `gameclaw-api` Worker was deleted on 2026-10-31,
+   and the website Worker neither sends notifications nor reaches the database.
 
 ## Cost
 

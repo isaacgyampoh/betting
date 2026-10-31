@@ -5,11 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gameclaw_app/data/auth_client.dart';
 import 'package:gameclaw_app/data/api_client.dart';
 
-/// Signing in against GameClaw's own API rather than Supabase.
+/// Signing in against GameClaw's own API, which is now the only backend there is.
 ///
-/// The two backends differ in three ways that are easy to get wrong and silent when wrong: the
-/// path, the response envelope, and which token a sign-out revokes.
-SupabaseConfig gameclaw() => const SupabaseConfig.gameclaw(
+/// Written when there were two and the difference mattered in three places that are silent when
+/// wrong: the path, the response envelope, and which token a sign-out revokes. The Supabase side
+/// has been removed, so these are no longer a comparison - they are the contract.
+AuthConfig gameclaw() => const AuthConfig(
   authBase: 'https://api.test/api/v1',
   googleServerClientId: '400646694915-web.apps.googleusercontent.com',
 );
@@ -46,14 +47,36 @@ const _session = {
 };
 
 void main() {
-  test('a build with GC_AUTH_BASE set uses GameClaw, not Supabase', () {
+  test('a build with GC_AUTH_BASE set is configured and can offer Google', () {
     final config = gameclaw();
-    expect(config.isGameClaw, isTrue);
     expect(config.isConfigured, isTrue);
     expect(config.hasGoogle, isTrue);
-    // No Supabase project is involved at all, so there is nothing to misconfigure.
-    expect(config.url, isEmpty);
-    expect(config.anonKey, isEmpty);
+    expect(config.authBase, 'https://api.test/api/v1');
+  });
+
+  // The failure this replaces an entire branch with. An unconfigured build used to fall through to
+  // Supabase and fail with whatever that produced; it now refuses before sending anything, and
+  // says which flag is missing.
+  test('a build without GC_AUTH_BASE refuses with a configuration error', () async {
+    const unconfigured = AuthConfig(
+      authBase: '',
+      googleServerClientId: '400646694915-web.apps.googleusercontent.com',
+    );
+    // No Dio passed, so this builds the one production builds use. That is the point: with an
+    // empty authBase the base URL would be the relative "/auth", which Dio refuses outright, so
+    // constructing the client threw an ArgumentError before this message could be reached.
+    final client = AuthClient(config: unconfigured);
+
+    await expectLater(
+      client.refresh('a-refresh-token'),
+      throwsA(
+        isA<UnknownFailure>().having(
+          (e) => e.message,
+          'message',
+          contains('GC_AUTH_BASE'),
+        ),
+      ),
+    );
   });
 
   test('Google sign-in posts the id token to /google', () async {
@@ -67,8 +90,8 @@ void main() {
   });
 
   test('the {"data": …} envelope is unwrapped', () async {
-    // Supabase returns the token object bare; GameClaw wraps it. Reading the wrapper as the
-    // session would produce a null access token and a "no session came back" error.
+    // The API wraps every success. Reading the wrapper as the session would produce a null access
+    // token and a "no session came back" error.
     final (client, _) = clientWith({'/google': (200, _session)});
     final session = await client.signInWithGoogle(source: (_, __) async => 'an-id-token');
     expect(session.accessToken, 'the-access-token');

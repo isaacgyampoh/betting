@@ -166,8 +166,9 @@ every device on the project. If the JSON file was ever committed, emailed, paste
    which opens Google Cloud IAM.
 2. Find the key under that service account and **delete it there**. Deleting the downloaded file
    does nothing; the key stays valid until it is revoked in the console.
-3. Generate a new private key and set it: `npx wrangler secret put FCM_SERVICE_ACCOUNT
-   --config wrangler.api.jsonc < ~/Downloads/<file>.json`
+3. Generate a new private key and set it on Render: dashboard → `gameclaw-api` → *Environment* →
+   `FCM_SERVICE_ACCOUNT`. Render is what sends notifications; the Cloudflare `gameclaw-api` Worker
+   this used to name was deleted on 2026-10-31.
 
 ### Status as checked
 

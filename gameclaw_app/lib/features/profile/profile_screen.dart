@@ -112,7 +112,7 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  if (!ref.watch(supabaseConfigProvider).isConfigured) ...[
+                  if (!ref.watch(authConfigProvider).isConfigured) ...[
                     const SizedBox(height: GcSpace.md),
                     const GcNote(
                       'This build has no sign-in configured.',

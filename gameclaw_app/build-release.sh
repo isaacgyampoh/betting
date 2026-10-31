@@ -4,8 +4,9 @@
 # This script exists because the defines are not optional and their absence is silent. Without
 # GC_API_BASE the app falls back to `http://10.0.2.2:3000/api/v1` - the Android emulator's route to
 # a developer's laptop - and the build installs, signs and launches perfectly while every screen
-# reports "Something went wrong". Without GC_AUTH_BASE sign-in falls back to Supabase, whose
-# project no longer exists.
+# reports "Something went wrong". Without GC_AUTH_BASE there is no sign-in at all: the screen names
+# the missing flag rather than offering a button, which is deliberate - it used to fall back to a
+# Supabase project that no longer exists.
 #
 # None of these three values is a secret: the API base and the web client id are both readable
 # from any installed APK, and the signing key is what makes a build ours. The keystore itself is

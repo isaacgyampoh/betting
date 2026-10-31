@@ -15,7 +15,7 @@ void main() {
     String server = 'web-client-id.apps.googleusercontent.com',
     String ios = '',
     required bool isIOS,
-  }) => SupabaseConfig.googleAvailable(
+  }) => AuthConfig.googleAvailable(
     configured: configured,
     serverClientId: server,
     iosClientId: ios,

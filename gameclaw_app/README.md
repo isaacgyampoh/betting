@@ -49,13 +49,18 @@ Two flags decide this, and **a release build needs both**:
 
 | Flag | What it does |
 | --- | --- |
-| `GC_AUTH_BASE` | GameClaw's auth endpoints, e.g. `https://gameclaw-api.onrender.com/api/v1`. **When set, Supabase is not involved at all.** |
+| `GC_AUTH_BASE` | GameClaw's auth endpoints, e.g. `https://gameclaw-api.onrender.com/api/v1`. The only backend there is. |
 | `GC_GOOGLE_SERVER_CLIENT_ID` | The **Web** OAuth client id - not the Android one. See below. |
 
-Leave `GC_AUTH_BASE` empty and the build falls back to the Supabase path (`GC_SUPABASE_URL` and
-`GC_SUPABASE_ANON_KEY`), which is the rollback and nothing else. It is one flag to go back to, and
-one flag to ship by mistake: a release built without `GC_AUTH_BASE` signs in against a backend that
-is being retired. Check a built APK if in doubt -
+`GC_AUTH_BASE` used to be optional: left empty, the build fell back to a Supabase project
+(`GC_SUPABASE_URL`, `GC_SUPABASE_ANON_KEY`) that was described as the rollback, "one flag to go
+back to". There is nothing to go back to - that project is deleted and its hostname does not
+resolve - and the fallback was never reachable anyway, because no build script has ever passed
+either flag. It has been removed, along with the email-and-password form that only it could serve.
+
+A build without `GC_AUTH_BASE` now says so: the sign-in screen names the missing flag, and the auth
+client refuses before sending anything rather than failing obscurely. Check a built APK if in
+doubt -
 
 ```bash
 # Release keeps Dart in libapp.so; a debug build keeps it in kernel_blob.bin, so match both.
@@ -63,9 +68,10 @@ unzip -p app-release.apk 'lib/*/libapp.so' 'assets/flutter_assets/kernel_blob.bi
   | grep -ac 'supabase\.co'
 ```
 
-A release on the right path prints `0`: no Supabase hostname is compiled into it. Grep the binary
-directly rather than piping through `strings` - macOS `strings` breaks the hostname across lines
-and the match silently never fires.
+That prints `0`, and now does so for every build rather than only a correctly flagged one: no
+Supabase hostname exists in the source to be compiled in. Grep the binary directly rather than
+piping through `strings` - macOS `strings` breaks a hostname across lines and the match silently
+never fires.
 
 ### The Web client id, not the Android one
 

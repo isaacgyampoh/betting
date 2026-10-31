@@ -10,11 +10,19 @@ import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/brand/gc_claw.dart';
 import '../../ui/components/gc_button.dart';
-import '../../ui/components/gc_input.dart';
 import '../../ui/components/gc_states.dart';
 
-/// Sign in, or make an account. One screen for both, because they are the same two fields and a
-/// user who picked the wrong one should not have to go anywhere to fix it.
+/// Sign in. One way in, and it is the account already on the phone.
+///
+/// This screen carried an email-and-password form until the Supabase client was removed. The form
+/// posted to `/token?grant_type=password` and `/signup`, which are Supabase's endpoints: GameClaw's
+/// API has no password sign-in and answers 404 to both. It was already unreachable here, rendered
+/// only `if (!google)` and guarded by a comment saying it existed solely because deleting it while
+/// Google was unavailable would have left no way in at all - and that "the moment a Web client id
+/// reaches this build, this disappears on its own". Every build passes one, so it has.
+///
+/// No password field is a feature rather than a reduction: there is no password to phish, to
+/// forget, or to reset over email.
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
 
@@ -23,21 +31,8 @@ class SignInScreen extends ConsumerStatefulWidget {
 }
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
-  final _form = GlobalKey<FormState>();
-  final _email = TextEditingController();
-  final _password = TextEditingController();
-
-  bool _creating = false;
   bool _busy = false;
   String? _error;
-  String? _notice;
-
-  @override
-  void dispose() {
-    _email.dispose();
-    _password.dispose();
-    super.dispose();
-  }
 
   /// Signs in with the Google account on the phone.
   ///
@@ -46,12 +41,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     FocusScope.of(context).unfocus();
     setState(() {
       _error = null;
-      _notice = null;
       _busy = true;
     });
     try {
       await ref.read(sessionProvider.notifier).signInWithGoogle();
       if (!mounted) return;
+      // Straight to the 18+ gate. The API refuses every football endpoint until it is given, so
+      // landing on a tab full of refusals would be a worse first impression than one question.
       context.pushReplacement('/age');
     } on CancelledFailure {
       if (mounted) setState(() => _busy = false);
@@ -64,49 +60,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
-  Future<void> _submit() async {
-    FocusScope.of(context).unfocus();
-    if (!_form.currentState!.validate()) return;
-    setState(() {
-      _error = null;
-      _notice = null;
-    });
-
-    final email = _email.text.trim();
-    final password = _password.text;
-
-    try {
-      if (_creating) {
-        final signedIn = await ref
-            .read(sessionProvider.notifier)
-            .signUp(email: email, password: password);
-        if (!mounted) return;
-        if (!signedIn) {
-          // The project requires email confirmation. That is the whole message: there is nothing
-          // else for the user to do here and no session to send them on with.
-          setState(() {
-            _notice = 'Check $email for a confirmation link, then come back and sign in.';
-            _creating = false;
-          });
-          return;
-        }
-      } else {
-        await ref.read(sessionProvider.notifier).signIn(email: email, password: password);
-      }
-      if (!mounted) return;
-      // Straight to the 18+ gate. The API refuses every football endpoint until it is given, so
-      // landing on a tab full of refusals would be a worse first impression than one question.
-      context.pushReplacement('/age');
-    } on ApiFailure catch (failure) {
-      if (!mounted) return;
-      setState(() => _error = failure.message);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final configured = ref.watch(supabaseConfigProvider).isConfigured;
-    final google = ref.watch(supabaseConfigProvider).hasGoogle;
+    final config = ref.watch(authConfigProvider);
+    final configured = config.isConfigured;
+    final google = config.hasGoogle;
 
     return Scaffold(
       body: SafeArea(
@@ -141,33 +99,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     ],
                   ),
                   const SizedBox(height: GcSpace.sm),
-                  Text(
-                    google ? 'Sign in' : (_creating ? 'Create an account' : 'Welcome back'),
-                    style: GcType.hero,
-                  ),
+                  Text('Sign in', style: GcType.hero),
                   const SizedBox(height: GcSpace.md),
                   Text(
-                    google
-                        ? 'Live scores and the published record are open to everyone. Signing in '
-                              'is for Claw and for moving a slip between bookmakers.'
-                        : _creating
-                        ? 'An account keeps your slips and your conversation with Claw across devices.'
-                        : 'Live scores and the published record are open to everyone. '
-                              'Signing in is for building slips.',
+                    'Live scores and the published record are open to everyone. Signing in is for '
+                    'Claw and for moving a slip between bookmakers.',
                     style: GcType.body.copyWith(color: gc(context).inkMuted),
                   ),
                   if (!configured) ...[
                     const SizedBox(height: GcSpace.lg),
-                    // Names the flags that are actually missing. It used to say "the Supabase
-                    // flags", which stopped being true when sign-in moved to GameClaw's own API
-                    // and sends anyone who sees it looking for credentials to a project that no
-                    // longer exists. Whoever meets this message is building by hand rather than
-                    // through build-release.sh - likely the first iOS build from Xcode - and the
-                    // one thing it owes them is the right name.
+                    // Names the flag that is actually missing. Whoever meets this message is
+                    // building by hand rather than through build-release.sh - likely the first iOS
+                    // build from Xcode - and the one thing it owes them is the right name. It used
+                    // to say "the Supabase flags", which sent people looking for credentials to a
+                    // project that no longer exists.
                     const GcNote(
-                      'This build has no sign-in configured. It was built without '
-                      'GC_AUTH_BASE, so the form below cannot work. Use ./build-release.sh, '
-                      'which passes it.',
+                      'This build has no sign-in configured. It was built without GC_AUTH_BASE, '
+                      'so there is nothing to sign in against. Use ./build-release.sh, which '
+                      'passes it.',
                       icon: Icons.warning_amber_rounded,
                     ),
                   ],
@@ -188,9 +137,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     ),
                   ],
                   const SizedBox(height: GcSpace.xxl),
-                  // Offered first, and deliberately. Creating an account by email depends on a
-                  // confirmation message arriving; Google needs nothing to arrive at all.
-                  if (google) ...[
+                  if (google)
                     GcButton(
                       label: 'Continue with Google',
                       icon: Icons.account_circle_outlined,
@@ -198,88 +145,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       kind: GcButtonKind.secondary,
                       onPressed: _busy ? null : _google,
                     ),
-                    const SizedBox(height: GcSpace.lg),
-                  ],
-                  // Email and password exist only while Google cannot be offered.
-                  //
-                  // Google is the one way in. Creating an account by email does not work anyway -
-                  // the project requires a confirmation message and its mailer refuses every
-                  // signup with over_email_send_rate_limit - so the form is a dead end wearing the
-                  // clothes of a working one. What stops it being deleted outright is that
-                  // deleting it today would leave no way to sign in at all, and take Claw and
-                  // slip conversion with it. The moment a Web client id reaches this build, this
-                  // disappears on its own.
-                  if (!google) ...[
-                    Form(
-                      key: _form,
-                      child: Column(
-                        children: [
-                          GcTextField(
-                            controller: _email,
-                            label: 'Email',
-                            icon: Icons.alternate_email_rounded,
-                            keyboardType: TextInputType.emailAddress,
-                            autofillHints: const [AutofillHints.email],
-                            textInputAction: TextInputAction.next,
-                            validator: (value) {
-                              final text = value?.trim() ?? '';
-                              // Deliberately loose. The server is the authority on whether an
-                              // address exists; this only catches the obvious slip before a round
-                              // trip.
-                              if (text.isEmpty) return 'Enter your email';
-                              if (!text.contains('@') || !text.contains('.')) {
-                                return "That doesn't look like an email";
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: GcSpace.md),
-                          GcTextField(
-                            controller: _password,
-                            label: 'Password',
-                            icon: Icons.lock_outline_rounded,
-                            obscure: true,
-                            autofillHints: [
-                              _creating ? AutofillHints.newPassword : AutofillHints.password,
-                            ],
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _submit(),
-                            validator: (value) {
-                              if ((value ?? '').isEmpty) return 'Enter your password';
-                              // Only on sign-up. Refusing to let someone sign in because an existing
-                              // password is short is both useless and infuriating.
-                              if (_creating && value!.length < 8) {
-                                return 'Use at least 8 characters';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: GcSpace.xl),
-                    GcButton(
-                      label: _creating ? 'Create account' : 'Sign in',
-                      size: GcButtonSize.large,
-                      onPressed: _submit,
-                    ),
-                    const SizedBox(height: GcSpace.sm),
-                    GcButton(
-                      label: _creating ? 'I already have an account' : 'Create an account',
-                      kind: GcButtonKind.ghost,
-                      onPressed: () => setState(() {
-                        _creating = !_creating;
-                        _error = null;
-                        _notice = null;
-                      }),
-                    ),
-                  ],
-                  // Outside the email branch, because Google fails too.
-                  //
-                  // It was inside it, which meant a Google sign-in that failed could not say so:
-                  // the flow ran, Google Play Services logged "Flow failed. [16] Account reauth
-                  // failed", and the screen rendered nothing at all. An error that only one of
-                  // two sign-in paths can display is an error the other path silently swallows.
+                  // Shown whatever the sign-in path, and that placement was a fix rather than a
+                  // choice. It was once nested inside the email branch, which meant a Google
+                  // sign-in that failed could not say so: the flow ran, Google Play Services
+                  // logged "Flow failed. [16] Account reauth failed", and the screen rendered
+                  // nothing at all. An error only one path can display is an error the other
+                  // silently swallows.
                   if (_error != null) ...[
                     const SizedBox(height: GcSpace.md),
                     Row(
@@ -295,10 +166,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         ),
                       ],
                     ),
-                  ],
-                  if (_notice != null) ...[
-                    const SizedBox(height: GcSpace.md),
-                    GcNote(_notice!, icon: Icons.mark_email_unread_outlined),
                   ],
                   const SizedBox(height: GcSpace.xl),
                   Text(

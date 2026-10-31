@@ -84,7 +84,10 @@ void main() {
       expect(AuthSession.fromJson(const {}), isNull);
     });
 
-    test("a sign-up that returns no session is Supabase asking for email confirmation", () {
+    // A response with no tokens in it is not a session, whatever else it contains. This covered
+    // Supabase's "go and confirm your email" reply; it still guards the general case, which is a
+    // 2xx whose body is not what was expected.
+    test('a response carrying no tokens is not a session', () {
       expect(
         AuthSession.fromAuthResponse(const {
           'user': {'email': 'x@y.z'},
@@ -104,42 +107,63 @@ void main() {
   });
 
   group('AuthClient', () {
+    // There were email-and-password cases here, exercising Supabase's `/token?grant_type=password`
+    // and its `{error_code, msg}` refusals. Both are gone: GameClaw's API has no password sign-in
+    // and answers 404 to that path, and its refusals arrive as `{error: {code, message}}`.
+    const api = 'https://api.test/api/v1';
+
     AuthClient clientFor(int status, Map<String, dynamic> body) => AuthClient(
-      config: const SupabaseConfig(url: 'https://p.supabase.co', anonKey: 'anon'),
-      dio: Dio(BaseOptions(baseUrl: 'https://p.supabase.co/auth/v1', validateStatus: (_) => true))
+      config: const AuthConfig(authBase: api, googleServerClientId: 'web.apps.googleusercontent.com'),
+      dio: Dio(BaseOptions(baseUrl: '$api/auth', validateStatus: (_) => true))
         ..httpClientAdapter = _Canned(status, body),
     );
 
-    test("Supabase's own wording for a bad password reaches the user", () async {
-      // "Invalid login credentials" is better than anything we would write, and it is what the
-      // user will find if they search for it.
+    test("the server's own wording reaches the user", () async {
+      // The API words its refusals better than anything generic this could substitute, and its
+      // wording is what the user will find if they search for it.
       await expectLater(
-        clientFor(400, {
-          'error_code': 'invalid_credentials',
-          'msg': 'Invalid login credentials',
-        }).signIn(email: 'a@b.c', password: 'wrong'),
+        clientFor(401, {
+          'error': {'code': 'UNAUTHORIZED', 'message': 'That refresh token is no longer valid.'},
+        }).refresh('stale'),
         throwsA(
-          isA<ServerFailure>().having((e) => e.message, 'message', 'Invalid login credentials'),
+          isA<ServerFailure>().having(
+            (e) => e.message,
+            'message',
+            'That refresh token is no longer valid.',
+          ),
         ),
       );
     });
 
-    test('a build with no auth flags says so instead of failing obscurely', () async {
+    test('a build with no auth flags says which flag, instead of failing obscurely', () async {
+      const unconfiguredConfig = AuthConfig(authBase: '', googleServerClientId: '');
+      expect(unconfiguredConfig.isConfigured, isFalse);
+
       final unconfigured = AuthClient(
-        config: const SupabaseConfig(url: '', anonKey: ''),
+        config: unconfiguredConfig,
         dio: Dio()..httpClientAdapter = _Canned(200, const {}),
       );
-      expect(const SupabaseConfig(url: '', anonKey: '').isConfigured, isFalse);
       await expectLater(
-        unconfigured.signIn(email: 'a@b.c', password: 'x'),
-        throwsA(isA<UnknownFailure>()),
+        unconfigured.refresh('anything'),
+        throwsA(
+          isA<UnknownFailure>().having((e) => e.message, 'message', contains('GC_AUTH_BASE')),
+        ),
       );
     });
 
     test('a refused refresh token is an ended session, not a transport error', () async {
       await expectLater(
-        clientFor(400, {'msg': 'Invalid Refresh Token'}).refresh('stale'),
+        clientFor(400, {
+          'error': {'code': 'BAD_REQUEST', 'message': 'Invalid refresh token.'},
+        }).refresh('stale'),
         throwsA(isA<ServerFailure>()),
+      );
+    });
+
+    test('a 2xx with no tokens is reported rather than returned as a session', () async {
+      await expectLater(
+        clientFor(200, const {'data': <String, dynamic>{}}).refresh('a-token'),
+        throwsA(isA<UnauthorizedFailure>()),
       );
     });
   });

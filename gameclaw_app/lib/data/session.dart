@@ -10,7 +10,7 @@ import 'secure_store.dart';
 /// channel round trip and the request interceptor asks for a token on every single call.
 class SessionController extends AsyncNotifier<AuthSession?> {
   /// One refresh at a time. Six screens loading at once on a cold start would otherwise fire six
-  /// refreshes with the same refresh token, and Supabase rotates it - the first succeeds and the
+  /// refreshes with the same refresh token, and the API rotates it - the first succeeds and the
   /// other five are rejected with a token that no longer exists, signing the user out on launch.
   Future<AuthSession?>? _refreshing;
 
@@ -58,21 +58,10 @@ class SessionController extends AsyncNotifier<AuthSession?> {
     }
   }
 
-  Future<void> signIn({required String email, required String password}) async {
-    final session = await ref.read(authClientProvider).signIn(email: email, password: password);
-    await ref.read(secureStoreProvider).writeSession(session);
-    state = AsyncData(session);
-  }
-
-  /// Returns true when the user is signed in straight away, false when the project wants them to
-  /// confirm their email first.
-  Future<bool> signUp({required String email, required String password}) async {
-    final result = await ref.read(authClientProvider).signUp(email: email, password: password);
-    if (result.session == null) return false;
-    await ref.read(secureStoreProvider).writeSession(result.session!);
-    state = AsyncData(result.session);
-    return true;
-  }
+  // There were `signIn` and `signUp` here, taking an email and a password. They posted to
+  // Supabase's `/token?grant_type=password` and `/signup`, which have no equivalent on GameClaw's
+  // API and answer 404 there, so they went with the Supabase client. Sign-in is an ID token from
+  // Google - and, on the API side, Apple - exchanged for one of our own sessions.
 
   /// Signs in with Google. Returns normally, or throws an [ApiFailure] the screen can show.
   Future<void> signInWithGoogle() async {
@@ -87,8 +76,7 @@ class SessionController extends AsyncNotifier<AuthSession?> {
     await ref.read(secureStoreProvider).clear();
     if (current != null) {
       // Tell the server too, so the refresh token cannot be used again from anywhere else.
-      // Both tokens are passed because the two backends revoke by different ones; see
-      // AuthClient.signOut.
+      // Both are passed because the refresh token is the one revoked; see AuthClient.signOut.
       await ref
           .read(authClientProvider)
           .signOut(current.accessToken, refreshToken: current.refreshToken);
@@ -98,10 +86,10 @@ class SessionController extends AsyncNotifier<AuthSession?> {
 
 final secureStoreProvider = Provider<SecureStore>((ref) => SecureStore());
 
-final supabaseConfigProvider = Provider<SupabaseConfig>((ref) => SupabaseConfig.fromEnvironment());
+final authConfigProvider = Provider<AuthConfig>((ref) => AuthConfig.fromEnvironment());
 
 final authClientProvider = Provider<AuthClient>(
-  (ref) => AuthClient(config: ref.watch(supabaseConfigProvider)),
+  (ref) => AuthClient(config: ref.watch(authConfigProvider)),
 );
 
 final sessionProvider = AsyncNotifierProvider<SessionController, AuthSession?>(

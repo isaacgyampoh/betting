@@ -6,17 +6,19 @@ import 'package:gameclaw_app/data/api_client.dart';
 import 'package:gameclaw_app/data/auth_client.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-/// Native Google sign-in: Google hands back an ID token and Supabase exchanges it for a session.
-/// Nothing opens a web view and nothing returns through a deep link, which removes the part of
-/// OAuth that most often breaks on Android - but it adds a configuration requirement that is easy
-/// to get wrong, so the failures have to be legible.
+/// Native Google sign-in: Google hands back an ID token and GameClaw's API exchanges it for a
+/// session. Nothing opens a web view and nothing returns through a deep link, which removes the
+/// part of OAuth that most often breaks on Android - but it adds a configuration requirement that
+/// is easy to get wrong, so the failures have to be legible.
+///
+/// The exchange used to go to Supabase, on a different path, with a different request body and a
+/// different error shape. That branch has been removed, so what is asserted below is the only path
+/// there is.
 void main() {
-  SupabaseConfig configured({String google = 'web-client-id.apps.googleusercontent.com'}) =>
-      SupabaseConfig.withGoogle(
-        url: 'https://p.supabase.co',
-        anonKey: 'anon',
-        googleServerClientId: google,
-      );
+  const api = 'https://api.test/api/v1';
+
+  AuthConfig configured({String google = 'web-client-id.apps.googleusercontent.com'}) =>
+      AuthConfig(authBase: api, googleServerClientId: google);
 
   group('what the build is able to offer', () {
     test('a build given no Web client id does not claim to support Google', () {
@@ -24,19 +26,20 @@ void main() {
       expect(configured().hasGoogle, isTrue);
     });
 
-    test('Google needs Supabase too, not just a client id', () {
-      const noSupabase = SupabaseConfig.withGoogle(
-        url: '',
-        anonKey: '',
+    test('Google needs a backend to exchange the token with, not just a client id', () {
+      const noBackend = AuthConfig(
+        authBase: '',
         googleServerClientId: 'web-client-id.apps.googleusercontent.com',
       );
-      expect(noSupabase.hasGoogle, isFalse);
+      expect(noBackend.hasGoogle, isFalse);
+      expect(noBackend.isConfigured, isFalse);
     });
 
-    test('the plain constructor leaves Google off, so existing builds are unchanged', () {
-      const plain = SupabaseConfig(url: 'https://p.supabase.co', anonKey: 'anon');
-      expect(plain.isConfigured, isTrue);
-      expect(plain.hasGoogle, isFalse);
+    test('the iOS client id defaults to empty, which is what Android wants', () {
+      // Android names no client in the build - its client is matched by package name and signing
+      // fingerprint - so the default must not require one.
+      expect(configured().googleIosClientId, isEmpty);
+      expect(configured().hasGoogle, isTrue);
     });
 
     test('refuses to start a flow it cannot finish', () async {
@@ -100,46 +103,60 @@ void main() {
     });
   });
 
-  group('the exchange with Supabase', () {
+  group('the exchange with the API', () {
     late List<RequestOptions> sent;
 
-    AuthClient clientReturning(int status, Map<String, dynamic> body, {String? idToken}) {
+    // The API's own shape: every success wrapped in `data`, and no `user` object - the address is
+    // in the token, and the profile endpoint is what the app asks for it.
+    const session = {
+      'data': {
+        'access_token': 'at',
+        'refresh_token': 'rt',
+        'expires_in': 3600,
+        'token_type': 'bearer',
+        'is_new': false,
+      },
+    };
+
+    AuthClient clientReturning(int status, Map<String, dynamic> body) {
       sent = [];
-      final dio = Dio(
-        BaseOptions(baseUrl: 'https://p.supabase.co/auth/v1', validateStatus: (_) => true),
-      )..httpClientAdapter = _Spy(sent, status, jsonEncode(body));
+      final dio = Dio(BaseOptions(baseUrl: '$api/auth', validateStatus: (_) => true))
+        ..httpClientAdapter = _Spy(sent, status, jsonEncode(body));
       return AuthClient(config: configured(), dio: dio);
     }
 
-    test('posts the id token to the id_token grant, naming google as the provider', () async {
+    test('posts the id token to /google', () async {
+      final client = clientReturning(200, session);
+
+      final result = await client.signInWithGoogle(source: (_, __) async => 'google-id-token');
+
+      expect(result.accessToken, 'at');
+      expect(result.refreshToken, 'rt');
+      // Null because the API sends no user object. Asserted rather than left unstated, so that a
+      // change to the response is a failing test rather than a surprise.
+      expect(result.email, isNull);
+      expect(sent.single.path, '/google');
+      expect(jsonDecode(sent.single.data as String), {'id_token': 'google-id-token'});
+    });
+
+    test('reads an email when one is supplied', () async {
       final client = clientReturning(200, {
-        'access_token': 'at',
-        'refresh_token': 'rt',
-        'expires_in': 3600,
-        'user': {'email': 'someone@gmail.com'},
+        'data': {
+          'access_token': 'at',
+          'refresh_token': 'rt',
+          'expires_in': 3600,
+          'user': {'email': 'someone@gmail.com'},
+        },
       });
-
-      final session = await client.signInWithGoogle(source: (_, __) async => 'google-id-token');
-
-      expect(session.accessToken, 'at');
-      expect(session.email, 'someone@gmail.com');
-      expect(sent.single.path, '/token?grant_type=id_token');
-      expect(jsonDecode(sent.single.data as String), {
-        'provider': 'google',
-        'id_token': 'google-id-token',
-      });
+      final result = await client.signInWithGoogle(source: (_, __) async => 'tok');
+      expect(result.email, 'someone@gmail.com');
     });
 
     // The Web client id, not the Android one: it is the audience Google stamps on the token and
-    // the one both Google and Supabase check. Passing the Android id here is the classic mistake
-    // and produces a token Supabase rejects.
+    // the one both Google and the API check. Passing the Android id here is the classic mistake
+    // and produces a token the API rejects.
     test('hands the Web client id to Google, not the Android one', () async {
-      final client = clientReturning(200, {
-        'access_token': 'at',
-        'refresh_token': 'rt',
-        'expires_in': 3600,
-        'user': {'email': 'someone@gmail.com'},
-      });
+      final client = clientReturning(200, session);
       String? seen;
       String? seenIos;
       await client.signInWithGoogle(
@@ -154,11 +171,11 @@ void main() {
       expect(seenIos, '');
     });
 
-    // Google authenticated the person but gave nothing Supabase can verify. In practice that
-    // means the Web client id is wrong, and "something went wrong" would send someone hunting
-    // in the wrong place entirely.
+    // Google authenticated the person but gave nothing the API can verify. In practice that means
+    // the Web client id is wrong, and "something went wrong" would send someone hunting in the
+    // wrong place entirely.
     test('says which piece is wrong when Google returns no id token', () async {
-      final client = clientReturning(200, {});
+      final client = clientReturning(200, const {});
       await expectLater(
         client.signInWithGoogle(source: (_, __) async => null),
         throwsA(
@@ -167,10 +184,12 @@ void main() {
       );
     });
 
-    test('a refusal from Supabase keeps Supabase\'s own wording', () async {
+    test("a refusal from the API keeps the API's own wording", () async {
       final client = clientReturning(400, {
-        'error_code': 'validation_failed',
-        'msg': 'Unacceptable audience in id_token',
+        'error': {
+          'code': 'BAD_REQUEST',
+          'message': 'Unacceptable audience in id_token',
+        },
       });
       await expectLater(
         client.signInWithGoogle(source: (_, __) async => 'x'),

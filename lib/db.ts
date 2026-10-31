@@ -5,10 +5,10 @@ import { PrismaClient } from "@/lib/generated/prisma/client";
 import { env } from "@/lib/env";
 
 // Cloudflare Workers forbid reusing a connection opened by one request in another, so on Workers
-// each request gets its own client (cheap with Hyperdrive, which pools connections near the DB).
-// Under Node (next dev, tests, scripts) one client per process is reused.
+// each request gets its own client. Under Node (next dev, tests, scripts) one client per process
+// is reused.
 
-type CfRequest = { ctx: object; env: { HYPERDRIVE?: { connectionString: string } } };
+type CfRequest = { ctx: object };
 
 function cloudflareRequest(): CfRequest | null {
   try {
@@ -75,13 +75,18 @@ function getClient(): PrismaClient {
   if (cf) {
     let client = perRequest.get(cf.ctx);
     if (!client) {
-      // Hyperdrive if a binding exists, otherwise DATABASE_URL - and on Cloudflare neither one
-      // reaches the database. The website Worker's Hyperdrive binding was removed when /api/v1 was
-      // moved behind the forwarder in worker.ts, and gameclaw-db accepts no external connections
-      // anyway, so a query from the edge fails whichever branch it takes. That is the intent:
-      // nothing on the edge should arrive here. The branch survives for the gameclaw-api Worker in
-      // wrangler.api.jsonc, which still binds one.
-      client = createClient(cf.env.HYPERDRIVE?.connectionString ?? env().DATABASE_URL);
+      // DATABASE_URL, which on Cloudflare will not reach the database: gameclaw-db accepts no
+      // external connections. That is deliberate rather than an oversight - worker.ts forwards
+      // /api/v1 to the API on Render instead of serving it, so nothing at the edge should arrive
+      // here at all.
+      //
+      // There is no Hyperdrive branch any more. The binding went when the forwarder landed, and
+      // the configuration itself (673d415bb1174f8092e5649a5675516a, still pointing at the deleted
+      // Supabase pooler) was deleted on 2026-10-31 together with the second Worker that was the
+      // last thing binding it. No Cloudflare Worker now has a database connection of any kind.
+      // This path survives so a stray query from the edge fails plainly rather than being routed
+      // somewhere unexpected.
+      client = createClient(env().DATABASE_URL);
       perRequest.set(cf.ctx, client);
     }
     return client;

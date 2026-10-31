@@ -82,7 +82,7 @@ void main() {
   });
 
   test('six screens asking at once produce one refresh, not six', () async {
-    // Supabase rotates the refresh token. Without the in-flight guard the first refresh succeeds
+    // The API rotates the refresh token. Without the in-flight guard the first refresh succeeds
     // and the other five are rejected with a token that no longer exists - signing the user out
     // on launch, which is exactly when six screens do ask at once.
     store.stored = session(expiresIn: Duration.zero);
@@ -148,7 +148,7 @@ void main() {
     expect(container.read(isSignedInProvider), isTrue);
   });
 
-  test('signing out clears the session on this device and at Supabase', () async {
+  test('signing out clears the session on this device and at the server', () async {
     store.stored = session(expiresIn: const Duration(hours: 1));
     final container = containerWith();
     await container.read(sessionProvider.future);
@@ -177,28 +177,19 @@ void main() {
     expect(await cache.favourites(), hasLength(1));
   });
 
+  // Google is the only way in now. This asserted the same thing through the email-and-password
+  // `signIn`, which went with the Supabase client: its endpoint was Supabase's and answers 404 on
+  // GameClaw's API. The sign-up case that followed went too - there is no sign-up step, and no
+  // email confirmation to wait for, because the identity provider has already verified the person.
   test('signing in stores the session and flips everything that reads the API', () async {
     final container = containerWith();
     await container.read(sessionProvider.future);
     expect(container.read(isSignedInProvider), isFalse);
 
-    await container.read(sessionProvider.notifier).signIn(email: 'a@b.c', password: 'x');
+    await container.read(sessionProvider.notifier).signInWithGoogle();
 
     expect(container.read(isSignedInProvider), isTrue);
     expect(store.stored, isNotNull);
-  });
-
-  test('a sign-up awaiting email confirmation does not pretend to be signed in', () async {
-    auth.signUpReturnsSession = false;
-    final container = containerWith();
-    await container.read(sessionProvider.future);
-
-    final signedIn = await container
-        .read(sessionProvider.notifier)
-        .signUp(email: 'a@b.c', password: 'xxxxxxxx');
-
-    expect(signedIn, isFalse);
-    expect(container.read(isSignedInProvider), isFalse);
   });
 }
 
@@ -223,7 +214,6 @@ class _FakeAuth implements AuthClient {
   int refreshCalls = 0;
   String? lastRefreshTokenSeen;
   bool signedOut = false;
-  bool signUpReturnsSession = true;
   ApiFailure? failWith;
 
   AuthSession _fresh() => AuthSession(
@@ -251,20 +241,6 @@ class _FakeAuth implements AuthClient {
     await Future<void>.delayed(const Duration(milliseconds: 10));
     if (failWith != null) throw failWith!;
     return _fresh();
-  }
-
-  @override
-  Future<AuthSession> signIn({required String email, required String password}) async {
-    if (failWith != null) throw failWith!;
-    return _fresh();
-  }
-
-  @override
-  Future<SignUpResult> signUp({required String email, required String password}) async {
-    if (failWith != null) throw failWith!;
-    return signUpReturnsSession
-        ? SignUpResult(session: _fresh(), needsEmailConfirmation: false)
-        : const SignUpResult(session: null, needsEmailConfirmation: true);
   }
 
   String? revokedRefreshToken;

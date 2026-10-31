@@ -6,40 +6,33 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import 'api_client.dart';
 
-/// Where the app signs people in.
+/// Where the app signs people in: GameClaw's own API, and nothing else.
 ///
-/// Supabase, which is also what the API verifies its bearer tokens against - the API accepts
-/// `Authorization: Bearer <supabase access_token>` and checks the signature itself. So the app
-/// talks to Supabase to get a token and to GameClaw for everything else.
+/// This class was `SupabaseConfig` and carried two backends. Google or Apple handed back an ID
+/// token, and the app posted it either to GameClaw's `/auth/*` or, when `GC_AUTH_BASE` was unset,
+/// to a Supabase project - the second path being the rollback, "one build flag to go back to it".
 ///
-/// Supplied at build time next to the API host. The anon key is designed to be public - it
-/// identifies the project and grants nothing on its own, which is why the web client has always
-/// shipped it in its bundle - so it is not a secret being leaked into an APK. The service key,
-/// which does grant everything, is not here and never will be.
-class SupabaseConfig {
-  const SupabaseConfig({required this.url, required this.anonKey})
-    : googleServerClientId = '',
-      googleIosClientId = '',
-      authBase = '';
-
-  const SupabaseConfig.withGoogle({
-    required this.url,
-    required this.anonKey,
+/// There is nothing to roll back to. That project has been deleted and its hostname does not
+/// resolve, so the fallback could only ever fail; it was also unreachable in practice, because no
+/// build script has ever passed `GC_SUPABASE_URL` or `GC_SUPABASE_ANON_KEY`, so it would have been
+/// handed two empty strings and reported itself unconfigured. A rollback path that cannot work is
+/// worse than no rollback path, because it reads like a safety net.
+///
+/// What goes with it: the email-and-password `signIn` and `signUp`. Those posted to
+/// `/token?grant_type=password` and `/signup`, which are Supabase's endpoints and have no GameClaw
+/// equivalent - both answer 404 on the API today. They were already unreachable in the interface,
+/// shown only `if (!google)`, and every build passes a Google client id.
+class AuthConfig {
+  const AuthConfig({
+    required this.authBase,
     required this.googleServerClientId,
     this.googleIosClientId = '',
-  }) : authBase = '';
+  });
 
-  static const _url = String.fromEnvironment('GC_SUPABASE_URL');
-  static const _anonKey = String.fromEnvironment('GC_SUPABASE_ANON_KEY');
-
-  /// GameClaw's own auth endpoints, e.g. https://gameclaw-api.onrender.com/api/v1.
+  /// GameClaw's auth endpoints, e.g. https://gameclaw-api.onrender.com/api/v1.
   ///
-  /// When this is set the app signs in against GameClaw and Supabase is not involved at all.
-  /// Left empty, it falls back to Supabase, which is what every build did before the move and
-  /// what still works while the old backend is up.
-  ///
-  /// Two backends rather than one switch thrown at midnight: the Supabase path is the rollback,
-  /// and it costs one build flag to go back to it.
+  /// Required. With it empty there is no sign-in at all, and [isConfigured] is how the screen
+  /// knows to say so rather than offering a button that cannot work.
   static const _authBase = String.fromEnvironment('GC_AUTH_BASE');
 
   /// The **Web** OAuth client id, not the Android one.
@@ -47,8 +40,8 @@ class SupabaseConfig {
   /// This is the counter-intuitive part of native Google sign-in and the usual reason it fails.
   /// The Android client is what lets Google trust the app - it is matched by package name and
   /// signing fingerprint and is never named in code. The web client is what the ID token is
-  /// *addressed to*, and both Google and Supabase check that audience, so it is the one the app
-  /// has to hand over. Supplying the Android id here produces a token Supabase rejects.
+  /// *addressed to*, and both Google and the API check that audience, so it is the one the app has
+  /// to hand over. Supplying the Android id here produces a token the API rejects.
   static const _googleServerClientId = String.fromEnvironment('GC_GOOGLE_SERVER_CLIENT_ID');
 
   /// The **iOS** OAuth client id, which is a different thing again from both of the above.
@@ -61,49 +54,28 @@ class SupabaseConfig {
   /// (GoogleSignInPlugin.swift, `clientIdKey`). That plist comes from the Firebase project,
   /// `gameclaw-push-notifications` / 569032239509, and every OAuth client this product uses lives
   /// in a *different* project, `game-claw` / 400646694915 - which is the one whose web client the
-  /// API checks the token's audience against. Letting the plist answer would sign in with a
-  /// client from the wrong project and the API would reject the token, which is the same failure,
-  /// from the same cause, as the `[28444]` conflict documented in docs/oauth-conflict-evidence.md.
+  /// API checks the token's audience against. Letting the plist answer would sign in with a client
+  /// from the wrong project and the API would reject the token, which is the same failure, from
+  /// the same cause, as the `[28444]` conflict documented in docs/oauth-conflict-evidence.md.
   ///
   /// So: create the iOS client in `game-claw`, pass its id here, and leave the plist to Firebase.
   static const _googleIosClientId = String.fromEnvironment('GC_GOOGLE_IOS_CLIENT_ID');
 
-  const SupabaseConfig.gameclaw({
-    required this.authBase,
-    required this.googleServerClientId,
-    this.googleIosClientId = '',
-  }) : url = '',
-       anonKey = '';
+  factory AuthConfig.fromEnvironment() => const AuthConfig(
+    authBase: _authBase,
+    googleServerClientId: _googleServerClientId,
+    googleIosClientId: _googleIosClientId,
+  );
 
-  factory SupabaseConfig.fromEnvironment() => _authBase.isNotEmpty
-      ? SupabaseConfig.gameclaw(
-          authBase: _authBase,
-          googleServerClientId: _googleServerClientId,
-          googleIosClientId: _googleIosClientId,
-        )
-      : const SupabaseConfig.withGoogle(
-          url: _url,
-          anonKey: _anonKey,
-          googleServerClientId: _googleServerClientId,
-          googleIosClientId: _googleIosClientId,
-        );
-
-  final String url;
-  final String anonKey;
+  final String authBase;
   final String googleServerClientId;
 
   /// Empty on Android, where the client is matched by package and fingerprint instead.
   final String googleIosClientId;
 
-  /// Empty on a Supabase build.
-  final String authBase;
-
-  /// True when sign-in goes to GameClaw's own API rather than Supabase.
-  bool get isGameClaw => authBase.isNotEmpty;
-
-  /// False in a build with no auth flags passed. The sign-in screen then says so plainly rather
-  /// than offering a form that cannot work.
-  bool get isConfigured => isGameClaw || (url.isNotEmpty && anonKey.isNotEmpty);
+  /// False in a build with no `GC_AUTH_BASE`. The sign-in screen then says which flag is missing
+  /// rather than offering a button that dead-ends, and [AuthClient] refuses before any request.
+  bool get isConfigured => authBase.isNotEmpty;
 
   /// Whether this build can offer Google at all. False is a configuration fact, not a failure,
   /// and the screen says which piece is missing rather than showing a button that dead-ends.
@@ -179,7 +151,12 @@ class AuthSession {
     );
   }
 
-  /// What Supabase returns from a sign-in, a sign-up with a confirmed user, or a refresh.
+  /// What `/auth/google`, `/auth/apple` and `/auth/refresh` return, unwrapped from `data`.
+  ///
+  /// The field names are OAuth's rather than this app's because that is what the API emits:
+  /// `{ access_token, refresh_token, expires_in, token_type, is_new }`. `user` is read when it is
+  /// there and is simply absent today, so [email] is null on a fresh sign-in - the token carries
+  /// the address, and the profile endpoint is what the app asks for it.
   static AuthSession? fromAuthResponse(Map<String, dynamic> json) {
     final access = json['access_token'] as String?;
     final refresh = json['refresh_token'] as String?;
@@ -194,20 +171,9 @@ class AuthSession {
   }
 }
 
-/// What a sign-up produced.
-///
-/// Supabase returns a session when the project does not require email confirmation, and no session
-/// when it does. The two are different outcomes for the user - straight in, or go and check your
-/// email - and the screen has to say which.
-class SignUpResult {
-  const SignUpResult({required this.session, required this.needsEmailConfirmation});
-  final AuthSession? session;
-  final bool needsEmailConfirmation;
-}
-
 /// Obtains a Google ID token for the given Web OAuth client id.
 ///
-/// A seam, so the exchange with Supabase can be tested without the platform plugin, which cannot
+/// A seam, so the exchange with the API can be tested without the platform plugin, which cannot
 /// run outside a device. The production implementation is [_googleIdToken]; everything that can
 /// actually be reasoned about lives on the other side of it.
 typedef GoogleIdTokenSource = Future<String?> Function(String serverClientId, String iosClientId);
@@ -231,50 +197,47 @@ Future<String?> _googleIdToken(String serverClientId, String iosClientId) async 
 }
 
 class AuthClient {
-  AuthClient({required SupabaseConfig config, Dio? dio})
+  AuthClient({required AuthConfig config, Dio? dio})
     : _config = config,
       _dio =
           dio ??
           Dio(
             BaseOptions(
-              baseUrl: config.isGameClaw ? '${config.authBase}/auth' : '${config.url}/auth/v1',
+              // The placeholder matters. With no GC_AUTH_BASE this would be the relative "/auth",
+              // and Dio rejects that at construction - "Invalid argument (baseUrl): Must be a
+              // valid URL on platforms other than Web" - which is an ArgumentError thrown while
+              // building a provider, not the configuration message below. Found by the test for
+              // that message, which could never reach it.
+              //
+              // `.invalid` is reserved by RFC 2606 and can never resolve, and _post refuses before
+              // sending anything, so nothing is ever addressed to it.
+              baseUrl: config.isConfigured ? '${config.authBase}/auth' : 'https://auth.invalid/',
               connectTimeout: const Duration(seconds: 10),
               receiveTimeout: const Duration(seconds: 20),
               validateStatus: (_) => true,
-              headers: {
-                // Supabase wants its anon key on every call and identifies the project by it.
-                // GameClaw's own endpoints are public by design - they are how you *get* a
-                // token - so they need no key, and sending one would be noise.
-                if (!config.isGameClaw) 'apikey': config.anonKey,
-                if (!config.isGameClaw) 'authorization': 'Bearer ${config.anonKey}',
-                'content-type': 'application/json',
-              },
+              // No API key of any kind. These endpoints are public by design - they are how you
+              // *get* a token - so there is nothing to identify the caller with and nothing to
+              // ship in the APK.
+              headers: {'content-type': 'application/json'},
             ),
           );
 
-  final SupabaseConfig _config;
+  final AuthConfig _config;
   final Dio _dio;
-
-  Future<AuthSession> signIn({required String email, required String password}) async {
-    final body = await _post('/token?grant_type=password', {'email': email, 'password': password});
-    final session = AuthSession.fromAuthResponse(body);
-    if (session == null) throw const UnknownFailure('Signed in, but no session came back.');
-    return session;
-  }
 
   /// Signs in with the Google account already on the phone.
   ///
-  /// This is the native flow, not a browser redirect: Google hands back an ID token and Supabase
-  /// exchanges it for a session. Nothing opens a web view, nothing comes back through a deep
-  /// link, and there is no redirect URL to get wrong - which removes the part of OAuth that most
-  /// often breaks on Android.
+  /// This is the native flow, not a browser redirect: Google hands back an ID token and the API
+  /// verifies it against Google's JWKS and issues our own session. Nothing opens a web view,
+  /// nothing comes back through a deep link, and there is no redirect URL to get wrong - which
+  /// removes the part of OAuth that most often breaks on Android.
   ///
   /// Three things have to line up before this can work, and the app can only supply one of them:
   ///   - an Android OAuth client registered against this package name and signing fingerprint,
   ///     which is how Google decides the caller is really GameClaw;
-  ///   - a Web OAuth client, whose id is passed as [SupabaseConfig.googleServerClientId] and is
-  ///     the audience of the token both Google and Supabase check;
-  ///   - that same Web client id configured on Supabase's Google provider.
+  ///   - a Web OAuth client, whose id is passed as [AuthConfig.googleServerClientId] and is the
+  ///     audience of the token both Google and the API check;
+  ///   - that same Web client id set as `GOOGLE_WEB_CLIENT_ID` on the API.
   /// Any of them missing produces a failure the user can act on, rather than a spinner.
   Future<AuthSession> signInWithGoogle({GoogleIdTokenSource? source}) async {
     if (!_config.hasGoogle) {
@@ -315,16 +278,14 @@ class AuthClient {
     }
 
     if (idToken == null) {
-      // Google authenticated the person but gave us nothing Supabase can verify. In practice this
+      // Google authenticated the person but gave us nothing the API can verify. In practice this
       // means the Web client id is wrong or is not the one Google issued the token for.
       throw const UnknownFailure(
         'Google did not return a usable token. Check the Web client id this build was given.',
       );
     }
 
-    final body = _config.isGameClaw
-        ? await _post('/google', {'id_token': idToken})
-        : await _post('/token?grant_type=id_token', {'provider': 'google', 'id_token': idToken});
+    final body = await _post('/google', {'id_token': idToken});
     final session = AuthSession.fromAuthResponse(body);
     if (session == null) throw const UnknownFailure('Signed in, but no session came back.');
     return session;
@@ -336,16 +297,8 @@ class AuthClient {
     return text.endsWith('.') ? text.substring(0, text.length - 1) : text;
   }
 
-  Future<SignUpResult> signUp({required String email, required String password}) async {
-    final body = await _post('/signup', {'email': email, 'password': password});
-    final session = AuthSession.fromAuthResponse(body);
-    return SignUpResult(session: session, needsEmailConfirmation: session == null);
-  }
-
   Future<AuthSession> refresh(String refreshToken) async {
-    final body = _config.isGameClaw
-        ? await _post('/refresh', {'refresh_token': refreshToken})
-        : await _post('/token?grant_type=refresh_token', {'refresh_token': refreshToken});
+    final body = await _post('/refresh', {'refresh_token': refreshToken});
     final session = AuthSession.fromAuthResponse(body);
     if (session == null) throw const UnauthorizedFailure();
     return session;
@@ -354,21 +307,13 @@ class AuthClient {
   /// Best effort. A sign-out that fails at the server still clears the session on this device,
   /// which is what the user asked for and the part that matters on a shared phone.
   ///
-  /// The two backends revoke different things. Supabase is told which session by the access
-  /// token in the header. GameClaw revokes the **refresh** token, because that is the one that
-  /// outlives the request - an access token expires within the hour on its own, and leaving the
-  /// refresh token alive would mean the session could be resumed after the user signed out.
+  /// The **refresh** token is what gets revoked, because that is the one that outlives the
+  /// request: an access token expires within the hour by itself, and leaving the refresh token
+  /// alive would mean the session could be resumed after the user signed out.
   Future<void> signOut(String accessToken, {String? refreshToken}) async {
+    if (refreshToken == null || refreshToken.isEmpty) return;
     try {
-      if (_config.isGameClaw) {
-        if (refreshToken == null || refreshToken.isEmpty) return;
-        await _dio.post<dynamic>('/logout', data: jsonEncode({'refresh_token': refreshToken}));
-      } else {
-        await _dio.post<dynamic>(
-          '/logout',
-          options: Options(headers: {'authorization': 'Bearer $accessToken'}),
-        );
-      }
+      await _dio.post<dynamic>('/logout', data: jsonEncode({'refresh_token': refreshToken}));
     } on DioException {
       // Ignore.
     }
@@ -376,7 +321,12 @@ class AuthClient {
 
   Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
     if (!_config.isConfigured) {
-      throw const UnknownFailure('This build has no sign-in configured.');
+      // A configuration error, said as one. Previously an unconfigured build fell through to the
+      // Supabase branch and failed with whatever that produced, which sent whoever met it looking
+      // for credentials to a project that no longer exists.
+      throw const UnknownFailure(
+        'This build has no sign-in configured: it was built without GC_AUTH_BASE.',
+      );
     }
 
     final Response<dynamic> response;
@@ -397,22 +347,19 @@ class AuthClient {
     final json = data is Map<String, dynamic> ? data : const <String, dynamic>{};
 
     if (status >= 200 && status < 300) {
-      // GameClaw wraps every success in {"data": …}; Supabase returns the token object bare.
+      // Every success is wrapped in {"data": …}. The fallback to the bare object is kept for a
+      // response that is already unwrapped rather than as a second protocol.
       final payload = json['data'];
       return payload is Map<String, dynamic> ? payload : json;
     }
 
-    // Supabase words its own refusals well - "Invalid login credentials", "User already
-    // registered" - and they are better than anything generic. Its newer shape is
-    // { error_code, msg }; the older one is { error, error_description }.
-    // GameClaw: {"error": {"code", "message"}}. Supabase's newer shape is {error_code, msg} and
-    // its older one {error, error_description}. Both word their refusals better than anything
-    // generic this could substitute, so the server's wording is preferred wherever it exists.
+    // The API's shape is {"error": {"code", "message"}}, and it words its own refusals better
+    // than anything generic this could substitute, so the server's wording is preferred wherever
+    // it exists. The flatter keys are read too, because a 404 or a proxy error on the way there
+    // does not come from the API at all.
     final nested = json['error'];
     final message =
         (nested is Map<String, dynamic> ? nested['message'] as String? : null) ??
-        json['msg'] as String? ??
-        json['error_description'] as String? ??
         json['message'] as String? ??
         (nested is String ? nested : null);
 
