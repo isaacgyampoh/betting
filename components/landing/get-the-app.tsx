@@ -94,7 +94,7 @@ export function GetTheApp({ align = "start" }: { align?: "start" | "center" }) {
         <p className={`text-xs text-muted-foreground ${centred ? "text-center" : ""}`}>
           {/* No date. "Coming soon" about work nobody has scheduled becomes a year old without
               anyone noticing, and a promised week that slips is worse than no week at all. */}
-          Android first. iPhone isn&apos;t built yet.
+          Android first. The iPhone app is being built and isn&apos;t available yet.
         </p>
       )}
     </div>

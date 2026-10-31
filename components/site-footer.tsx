@@ -3,6 +3,7 @@ import Link from "next/link";
 const LINKS = [
   { href: "/track-record", label: "Track record" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/support", label: "Support" },
   { href: "/responsible-gambling", label: "Responsible gambling" },
   { href: "/terms", label: "Terms" },
   { href: "/privacy", label: "Privacy" },

@@ -90,7 +90,8 @@ export default function PrivacyPage() {
       <p>
         You can access, correct or delete your data at any time. Deletion is immediate and available{" "}
         <Link href="/delete-account">from the app or this website</Link>, without contacting us. For anything else,
-        email <a href="mailto:support@gameclaw.win">support@gameclaw.win</a>.
+        see <Link href="/support">support</Link> or email{" "}
+        <a href="mailto:support@gameclaw.win">support@gameclaw.win</a>.
       </p>
 
       <h2>Children</h2>

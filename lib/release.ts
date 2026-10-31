@@ -32,7 +32,13 @@ export function androidRelease(): AndroidRelease {
 }
 
 /**
- * iOS has not been started, and saying "coming soon" about work nobody has begun is the kind of
- * claim that quietly becomes a year old. The page offers to tell people instead.
+ * iOS now exists: it builds, signs and runs on a real iPhone. It cannot be *distributed* - that
+ * needs a paid Apple Developer membership for a distribution certificate, and the App Store
+ * listing also waits on a legal assessment of guideline 5.3.4 (see docs/apple-5-3-4-evidence.md).
+ *
+ * Still not "coming soon". The original note here warned that saying so about work nobody had
+ * begun becomes a year-old claim; saying it about work that is finished but blocked on somebody
+ * else's decision is the same trap wearing better clothes. The wording below says what is true -
+ * being built, not available - and promises no date.
  */
-export const IOS_STATUS = "not-started" as const;
+export const IOS_STATUS = "in-development" as const;

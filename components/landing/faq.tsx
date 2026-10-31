@@ -85,10 +85,10 @@ const REST: Entry[] = [
 function androidAnswer(): string {
   const release = androidRelease();
   if (release.kind === "play") {
-    return "Yes - GameClaw is on Google Play for Android. iPhone is not built yet.";
+    return "Yes - GameClaw is on Google Play for Android. The iPhone app is being built and is not available yet.";
   }
   if (release.kind === "testing") {
-    return "The Android app is in testing and can be installed directly; it is not on Google Play yet. iPhone is not built yet.";
+    return "The Android app is in testing and can be installed directly; it is not on Google Play yet. The iPhone app is being built and is not available yet.";
   }
   return "Not yet. The Android app is on its way to Google Play, and this site will carry the link the day it is listed. There is no browser version to sign in to in the meantime.";
 }

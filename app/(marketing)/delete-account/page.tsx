@@ -40,7 +40,8 @@ export default function DeleteAccountPage() {
       <p>
         This website does not sign anybody in, so there is no second place to press the button — if you have
         uninstalled the app, lost the phone, or lost access to the Google account you signed in with, email{" "}
-        <a href="mailto:support@gameclaw.win">support@gameclaw.win</a> from the address the account used and we will
+        <a href="mailto:support@gameclaw.win">support@gameclaw.win</a> from the address the account used — see{" "}
+        <Link href="/support">support</Link> — and we will
         delete it for you. Say &quot;delete my account&quot; and nothing else is needed.
       </p>
       <p>
