@@ -49,6 +49,97 @@ export class StatsRateLimitError extends Error {
   }
 }
 
+/**
+ * The day's request budget is spent. Not the same thing as the burst limit above, and the
+ * difference is why this class exists.
+ *
+ * API-Football reports a spent daily allowance in the `requests` field - "You have reached the
+ * request limit for the day" - and serves it with **HTTP 200**. Nothing here looked at `requests`:
+ * the checks covered `plan` and `rateLimit`, so an exhausted account fell through to the generic
+ * "something went wrong" path. On 1 November 2026 that took the match list down for the whole day
+ * on both the website and the app, and the only trace in the log was `stats.api_error` with no
+ * mention of quota - while `x-ratelimit-requests-limit`, the single number that identifies the
+ * plan, was already being captured and never read.
+ *
+ * Retrying does not help: the counter resets on the provider's clock, not ours.
+ */
+export class StatsQuotaExhaustedError extends Error {
+  constructor(
+    readonly endpoint: string,
+    readonly providerMessage?: string,
+    /** The provider's own daily ceiling, which names the plan: 100 free, 7500 Pro. */
+    readonly dailyLimit?: string | null,
+  ) {
+    super(providerMessage ?? "API-Football daily request limit reached");
+    this.name = "StatsQuotaExhaustedError";
+  }
+}
+
+/**
+ * The key was refused. A deployment problem, not a traffic problem.
+ *
+ * Kept separate because the response to it is completely different: no amount of waiting or
+ * caching fixes a revoked or mistyped key, and it must be obvious in the logs rather than hidden
+ * behind an HTTP status. API-Football returns this as `{ token: "..." }`, sometimes with a 4xx -
+ * which is how the reason used to be lost, since the old code threw on `!res.ok` before reading
+ * the body.
+ */
+export class StatsAuthError extends Error {
+  constructor(
+    readonly endpoint: string,
+    readonly providerMessage?: string,
+  ) {
+    super(providerMessage ?? "API-Football rejected the API key");
+    this.name = "StatsAuthError";
+  }
+}
+
+/**
+ * What API-Football's `errors` field is actually telling us.
+ *
+ * Pure, exported and tested (tests/stats/provider-errors.test.ts) because the outage on
+ * 1 November 2026 was a missing branch in exactly this decision, and a missing branch is invisible
+ * until something enumerates the cases. The provider returns `errors` as `[]` when all is well and
+ * as an **object** keyed by reason when not, and the keys are not interchangeable:
+ *
+ *   token      the key was refused. A person has to fix it.
+ *   requests   the day's budget is gone. Resets on the provider's clock; retrying is pointless.
+ *   rateLimit  too many at once. Worth one short pause.
+ *   plan       this data is not in the subscription. Permanent until the plan changes.
+ *
+ * Order matters. `token` first, because nothing else means anything if we are not authenticated;
+ * `requests` before `rateLimit`, because the two used to be conflated and the responses differ.
+ */
+export type ProviderVerdict =
+  | { kind: "ok" }
+  | { kind: "auth"; message: string }
+  | { kind: "quota"; message: string }
+  | { kind: "plan"; message: string }
+  | { kind: "rate"; message?: string }
+  | { kind: "error" };
+
+export function classifyApiFootballErrors(errors: unknown, httpStatus = 200): ProviderVerdict {
+  const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+  const fields = (errors ?? {}) as Record<string, unknown>;
+  // An array is the healthy shape; an empty object is too. Neither carries a reason.
+  const listed: unknown[] = !errors ? [] : Array.isArray(errors) ? errors : Object.values(fields);
+
+  if (!Array.isArray(errors)) {
+    const token = text(fields.token);
+    if (token) return { kind: "auth", message: token };
+    const requests = text(fields.requests);
+    if (requests) return { kind: "quota", message: requests };
+    const plan = text(fields.plan);
+    if (plan) return { kind: "plan", message: plan };
+    if (fields.rateLimit) return { kind: "rate", message: text(fields.rateLimit) };
+  }
+
+  // Anything else that is present, or an error status whose body said nothing we recognise. The
+  // status test is what stops a 500 with an empty `errors` being cached as "no matches today".
+  if (listed.length || httpStatus >= 400) return { kind: "error" };
+  return { kind: "ok" };
+}
+
 const PLAN_LIMITED = "__plan_limited__";
 /** The plan in force when a limit was recorded, so an upgrade clears it instead of waiting it out. */
 const PLAN_AT = "__plan_at__";
@@ -447,11 +538,25 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
    */
   const STALE_GRACE_MS = 60 * 60_000;
 
+  /**
+   * The same cache, kept far longer when the reason we cannot refresh is our own budget.
+   *
+   * An hour is right for a provider that answered with rubbish: the data may genuinely have moved
+   * on and showing an old copy would be a lie. It is the wrong window for an exhausted daily quota,
+   * which lasts until the provider's clock rolls over - the cached fixtures are not wrong, we
+   * simply are not allowed to ask again. Twelve hours of "yesterday's list" beats a day of 503s,
+   * which is what happened on 1 November.
+   */
+  const STALE_GRACE_BUDGET_MS = 12 * 60 * 60_000;
+
   /** A cached answer that is expired, but not so expired that showing it would be a lie. */
-  function servableStale<T>(hit: { payload: unknown; expiresAt: Date } | null): T[] | null {
+  function servableStale<T>(
+    hit: { payload: unknown; expiresAt: Date } | null,
+    graceMs: number = STALE_GRACE_MS,
+  ): T[] | null {
     if (!hit) return null;
     const expiredFor = Date.now() - hit.expiresAt.getTime();
-    if (expiredFor > STALE_GRACE_MS) return null;
+    if (expiredFor > graceMs) return null;
     return hit.payload as T[];
   }
 
@@ -529,6 +634,7 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
     // never log. The daily limit alone identifies the plan - 100 on the free tier, 7500 on Pro -
     // which is how a misconfigured deployment can be told apart from a genuinely busy minute.
     let quota: Record<string, string | null> = {};
+    let httpStatus = 0;
     try {
       const res = await withSlot(() =>
         fetch(url, { headers: { "x-apisports-key": apiKey }, signal: AbortSignal.timeout(10_000), cache: "no-store" }),
@@ -539,28 +645,77 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
         dailyLimit: res.headers.get("x-ratelimit-requests-limit"),
         dailyLeft: res.headers.get("x-ratelimit-requests-remaining"),
       };
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      body = await res.json();
+      httpStatus = res.status;
+      // Parsed before the status is consulted, and that ordering is the fix.
+      //
+      // API-Football puts the actionable sentence in the body - `{ token: … }` for a refused key,
+      // `{ requests: … }` for a spent daily budget - and serves some of them with a 4xx. Throwing
+      // on `!res.ok` first discarded exactly that sentence and left `HTTP 403` in the log, which
+      // says nothing about what to do. The classification below now gets to see it.
+      const text = await res.text();
+      try {
+        body = JSON.parse(text) as { response?: T[]; errors?: unknown };
+      } catch {
+        // Not JSON: a gateway page, a truncated response, a provider genuinely down. That is an
+        // outage rather than a refusal, so it belongs in the transport branch.
+        throw new Error(`HTTP ${res.status}, body not JSON: ${text.slice(0, 120)}`);
+      }
     } catch (err) {
-      logger.error("stats.request_failed", { endpoint, params, err });
-      const stale = servableStale<T>(hit);
-      if (stale) return stale; // recently expired beats nothing
+      // A timeout is worth naming separately: it points at the network or a slow provider, not at
+      // anything about this account, and it is the one failure that is usually worth retrying.
+      const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+      logger.error(timedOut ? "stats.request_timeout" : "stats.request_failed", {
+        endpoint,
+        params,
+        httpStatus,
+        quota,
+        err,
+      });
+      // Treated as a budget-class failure for caching purposes: the provider being unreachable is
+      // also a case where the cached copy is the best honest answer available.
+      const stale = servableStale<T>(hit, STALE_GRACE_BUDGET_MS);
+      if (stale) return stale;
       throw new AppError("STATS_UNAVAILABLE", "Match stats are unavailable right now. Please try again later.", { cause: err });
     }
 
-    // API-Football returns `errors` as [] when fine, or an object like { token: "..." } on failure.
-    const errors: unknown[] = !body.errors ? [] : Array.isArray(body.errors) ? body.errors : Object.values(body.errors as object);
-    const planError = (body.errors as Record<string, unknown> | undefined)?.plan;
-    if (typeof planError === "string") {
-      // Not an outage: this key's plan excludes the data. Remember for a day to save quota and latency.
-      logger.warn("stats.plan_limited", { endpoint, params, capability, message: planError });
-      await rememberPlanLimit(key, endpoint, params, planError);
-      if (capability) await rememberPlanLimit(`capability:${capability}`, endpoint, params, planError);
-      throw new StatsPlanLimitError(endpoint, planError);
+    const verdict = classifyApiFootballErrors(body.errors, httpStatus);
+
+    if (verdict.kind === "auth") {
+      // Nothing retries its way out of a refused key. Loud in the log, invisible to the client.
+      logger.error("stats.key_rejected", { endpoint, params, httpStatus, quota, message: verdict.message });
+      const stale = servableStale<T>(hit, STALE_GRACE_BUDGET_MS);
+      if (stale) return stale;
+      throw new StatsAuthError(endpoint, verdict.message);
     }
-    const rateLimited = (body.errors as Record<string, unknown> | undefined)?.rateLimit;
-    if (rateLimited) {
-      const providerMessage = typeof rateLimited === "string" ? rateLimited : undefined;
+
+    if (verdict.kind === "quota") {
+      // The day's budget is gone. No retry: the counter resets on the provider's clock, not ours.
+      // The daily ceiling is logged because it identifies the plan by itself - 100 on the free
+      // tier, 7500 on Pro - which is what separates "busier than the plan allows" from "the
+      // subscription is not the one we think we are paying for".
+      logger.error("stats.quota_exhausted", {
+        endpoint,
+        params,
+        message: verdict.message,
+        dailyLimit: quota.dailyLimit,
+        dailyLeft: quota.dailyLeft,
+        perMinuteLimit: quota.perMinuteLimit,
+      });
+      const stale = servableStale<T>(hit, STALE_GRACE_BUDGET_MS);
+      if (stale) return stale;
+      throw new StatsQuotaExhaustedError(endpoint, verdict.message, quota.dailyLimit);
+    }
+
+    if (verdict.kind === "plan") {
+      // Not an outage: this key's plan excludes the data. Remember for a day to save quota and latency.
+      logger.warn("stats.plan_limited", { endpoint, params, capability, message: verdict.message });
+      await rememberPlanLimit(key, endpoint, params, verdict.message);
+      if (capability) await rememberPlanLimit(`capability:${capability}`, endpoint, params, verdict.message);
+      throw new StatsPlanLimitError(endpoint, verdict.message);
+    }
+
+    if (verdict.kind === "rate") {
+      const providerMessage = verdict.message;
       // A burst refusal is not an exhausted plan: the quota header alongside it still reported
       // most of the minute's allowance unspent. The slot gate above makes this rare, but isolates
       // do not share a gate, so two of them can still collide. Waiting out the collision is worth
@@ -580,8 +735,12 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
       if (stale) return stale; // recently expired beats nothing
       throw new StatsRateLimitError(endpoint, providerMessage);
     }
-    if (errors.length) {
-      logger.error("stats.api_error", { endpoint, params, errors: body.errors });
+    // Anything left: an unrecognised error field, or an error status whose body parsed but said
+    // nothing we know how to read. The httpStatus test matters - without it a 500 carrying an empty
+    // `errors` array would fall through and be cached as a legitimately empty result, turning a
+    // provider fault into "there are no matches today".
+    if (verdict.kind === "error") {
+      logger.error("stats.api_error", { endpoint, params, httpStatus, quota, errors: body.errors });
       const stale = servableStale<T>(hit);
       if (stale) return stale;
       throw new AppError("STATS_UNAVAILABLE", "Match stats are unavailable right now. Please try again later.");

@@ -4,7 +4,7 @@ import { env } from "@/lib/env";
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { bestMatch, levelFromCompetition, withSquadLevel } from "@/lib/matching/similarity";
-import { createApiFootballProvider, StatsPlanLimitError, StatsRateLimitError } from "@/lib/stats/api-football";
+import { StatsAuthError, StatsPlanLimitError, StatsQuotaExhaustedError, StatsRateLimitError, createApiFootballProvider } from "@/lib/stats/api-football";
 import { buildTeamForm } from "@/lib/stats/form";
 import { sampleStatsProvider } from "@/lib/stats/sample";
 import type { Lineup, MatchDetail, MatchEvent, MatchSummary, StatsProvider, TeamStatistics } from "@/lib/stats/types";
@@ -140,6 +140,18 @@ async function orBusy<T>(p: Promise<T>): Promise<T> {
   } catch (err) {
     if (err instanceof StatsRateLimitError) throw new AppError("STATS_UNAVAILABLE", BUSY_MESSAGE, { cause: err });
     if (err instanceof StatsPlanLimitError) throw new AppError("STATS_UNAVAILABLE", "Stats for that date aren't available on our current plan.", { cause: err });
+    // Says "today", because that is true and actionable for the reader: waiting a minute will not
+    // help, and the alternative wording ("busy") sent people refreshing all afternoon on
+    // 1 November. The provider's own sentence and the daily ceiling stay in the server log; none
+    // of it reaches a phone or a browser, because none of it is the user's business.
+    if (err instanceof StatsQuotaExhaustedError) {
+      throw new AppError("STATS_UNAVAILABLE", "Live match data has reached today's limit. It returns tomorrow.", { cause: err });
+    }
+    // Deliberately indistinguishable from any other outage on the client. A misconfigured or
+    // revoked key is our problem to see in the logs, not a detail to advertise.
+    if (err instanceof StatsAuthError) {
+      throw new AppError("STATS_UNAVAILABLE", "Match stats are unavailable right now. Please try again later.", { cause: err });
+    }
     throw err;
   }
 }
