@@ -90,3 +90,15 @@ marketing/deliverables/*.png
 
 # Editor-local settings.
 .vscode/
+
+# Self-hosted deployment (deploy/). Secrets, backups and TLS keys never go in the repository.
+deploy/.env
+deploy/.env.*
+!deploy/.env.example
+deploy/backups/*
+!deploy/backups/.gitkeep
+deploy/certs/*
+!deploy/certs/.gitkeep
+deploy/*.key
+deploy/*.pem
+backup-key.txt

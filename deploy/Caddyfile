@@ -1,0 +1,72 @@
+# Reverse proxy and TLS terminator for the GameClaw API.
+#
+# Caddy rather than nginx for one reason that matters on a box nobody is watching: certificate
+# renewal is part of the server, not a cron job that can silently stop. There is no certbot timer
+# to fail quietly three months from now.
+
+{
+	email {$ACME_EMAIL}
+	# Keep the admin API off. It is loopback-only by default, but a reverse proxy with a mutable
+	# configuration endpoint is not something to leave enabled on a shared box.
+	admin off
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+{$API_DOMAIN} {
+	# --- TLS -----------------------------------------------------------------
+	# Automatic Let's Encrypt, which needs this name resolving straight to this host: set the
+	# Cloudflare record to DNS only (grey cloud) for the first issuance.
+	#
+	# Once it is issued you have a choice, and it is a real one:
+	#
+	#   * Leave it DNS only. Simplest, and the origin IP is public.
+	#   * Put it behind Cloudflare's proxy. The IP is hidden and you get their edge, but HTTP-01
+	#     renewal then depends on Cloudflare passing :80 through. The robust pairing is a
+	#     Cloudflare Origin CA certificate (free, 15-year) and no ACME at all - generate it, drop
+	#     the pair in deploy/certs/, comment out this block and uncomment the next.
+	#
+	# If you do move behind the proxy, also delete the `-CF-Connecting-IP` line below.
+
+	# tls /certs/origin.pem /certs/origin.key
+
+	encode zstd gzip
+
+	# --- client address ------------------------------------------------------
+	reverse_proxy api:3000 {
+		header_up X-Real-IP {remote_host}
+
+		# Removed on purpose. lib/request.ts reads CF-Connecting-IP first when hashing a client
+		# address for rate limiting, so while this host is reachable directly, anyone could send a
+		# forged CF-Connecting-IP and spread their requests across unlimited buckets - defeating
+		# the AUTH limiter at ten attempts per ten minutes. Caddy strips it so the real X-Forwarded-For
+		# is what gets hashed.
+		#
+		# DELETE THIS LINE if you move the record behind Cloudflare's proxy, because then the header
+		# is genuine and is the only place the visitor's real address appears.
+		header_up -CF-Connecting-IP
+
+		# Longer than any page load should need; a slip conversion prices every leg at a bookmaker
+		# and legitimately takes tens of seconds.
+		transport http {
+			read_timeout 120s
+			write_timeout 120s
+		}
+	}
+
+	# --- logging -------------------------------------------------------------
+	# Access logs on, bounded, no query strings: booking codes and tokens travel in those.
+	log {
+		output file /data/access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# Anything arriving on another name, including a bare IP scan, gets nothing rather than the API.
+:80, :443 {
+	respond 404
+}

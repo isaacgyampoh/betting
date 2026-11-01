@@ -10,6 +10,13 @@ const commit = (process.env.GITHUB_SHA ?? process.env.RENDER_GIT_COMMIT ?? "dev"
 
 const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_COMMIT_SHA: commit },
+  // A self-contained server for the container image, and only for it.
+  //
+  // Gated on DOCKER_BUILD rather than set unconditionally because Render's startCommand is
+  // `next start`, which reads .next directly. Standalone writes an extra .next/standalone tree and
+  // changes what the build traces; leaving it off everywhere else keeps the Render and Cloudflare
+  // builds byte-for-byte what they are today. deploy/Dockerfile sets it.
+  ...(process.env.DOCKER_BUILD === "1" ? { output: "standalone" as const } : {}),
   images: {
     // Team and league logos from API-Football. Served as-is: they're tiny, and optimising on
     // Cloudflare would need the paid Images binding.

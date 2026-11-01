@@ -1,0 +1,176 @@
+# GameClaw on a single VPS: reverse proxy, application, database.
+#
+# Three deliberate properties:
+#
+#   1. Postgres publishes no port. It is reachable only on the internal `data` network, which is
+#      marked internal so it has no route off the host at all. This is the whole point of the
+#      move - the Render database currently answers TCP on 5432 from the public internet.
+#   2. Every service has a CPU and memory ceiling. Not for this project's sake but for the next
+#      one's: an unbounded container on a shared box is how one project takes down another.
+#   3. Migrations are a one-shot container built from the `builder` stage, so the serving image
+#      carries no Prisma CLI and no schema-changing credential. deploy/scripts/deploy.sh runs it
+#      before starting the API.
+#
+# Secrets come from deploy/.env, which is gitignored. Nothing here has a default password.
+
+name: gameclaw
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }   # bounded, so logs cannot fill the disk
+
+networks:
+  edge:
+    name: gameclaw_edge
+  data:
+    name: gameclaw_data
+    internal: true        # no gateway: containers here cannot reach, or be reached from, the internet
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - ./certs:/certs:ro          # only used by the Cloudflare Origin CA option; may be empty
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in deploy/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
+    networks: [edge]
+    cpus: 0.25
+    mem_limit: 192m
+    logging: *logging
+    depends_on:
+      api:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    # No `ports:`. Deliberate - see the note at the top of this file.
+    environment:
+      # The superuser exists to run initdb and nothing else. The application and the migrator each
+      # get their own role in postgres/initdb/10-roles.sql.
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:-gameclaw}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?}
+      OWNER_DB_PASSWORD: ${OWNER_DB_PASSWORD:?}
+      # Checksums catch silent corruption on cheap storage, which is exactly what a budget VPS is.
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+      # Mounted outside initdb.d so the entrypoint does not also run it directly; 00-init.sh
+      # explains why that matters.
+      - ./postgres/roles.sql:/opt/gameclaw/roles.sql:ro
+    networks: [data]
+    # 256 MB is what Render's basic-256mb gives it today; 1 GB is room to stop being the bottleneck
+    # without crowding out the rest of the box.
+    cpus: 1.0
+    mem_limit: 1g
+    mem_reservation: 512m
+    shm_size: 256m
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=96MB
+      - -c
+      - log_min_duration_statement=500ms   # one line per slow query, nothing per fast one
+      - -c
+      - log_connections=off
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging: *logging
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: runner
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-dev}
+    image: gameclaw-api:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      # The application connects as the least-privileged role; migrations use the owner. Both stay
+      # on the internal network, so neither credential is usable from anywhere but this host.
+      DATABASE_URL: postgresql://gameclaw_app:${APP_DB_PASSWORD}@db:5432/${POSTGRES_DB:-gameclaw}
+      DIRECT_URL: postgresql://gameclaw_owner:${OWNER_DB_PASSWORD}@db:5432/${POSTGRES_DB:-gameclaw}
+    networks: [edge, data]
+    cpus: 2.0
+    mem_limit: 1536m
+    mem_reservation: 512m
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # One-shot. `docker compose run --rm migrate` - never starts with the stack.
+  migrate:
+    profiles: [tools]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: builder
+    image: gameclaw-migrate:${IMAGE_TAG:-local}
+    env_file: [.env]
+    environment:
+      DIRECT_URL: postgresql://gameclaw_owner:${OWNER_DB_PASSWORD}@db:5432/${POSTGRES_DB:-gameclaw}
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    networks: [data]
+    cpus: 1.0
+    mem_limit: 1g
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Nightly encrypted dump. Alpine + postgres client + age, driven by scripts/backup.sh.
+  backup:
+    profiles: [tools]
+    build:
+      context: .
+      dockerfile: backup.Dockerfile
+    image: gameclaw-backup:${IMAGE_TAG:-local}
+    env_file: [.env]
+    environment:
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-gameclaw}
+      PGUSER: gameclaw_owner
+      PGPASSWORD: ${OWNER_DB_PASSWORD}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:?}
+    volumes:
+      - ./backups:/backups
+      - ./scripts:/scripts:ro
+    entrypoint: ["/bin/bash", "/scripts/backup.sh"]
+    networks: [data]
+    cpus: 0.5
+    mem_limit: 512m
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy

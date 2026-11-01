@@ -1,0 +1,14 @@
+# Keep the build context small and secrets out of it entirely.
+.git
+.next
+.open-next
+node_modules
+deploy/backups
+gameclaw_app
+coverage
+*.log
+.env
+.env.*
+!.env.example
+.dev.vars
+.wrangler
