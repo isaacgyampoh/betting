@@ -56,7 +56,48 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 
 const LIVE_TTL_MS = 30_000;
-const DAY_TTL_MS = 10 * 60_000;
+
+/**
+ * How long a day's fixture list is kept, by how changeable that day is.
+ *
+ * This is a budget decision as much as a freshness one. A full day is 1,149 fixtures over twelve
+ * requests, and the free allowance is 1,000 a day, so a flat ten-minute TTL costs
+ * 12 x 144 = 1,728 requests for today alone - over budget before anybody opens a match, and the
+ * Live Centre polls. Left alone it would have exhausted the quota and produced the same 503 the
+ * move to this provider was meant to end.
+ *
+ * A past day cannot change; a future one barely does. Only today needs refreshing often, and it
+ * is the only one that pays the full price.
+ */
+const DAY_TTL_PAST_MS = 24 * 60 * 60_000;
+const DAY_TTL_TODAY_MS = 60 * 60_000;
+const DAY_TTL_FUTURE_MS = 6 * 60 * 60_000;
+
+/**
+ * How the Live Centre stays live on a 1,000-request budget.
+ *
+ * Refreshing the whole of today often enough to be "live" is what does not fit: twelve requests a
+ * time, so even a ten-minute TTL is 1,728 a day. But only the handful of matches in play are
+ * actually changing, and `/fixtures/live` returns exactly those in **one** request.
+ *
+ * So the day is fetched hourly and the live matches are laid over it every few minutes:
+ *
+ *   day list   12 x 24  =  288 / day
+ *   live       1  x 480 =  480 / day
+ *                          768 / day, inside 1,000, with room for match pages
+ *
+ * Three minutes rather than one: at one request a minute the overlay alone is 1,440 a day, which
+ * is over budget on its own. Three is the fastest cadence the free tier actually affords.
+ */
+const LIVE_OVERLAY_TTL_MS = 3 * 60_000;
+
+/** UTC, like every date the provider and this app exchange. */
+function dayTtl(date: string): number {
+  const today = new Date().toISOString().slice(0, 10);
+  if (date < today) return DAY_TTL_PAST_MS;
+  if (date > today) return DAY_TTL_FUTURE_MS;
+  return DAY_TTL_TODAY_MS;
+}
 const SETTLED_TTL_MS = 24 * 60 * 60_000;
 /** Long: a cuid never changes, and losing the mapping costs a whole panel. */
 const ID_MAP_TTL_MS = 90 * 24 * 60 * 60_000;
@@ -131,6 +172,14 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
       // cache holds scores, and an old score is a scoreboard showing finished matches in play.
       if (hit && Date.now() - hit.expiresAt.getTime() < 60 * 60_000) return hit.payload as T;
       throw new AppError("STATS_UNAVAILABLE", "Match stats are unavailable right now. Please try again later.", { cause: err });
+    }
+
+    // The provider states the day's budget on every response. Logged when it gets low, because
+    // the failure mode is a whole day of 503s and the warning is free.
+    const left = Number(res.headers.get("x-ratelimit-remaining"));
+    const limit = res.headers.get("x-ratelimit-limit");
+    if (Number.isFinite(left) && left <= 150) {
+      logger.warn("goal.quota_low", { remaining: left, limit, path });
     }
 
     const body = (await res.json().catch(() => null)) as Envelope<T> | null;
@@ -370,7 +419,24 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
     source: "goal-api",
 
     async fixturesByDate(date) {
-      return summaries(await paged(`/fixtures/date/${date}`, DAY_TTL_MS));
+      const day = await paged(`/fixtures/date/${date}`, dayTtl(date));
+
+      // Only today has anything in play, and only today pays for the overlay.
+      if (date === new Date().toISOString().slice(0, 10)) {
+        const live = await call<GoalFixture[]>("/fixtures/live", LIVE_OVERLAY_TTL_MS).catch(() => null);
+        if (live?.length) {
+          // Keyed on apiId, which is the id this provider hands outwards; the cuid would work too
+          // but apiId is what everything downstream already holds.
+          const fresh = new Map(live.map((f) => [String(f.apiId), f]));
+          for (let i = 0; i < day.length; i++) {
+            const updated = fresh.get(String(day[i].apiId));
+            // The whole record, not a merge of fields: a half-updated fixture is how a score and
+            // a minute end up disagreeing with each other.
+            if (updated) day[i] = updated;
+          }
+        }
+      }
+      return summaries(day);
     },
 
     async fixture(id) {

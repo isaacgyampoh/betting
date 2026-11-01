@@ -281,6 +281,46 @@ describe.skipIf(!live)("GOAL API, live", () => {
     ).toBeLessThan(20);
   }, 300_000);
 
+  /**
+   * The live overlay, which is what lets a once-an-hour day list still be a Live Centre.
+   *
+   * Refreshing all 1,149 fixtures often enough to be live costs twelve requests a time and does
+   * not fit a 1,000-a-day budget. `/fixtures/live` returns only the matches in play, in one
+   * request, and is laid over the cached day. This checks the overlay actually lands: every
+   * fixture the provider calls live must come back from fixturesByDate as LIVE, even though the
+   * day underneath it may be an hour old.
+   */
+  it("keeps matches in play fresh over an hour-old day list", async () => {
+    const { createGoalApiProvider } = await import("@/lib/stats/goal-api");
+    const provider = createGoalApiProvider(process.env.GOAL_API_KEY!);
+    const today = new Date().toISOString().slice(0, 10);
+
+    const res = await fetch("https://api.goal-api.com/v1/fixtures/live", {
+      headers: { authorization: `Bearer ${process.env.GOAL_API_KEY}` },
+    });
+    const live = ((await res.json())?.data ?? []) as { apiId: string }[];
+    if (!live.length) {
+      console.log("    nothing in play right now; overlay not exercised");
+      return;
+    }
+
+    const day = await provider.fixturesByDate(today);
+    const byId = new Map(day.map((m) => [m.id, m]));
+    let checked = 0;
+    for (const f of live) {
+      const m = byId.get(Number(f.apiId));
+      if (!m) continue; // a live fixture on another date is legitimate near midnight UTC
+      checked++;
+      expect(
+        m.status,
+        `${m.home.name} v ${m.away.name} is live at the provider but reads ${m.status} in the day list`,
+      ).toBe("LIVE");
+      expect(m.statusLabel).not.toBe("FT");
+    }
+    console.log(`    ${live.length} live at the provider, ${checked} matched into today, all LIVE`);
+    expect(checked, "no live fixture matched into today's list").toBeGreaterThan(0);
+  }, 180_000);
+
   it("reports coverage as unknown, because the provider does not publish it", async () => {
     const { createGoalApiProvider } = await import("@/lib/stats/goal-api");
     const provider = createGoalApiProvider(process.env.GOAL_API_KEY!);
