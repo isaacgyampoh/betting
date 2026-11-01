@@ -89,6 +89,20 @@ type GoalFixture = {
 
 type Envelope<T> = { success?: boolean; data?: T; error?: string; message?: string; code?: string };
 
+/**
+ * A score, from a provider that is not consistent about their type.
+ *
+ * `/fixtures/date/:date` returns `homeTeamScore` as a number or null; `/teams/:id/results` returns
+ * the same field as the string "1". Passing that straight into `goals.home`, which is typed
+ * `number | null`, type-checks because it arrives as JSON `any` and then compares and sorts
+ * wrongly for ever after.
+ */
+function score(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function createGoalApiProvider(apiKey: string): StatsProvider {
   /**
    * One request, cached in Postgres exactly as the API-Football client caches its own.
@@ -235,7 +249,24 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
     return "";
   }
 
-  async function toMatchSummary(f: GoalFixture): Promise<MatchSummary> {
+  /**
+   * Null for an entry that cannot be represented, rather than a throw.
+   *
+   * A single fixture with an unparseable kick-off used to take the whole call down: `new Date(…)`
+   * gives Invalid Date, `.toISOString()` throws, and one bad row in 1,149 empties the Live Centre
+   * for everybody. Found when the head-to-head endpoint turned out to return a different shape
+   * entirely, with no kickoffUtc at all.
+   */
+  async function toMatchSummary(f: GoalFixture): Promise<MatchSummary | null> {
+    const kickoff = new Date(f?.kickoffUtc ?? "");
+    if (Number.isNaN(kickoff.getTime())) {
+      logger.warn("goal.fixture_unmappable", { apiId: f?.apiId, kickoffUtc: f?.kickoffUtc });
+      return null;
+    }
+    return buildSummary(f, kickoff);
+  }
+
+  async function buildSummary(f: GoalFixture, kickoff: Date): Promise<MatchSummary> {
     const homeId = apiIdFromAsset(f.teamHomeBadge ?? f.homeTeam?.badge);
     const awayId = apiIdFromAsset(f.teamAwayBadge ?? f.awayTeam?.badge);
     const leagueId = apiIdFromAsset(f.leagueLogo);
@@ -249,28 +280,31 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
     const season = Number(f.leagueYear);
     return {
       id: Number(f.apiId),
-      kickoffAt: new Date(f.kickoffUtc).toISOString(),
+      kickoffAt: kickoff.toISOString(),
       status,
       statusLabel: statusLabel(f, status),
       league: {
         id: leagueId ?? 0,
         name: f.leagueName ?? "",
         country: f.countryName ?? "",
-        season: Number.isFinite(season) ? season : new Date(f.kickoffUtc).getUTCFullYear(),
+        season: Number.isFinite(season) ? season : kickoff.getUTCFullYear(),
         logo: f.leagueLogo ?? null,
       },
       // The nested object carries proper diacritics ("Lanús") where the flat field does not ("Lanus").
       home: { id: homeId ?? 0, name: f.homeTeam?.name ?? f.homeTeamName ?? "", logo: f.teamHomeBadge ?? null },
       away: { id: awayId ?? 0, name: f.awayTeam?.name ?? f.awayTeamName ?? "", logo: f.teamAwayBadge ?? null },
-      goals: { home: f.homeTeamScore, away: f.awayTeamScore },
+      goals: { home: score(f.homeTeamScore), away: score(f.awayTeamScore) },
       halftime:
-        f.homeTeamHalftimeScore === null && f.awayTeamHalftimeScore === null
+        score(f.homeTeamHalftimeScore) === null && score(f.awayTeamHalftimeScore) === null
           ? null
-          : { home: f.homeTeamHalftimeScore, away: f.awayTeamHalftimeScore },
+          : { home: score(f.homeTeamHalftimeScore), away: score(f.awayTeamHalftimeScore) },
     };
   }
 
-  const summaries = (list: GoalFixture[]) => Promise.all(list.map(toMatchSummary));
+  async function summaries(list: GoalFixture[]): Promise<MatchSummary[]> {
+    const mapped = await Promise.all((list ?? []).map(toMatchSummary));
+    return mapped.filter((m): m is MatchSummary => m !== null);
+  }
 
   /** Walks `limit`/`offset` until a short page. This endpoint returns no total to go by. */
   async function paged(path: string, ttlMs: number, cap = MAX_PAGES): Promise<GoalFixture[]> {
@@ -304,11 +338,61 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
       return summaries(list ?? []);
     },
 
+    /**
+     * Head to head, which speaks a different language from every other endpoint here.
+     *
+     * `/h2h/:a/:b/direct` is a passthrough of an older upstream rather than GOAL's own model: the
+     * fields are snake_case (`match_id`, `match_hometeam_name`), the badge URLs point at
+     * apiv3.apifootball.com, and the status is "Finished" in title case where the fixtures
+     * endpoint says "FINISHED". Feeding it through the normal mapper produced
+     * `Invalid time value` and took the whole match page down, because there is no kickoffUtc in
+     * it at all.
+     *
+     * One genuine compromise: there is no timezone. `match_date` and `match_time` are composed as
+     * UTC, which may be out by the competition's offset. For a list of past meetings that is
+     * immaterial - the date is what is read - but it is wrong enough that these must never be
+     * used where a precise kick-off matters.
+     */
     async headToHead(homeId, awayId, count) {
       const [a, b] = await Promise.all([resolve("team", homeId), resolve("team", awayId)]);
       if (!a || !b) return [];
-      const payload = await call<{ matches?: GoalFixture[] }>(`/h2h/${a}/${b}/direct`, SETTLED_TTL_MS);
-      return summaries((payload?.matches ?? []).slice(0, count));
+      type H2H = Record<string, string | null | undefined>;
+      const payload = await call<{ matches?: H2H[] }>(`/h2h/${a}/${b}/direct`, SETTLED_TTL_MS);
+
+      const out: MatchSummary[] = [];
+      for (const m of (payload?.matches ?? []).slice(0, count)) {
+        const date = m.match_date;
+        if (!date) continue;
+        const kickoff = new Date(`${date}T${m.match_time || "00:00"}:00Z`);
+        if (Number.isNaN(kickoff.getTime())) continue;
+        const finished = /finish|ft|after/i.test(m.match_status ?? "");
+        const season = Number(date.slice(0, 4));
+        out.push({
+          id: Number(m.match_id) || 0,
+          kickoffAt: kickoff.toISOString(),
+          status: finished ? "FINISHED" : "SCHEDULED",
+          statusLabel: finished ? "FT" : "",
+          league: {
+            id: Number(m.league_id) || 0,
+            name: m.league_name ?? "",
+            country: m.country_name ?? "",
+            season: Number.isFinite(season) ? season : kickoff.getUTCFullYear(),
+            logo: m.league_logo || null,
+          },
+          // Already numeric here, unlike everywhere else in this API.
+          home: { id: Number(m.match_hometeam_id) || 0, name: m.match_hometeam_name ?? "", logo: m.team_home_badge || null },
+          away: { id: Number(m.match_awayteam_id) || 0, name: m.match_awayteam_name ?? "", logo: m.team_away_badge || null },
+          goals: { home: score(m.match_hometeam_score), away: score(m.match_awayteam_score) },
+          halftime:
+            score(m.match_hometeam_halftime_score) === null && score(m.match_awayteam_halftime_score) === null
+              ? null
+              : {
+                  home: score(m.match_hometeam_halftime_score),
+                  away: score(m.match_awayteam_halftime_score),
+                },
+        });
+      }
+      return out;
     },
 
     async standings(leagueId) {

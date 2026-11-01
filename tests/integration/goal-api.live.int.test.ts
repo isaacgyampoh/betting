@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 /**
  * The GOAL API provider against the real service, with a real key.
@@ -97,6 +97,73 @@ describe.skipIf(!live)("GOAL API, live", () => {
       expect(m.status).toBe("FINISHED");
     }
   }, 120_000);
+
+  /**
+   * Whether a daily pick can still be evidenced under GOAL API.
+   *
+   * This is the question behind the whole switch, and it is not answered by the provider methods
+   * passing individually. A published pick needs `lookupMatch` to find the stats provider's copy
+   * of a fixture the *bookmaker* named - matched on team names and kick-off, across two sources
+   * that spell teams differently ("Lanús" against "Lanus") - and then `getMatchDetail` to return
+   * recent form behind it. Without both, `withConviction` drops every candidate and the 07:00 job
+   * publishes nothing, which is exactly what happened on 1 November.
+   *
+   * So this drives the real service functions, not the provider, and reports what each section
+   * actually returned rather than asserting a shape.
+   */
+  it("can look a fixture up by name and get form behind it, which is what a pick needs", async () => {
+    const prior = { key: process.env.GOAL_API_KEY, provider: process.env.STATS_PROVIDER, mode: process.env.STATS_MODE };
+    process.env.STATS_PROVIDER = "goal";
+    process.env.STATS_MODE = "auto";
+    vi.resetModules();
+
+    const { createGoalApiProvider } = await import("@/lib/stats/goal-api");
+    const { lookupMatch, getMatchDetail } = await import("@/lib/services/stats");
+
+    // Reading the day first is what fills the cuid map, and is also what production does before
+    // anything can be opened.
+    const day = await createGoalApiProvider(process.env.GOAL_API_KEY!).fixturesByDate(
+      new Date().toISOString().slice(0, 10),
+    );
+    const target = day.find((m) => m.status === "SCHEDULED" && m.home.id > 0 && m.away.id > 0);
+    expect(target, "no usable fixture in today's list").toBeDefined();
+
+    // Step one: the name-and-kick-off match a bookmaker fixture has to go through.
+    const found = await lookupMatch(
+      target!.home.name,
+      target!.away.name,
+      new Date(target!.kickoffAt),
+      target!.league.name,
+    );
+    expect(found, `lookupMatch could not find ${target!.home.name} v ${target!.away.name}`).not.toBeNull();
+    expect(found!.id).toBe(target!.id);
+
+    // Step two: the research behind the pick. `null` is the user, as the daily-picks cron passes -
+    // there is nobody to meter for background work.
+    const detail = await getMatchDetail(null, found!.id);
+    const got = {
+      source: detail.source,
+      homeFormPlayed: detail.form.home.summary.played,
+      awayFormPlayed: detail.form.away.summary.played,
+      h2h: detail.h2h.length,
+      standings: detail.standings?.length ?? 0,
+      unavailable: detail.unavailable,
+    };
+    console.log("    evidence available under GOAL:", JSON.stringify(got));
+
+    expect(detail.source).toBe("goal-api");
+    // The assertion that matters: at least one side has recent results. With none, every candidate
+    // loses its conviction and nothing is published - a silent no-pick day.
+    expect(
+      got.homeFormPlayed + got.awayFormPlayed,
+      "neither side had any recent form, so no pick could be evidenced",
+    ).toBeGreaterThan(0);
+
+    process.env.GOAL_API_KEY = prior.key;
+    process.env.STATS_PROVIDER = prior.provider;
+    process.env.STATS_MODE = prior.mode;
+    vi.resetModules();
+  }, 180_000);
 
   it("reports the panels it cannot supply as empty rather than inventing them", async () => {
     const { createGoalApiProvider } = await import("@/lib/stats/goal-api");
