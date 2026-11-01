@@ -505,6 +505,103 @@ model DailyPick {
 }
 
 /// One game on a daily pick, with the reason published alongside it.
+/// One researched selection in a specialist statistical market.
+///
+/// Deliberately not part of DailyPick. That model is an accumulator keyed [forDate, target],
+/// built to reach a total-odds target and settled from the final score; its own leg comment says
+/// markets we do not model "are reported as needing a manual check". A special pick is a single
+/// selection settled from match *statistics*, so sharing the table would make `target` meaningless
+/// and branch settlement everywhere. The research pipeline, bookmaker adapters and cron are
+/// shared; the storage is not.
+model SpecialPick {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Ghana date (GMT) this selection is published for.
+  forDate  DateTime @map("for_date") @db.Date
+  /// 1 or 2. At most two a day, and fewer when fewer qualify.
+  position Int
+
+  // --- the fixture -------------------------------------------------------
+  /// The stats provider's fixture id, which is what settlement reads back.
+  statsFixtureId Int      @map("stats_fixture_id")
+  homeTeam       String   @map("home_team")
+  awayTeam       String   @map("away_team")
+  competition    String?
+  country        String?
+  kickoffAt      DateTime @map("kickoff_at") @db.Timestamptz
+
+  // --- the market --------------------------------------------------------
+  /// CORNERS | SHOTS | SHOTS_ON_TARGET. A string rather than an enum: the set is defined in
+  /// lib/special-picks/markets.ts against measured bookmaker coverage and will change as that
+  /// coverage is verified, and a migration per market is friction for no safety - the values are
+  /// validated on the way in.
+  marketKind String  @map("market_kind")
+  /// MATCH | HOME | AWAY.
+  marketSide String  @map("market_side")
+  /// FT for now; firstHalf/secondHalf statistics exist, so H1 is reachable later.
+  marketPeriod String @default("FT") @map("market_period")
+  line       Decimal @db.Decimal(5, 2)
+  /// OVER | UNDER.
+  outcome    String
+
+  // --- the price, kept strictly apart from our own estimate ---------------
+  /// Null when no bookmaker price could be verified. Never a guess.
+  bookmaker     String?
+  /// The bookmaker's own name for the market, exactly as read, so a later change is traceable.
+  rawMarketName String?   @map("raw_market_name")
+  /// The price at publication. Never overwritten - a later move is a new SpecialPickOdds row.
+  odds          Decimal?  @db.Decimal(10, 3)
+  oddsCheckedAt DateTime? @map("odds_checked_at") @db.Timestamptz
+
+  // --- what the research concluded ---------------------------------------
+  /// Our estimated chance, 0..1. This is not a price and must never be shown as one.
+  probability Decimal  @db.Decimal(5, 4)
+  confidence  String
+  /// The ranking score that selected this pick, kept so a published choice can be re-examined.
+  rating      Decimal  @db.Decimal(6, 3)
+  reason      String
+  /// The statistics the selection rests on, as researched.
+  evidence    Json
+  researchedAt DateTime @map("researched_at") @db.Timestamptz
+
+  // --- outcome -----------------------------------------------------------
+  status    PickStatus @default(PENDING)
+  /// The count the line was graded against, once the match is over.
+  actual    Decimal?   @db.Decimal(6, 2)
+  settledAt DateTime?  @map("settled_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  oddsHistory SpecialPickOdds[]
+
+  /// At most two a day, and the same slot cannot be published twice.
+  @@unique([forDate, position])
+  /// Idempotency: a rerun of the generator cannot publish the same selection again, and two
+  /// correlated lines on the same fixture and market cannot both go up.
+  @@unique([forDate, statsFixtureId, marketKind, marketSide])
+  @@index([forDate])
+  @@index([status, kickoffAt])
+  @@map("special_picks")
+}
+
+/// Every price we have seen for a selection, including the one it was published at.
+///
+/// The published price in SpecialPick.odds is never rewritten. A bookmaker moving a line after
+/// publication is information, not a correction: overwriting it would quietly improve the record's
+/// apparent value and make the profit calculation a fiction.
+model SpecialPickOdds {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pickId    String   @map("pick_id") @db.Uuid
+  bookmaker String
+  odds      Decimal  @db.Decimal(10, 3)
+  line      Decimal  @db.Decimal(5, 2)
+  checkedAt DateTime @default(now()) @map("checked_at") @db.Timestamptz
+
+  pick SpecialPick @relation(fields: [pickId], references: [id], onDelete: Cascade)
+
+  @@index([pickId, checkedAt])
+  @@map("special_pick_odds")
+}
+
 model DailyPickLeg {
   id                   String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   pickId               String     @map("pick_id") @db.Uuid
