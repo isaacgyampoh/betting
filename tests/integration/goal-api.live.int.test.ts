@@ -165,13 +165,73 @@ describe.skipIf(!live)("GOAL API, live", () => {
     vi.resetModules();
   }, 180_000);
 
-  it("reports the panels it cannot supply as empty rather than inventing them", async () => {
+  /**
+   * The statistics and line-up panels, mapped from GOAL's own vocabulary.
+   *
+   * Scans a past day for a finished fixture that actually has both, because most do not -
+   * `hasStatistics` and `hasLineups` are false far more often than they are true, and a test
+   * written against a fixture with neither would pass while mapping nothing.
+   */
+  it("maps statistics and line-ups where the provider has them", async () => {
     const { createGoalApiProvider } = await import("@/lib/stats/goal-api");
     const provider = createGoalApiProvider(process.env.GOAL_API_KEY!);
-    // Honest absence, which the match page turns into a stated note. If these ever start
-    // returning data, the mapping has been written and this test should be replaced, not deleted.
-    expect(await provider.statistics(1, 1)).toEqual([]);
-    expect(await provider.lineups(1, 1)).toEqual([]);
+
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const day = await provider.fixturesByDate(yesterday);
+    const finished = day.filter((m) => m.status === "FINISHED");
+    expect(finished.length, "no finished fixtures to inspect").toBeGreaterThan(0);
+
+    let stats: Awaited<ReturnType<typeof provider.statistics>> = [];
+    let lineups: Awaited<ReturnType<typeof provider.lineups>> = [];
+    for (const m of finished.slice(0, 25)) {
+      if (!stats.length) stats = await provider.statistics(m.id, m.home.id, true);
+      if (!lineups.length) lineups = await provider.lineups(m.id, m.home.id, true);
+      if (stats.length && lineups.length) break;
+    }
+
+    if (stats.length) {
+      expect(stats).toHaveLength(2);
+      const [home, away] = stats;
+      console.log(
+        `    statistics: possession ${home.possession}/${away.possession}  corners ${home.corners}/${away.corners}  on target ${home.shotsOnGoal}/${away.shotsOnGoal}`,
+      );
+      expect(home.team.name.length).toBeGreaterThan(0);
+      // Possession is a percentage, not the raw "50%" string.
+      if (home.possession !== null) {
+        expect(home.possession).toBeGreaterThanOrEqual(0);
+        expect(home.possession).toBeLessThanOrEqual(100);
+      }
+      // What GOAL does not publish must be null, never 0 - the panel shows the two differently.
+      for (const k of ["fouls", "yellowCards", "offsides", "saves", "passesTotal", "shotsTotal"] as const) {
+        expect(home[k], `${k} should be null (not reported by this provider), not a number`).toBeNull();
+      }
+    } else {
+      console.log("    statistics: no fixture in the sample carried any");
+    }
+
+    if (lineups.length) {
+      expect(lineups).toHaveLength(2);
+      const [home] = lineups;
+      console.log(`    lineups: ${home.startXI.length} starting, ${home.substitutes.length} subs, coach ${home.coach}`);
+      expect(home.startXI.length).toBeGreaterThan(0);
+      for (const pl of home.startXI) {
+        expect(pl.name.length, "a named player is the whole point of a line-up").toBeGreaterThan(0);
+        // GOAL's lineupPosition reads "0" for everyone, so there is no grid to report.
+        expect(pl.grid).toBeNull();
+        if (pl.position !== null) expect(["G", "D", "M", "F"]).toContain(pl.position);
+      }
+    } else {
+      console.log("    lineups: no fixture in the sample carried any");
+    }
+
+    // One or the other must have been found, or the scan is not testing anything.
+    expect(stats.length + lineups.length, "neither panel was found in 25 finished fixtures").toBeGreaterThan(0);
+  }, 240_000);
+
+  it("reports coverage as unknown, because the provider does not publish it", async () => {
+    const { createGoalApiProvider } = await import("@/lib/stats/goal-api");
+    const provider = createGoalApiProvider(process.env.GOAL_API_KEY!);
+    // Null means "the provider does not say", which is true and is not the same as "none".
     expect(await provider.coverage(1, 2026)).toBeNull();
   }, 60_000);
 });

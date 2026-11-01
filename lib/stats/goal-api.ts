@@ -6,6 +6,7 @@ import type {
   CompetitionSummary,
   LeagueCoverage,
   Lineup,
+  LineupPlayer,
   MatchEvent,
   MatchStatus,
   MatchSummary,
@@ -339,6 +340,19 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
     return mapped;
   }
 
+  /**
+   * The two sides of a fixture, for panels whose own payload carries no team names.
+   *
+   * The statistics and line-up responses identify sides only as "home" and "away", so the fixture
+   * is read for the names and badges. It is nearly always already cached - getMatchDetail fetches
+   * the fixture before either panel - so this costs no extra request in practice.
+   */
+  async function teamRefs(fixtureId: number) {
+    const f = await call<GoalFixture>(`/fixtures/${fixtureId}`, LIVE_TTL_MS);
+    const m = f ? toMatchSummary(f) : null;
+    return m ? { home: m.home, away: m.away } : null;
+  }
+
   /** Walks `limit`/`offset` until a short page. This endpoint returns no total to go by. */
   async function paged(path: string, ttlMs: number, cap = MAX_PAGES): Promise<GoalFixture[]> {
     const out: GoalFixture[] = [];
@@ -512,6 +526,122 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
       return out.sort((a, b) => a.minute - b.minute || (a.extra ?? 0) - (b.extra ?? 0));
     },
 
+    /**
+     * Team statistics, home side first.
+     *
+     * GOAL publishes eleven rows per half under `match.fullTime`, in its own vocabulary and with
+     * values as strings ("50%" for possession). Four of them have an equivalent in our model:
+     *
+     *   Corners -> corners · On Target -> shotsOnGoal · Off Target -> shotsOffGoal
+     *   Ball Possession -> possession
+     *
+     * The rest - Throw In, Free Kick, Goal Kick, Penalty, Substitution, Attacks, Dangerous
+     * Attacks - have no field here and are dropped rather than bent into one.
+     *
+     * Everything GOAL does not report stays null: fouls, cards, offsides, saves, passes, blocked
+     * and boxed shots, expected goals. Null in TeamStatistics means "not reported", never zero,
+     * and the match page distinguishes the two - so the honest gap shows as a gap.
+     *
+     * shotsTotal is deliberately null rather than On Target + Off Target. That sum omits blocked
+     * shots, which GOAL does not publish, so it would be a plausible-looking number that is not
+     * the number.
+     */
+    async statistics(fixtureId, _homeTeamId, settled) {
+      type Row = { type?: string | null; home?: string | number | null; away?: string | number | null };
+      const payload = await call<{ match?: { fullTime?: Row[] }; hasStatistics?: boolean }>(
+        `/fixtures/${fixtureId}/statistics`,
+        settled ? SETTLED_TTL_MS : LIVE_TTL_MS,
+      );
+      const rows = payload?.match?.fullTime ?? [];
+      if (!payload?.hasStatistics || !rows.length) return [];
+
+      const refs = await teamRefs(fixtureId);
+      if (!refs) return [];
+
+      const pick = (label: string, side: "home" | "away") => {
+        const row = rows.find((r) => (r.type ?? "").trim().toLowerCase() === label);
+        if (!row) return null;
+        // "50%" for possession; plain digits elsewhere.
+        return score(String(row[side] ?? "").replace("%", "").trim());
+      };
+      const build = (team: typeof refs.home, side: "home" | "away"): TeamStatistics => ({
+        team,
+        possession: pick("ball possession", side),
+        shotsTotal: null,
+        shotsOnGoal: pick("on target", side),
+        shotsOffGoal: pick("off target", side),
+        shotsBlocked: null,
+        shotsInsideBox: null,
+        shotsOutsideBox: null,
+        corners: pick("corners", side),
+        offsides: null,
+        fouls: null,
+        yellowCards: null,
+        redCards: null,
+        saves: null,
+        passesTotal: null,
+        passesAccurate: null,
+        expectedGoals: null,
+      });
+      return [build(refs.home, "home"), build(refs.away, "away")];
+    },
+
+    /**
+     * Line-ups, home side first.
+     *
+     * `hasLineups` is false on a good many fixtures, including some that have finished, and an
+     * empty array is the right answer then rather than eleven blanks.
+     *
+     * `grid` stays null throughout. GOAL has a `lineupPosition` field but it reads "0" for every
+     * player in the sample taken, so there is no pitch position in it; the type's own comment says
+     * a pitch view must handle null rather than guess a formation, which is exactly this case.
+     */
+    async lineups(fixtureId, _homeTeamId, settled) {
+      type Entry = {
+        lineupPlayer?: string | null;
+        lineupNumber?: string | null;
+        playerKey?: string | null;
+        playerPosition?: string | null;
+      };
+      type Side = { startingLineups?: Entry[]; substitutes?: Entry[]; coach?: Entry[] };
+      const payload = await call<{ home?: Side; away?: Side; homeFormation?: string | null; awayFormation?: string | null; hasLineups?: boolean }>(
+        `/fixtures/${fixtureId}/lineups`,
+        settled ? SETTLED_TTL_MS : LIVE_TTL_MS,
+      );
+      if (!payload?.hasLineups) return [];
+
+      const refs = await teamRefs(fixtureId);
+      if (!refs) return [];
+
+      // "Goalkeepers" / "Defenders" / "Midfielders" / "Forwards" -> the single letter the model uses.
+      const letter = (pos: string | null | undefined) => {
+        const p = (pos ?? "").trim().toLowerCase();
+        if (p.startsWith("goal")) return "G";
+        if (p.startsWith("def")) return "D";
+        if (p.startsWith("mid")) return "M";
+        if (p.startsWith("for") || p.startsWith("att")) return "F";
+        return null;
+      };
+      const player = (e: Entry): LineupPlayer => ({
+        id: score(e.playerKey),
+        name: e.lineupPlayer ?? "",
+        number: score(e.lineupNumber),
+        position: letter(e.playerPosition),
+        grid: null,
+      });
+      const build = (team: typeof refs.home, side: Side | undefined, formation: string | null | undefined): Lineup => ({
+        team,
+        formation: formation || null,
+        coach: side?.coach?.[0]?.lineupPlayer ?? null,
+        startXI: (side?.startingLineups ?? []).map(player),
+        substitutes: (side?.substitutes ?? []).map(player),
+      });
+      return [
+        build(refs.home, payload.home, payload.homeFormation),
+        build(refs.away, payload.away, payload.awayFormation),
+      ];
+    },
+
     // ------------------------------------------------------------ not yet mapped
     //
     // Every one of these returns an honest empty rather than a guess, and the match page already
@@ -520,24 +650,12 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
     //
     // They are not stubs left for neatness. Each needs a shape decision that wants its own look:
     //
-    //   statistics  GOAL reports rows like {type:"On Target", home:"11", away:"5"} and
-    //               {type:"Ball Possession", home:"60%"} - its own vocabulary, with percentages as
-    //               strings, and no shots-total or fouls in the sample taken. Mapping it onto
-    //               TeamStatistics means deciding what "On Target" is and what to leave null, and
-    //               a wrong guess there publishes a number that is not the number.
-    //   lineups     `hasLineups` was false on the finished match sampled, with only a coach listed.
     //   coverage    GOAL publishes no per-competition coverage flags, so there is nothing to read.
     //               Null is correct: it means "the provider does not say", which is true.
     //   team/squad/upcomingFixtures/competitions
     //               Reachable, but each needs its own id-mapping and shape work.
     async coverage(): Promise<LeagueCoverage | null> {
       return null;
-    },
-    async statistics(): Promise<TeamStatistics[]> {
-      return [];
-    },
-    async lineups(): Promise<Lineup[]> {
-      return [];
     },
     async team(): Promise<TeamProfile | null> {
       return null;
