@@ -298,7 +298,7 @@ describe.skipIf(!live)("GOAL API, live", () => {
     const res = await fetch("https://api.goal-api.com/v1/fixtures/live", {
       headers: { authorization: `Bearer ${process.env.GOAL_API_KEY}` },
     });
-    const live = ((await res.json())?.data ?? []) as { apiId: string }[];
+    const live = (((await res.json()) as { data?: { apiId: string }[] })?.data ?? []) as { apiId: string }[];
     if (!live.length) {
       console.log("    nothing in play right now; overlay not exercised");
       return;
