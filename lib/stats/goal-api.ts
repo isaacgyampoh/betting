@@ -188,10 +188,43 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
    *
    * Populated whenever a fixture is read, which is always before anything can be opened, so no
    * request is ever spent on the mapping itself.
+   *
+   * Written in one batch, and skipped entirely for ids this process has already stored. The first
+   * version did an upsert per team and per league inside the per-fixture mapper, which is three
+   * round trips to Frankfurt for every fixture: a 1,149-fixture day was about 3,400 of them and
+   * `/api/v1/matches` took **69 seconds**, cached or not - the HTTP cache spared the twelve
+   * provider calls but the mapper ran over the cached payload all the same. Measured on the live
+   * service, not reasoned about.
    */
-  async function remember(kind: "team" | "league", apiId: number | null, cuid: string) {
-    if (!apiId) return;
-    await write(`goal:map:${kind}:${apiId}`, `map/${kind}`, { cuid }, ID_MAP_TTL_MS);
+  const persisted = new Set<string>();
+
+  async function rememberAll(pairs: { kind: "team" | "league"; apiId: number | null; cuid: string }[]) {
+    const rows = [];
+    for (const { kind, apiId, cuid } of pairs) {
+      if (!apiId || !cuid) continue;
+      const key = `goal:map:${kind}:${apiId}`;
+      if (persisted.has(key)) continue;
+      persisted.add(key);
+      rows.push({
+        key,
+        endpoint: `map/${kind}`,
+        params: {},
+        payload: { cuid } as never,
+        expiresAt: new Date(Date.now() + ID_MAP_TTL_MS),
+      });
+    }
+    if (!rows.length) return;
+    try {
+      // skipDuplicates, not upsert: a mapping never changes, so an existing row is already right
+      // and re-writing it would be work for nothing.
+      await db.statsCache.createMany({ data: rows, skipDuplicates: true });
+    } catch (err) {
+      // The map is an optimisation; losing it costs a panel, not the page. But the in-process set
+      // must forget these, or a transient failure would be remembered as success for the life of
+      // the process and the mapping would never be written again.
+      for (const r of rows) persisted.delete(r.key);
+      logger.warn("goal.id_map_write_failed", { rows: rows.length, err: String(err) });
+    }
   }
 
   async function resolve(kind: "team" | "league", apiId: number): Promise<string | null> {
@@ -257,24 +290,15 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
    * for everybody. Found when the head-to-head endpoint turned out to return a different shape
    * entirely, with no kickoffUtc at all.
    */
-  async function toMatchSummary(f: GoalFixture): Promise<MatchSummary | null> {
+  function toMatchSummary(f: GoalFixture): MatchSummary | null {
     const kickoff = new Date(f?.kickoffUtc ?? "");
     if (Number.isNaN(kickoff.getTime())) {
       logger.warn("goal.fixture_unmappable", { apiId: f?.apiId, kickoffUtc: f?.kickoffUtc });
       return null;
     }
-    return buildSummary(f, kickoff);
-  }
-
-  async function buildSummary(f: GoalFixture, kickoff: Date): Promise<MatchSummary> {
     const homeId = apiIdFromAsset(f.teamHomeBadge ?? f.homeTeam?.badge);
     const awayId = apiIdFromAsset(f.teamAwayBadge ?? f.awayTeam?.badge);
     const leagueId = apiIdFromAsset(f.leagueLogo);
-    await Promise.all([
-      remember("team", homeId, f.homeTeamId),
-      remember("team", awayId, f.awayTeamId),
-      remember("league", leagueId, f.leagueId),
-    ]);
 
     const status = toStatus(f);
     const season = Number(f.leagueYear);
@@ -302,8 +326,17 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
   }
 
   async function summaries(list: GoalFixture[]): Promise<MatchSummary[]> {
-    const mapped = await Promise.all((list ?? []).map(toMatchSummary));
-    return mapped.filter((m): m is MatchSummary => m !== null);
+    const rows = list ?? [];
+    const mapped = rows.map(toMatchSummary).filter((m): m is MatchSummary => m !== null);
+    // One batched write for the whole list, after the mapping rather than inside it.
+    await rememberAll(
+      rows.flatMap((f) => [
+        { kind: "team" as const, apiId: apiIdFromAsset(f.teamHomeBadge ?? f.homeTeam?.badge), cuid: f.homeTeamId },
+        { kind: "team" as const, apiId: apiIdFromAsset(f.teamAwayBadge ?? f.awayTeam?.badge), cuid: f.awayTeamId },
+        { kind: "league" as const, apiId: apiIdFromAsset(f.leagueLogo), cuid: f.leagueId },
+      ]),
+    );
+    return mapped;
   }
 
   /** Walks `limit`/`offset` until a short page. This endpoint returns no total to go by. */
@@ -328,7 +361,8 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
 
     async fixture(id) {
       const f = await call<GoalFixture>(`/fixtures/${id}`, LIVE_TTL_MS);
-      return f ? toMatchSummary(f) : null;
+      if (!f) return null;
+      return (await summaries([f]))[0] ?? null;
     },
 
     async lastFixtures(teamId, count) {
