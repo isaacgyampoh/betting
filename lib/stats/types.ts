@@ -63,7 +63,7 @@ export type StandingRow = {
   form: string | null;
 };
 
-export type StatsSource = "api-football" | "sample";
+export type StatsSource = "api-football" | "goal-api" | "sample";
 
 export type MatchDetail = {
   match: MatchSummary;

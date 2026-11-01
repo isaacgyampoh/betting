@@ -144,6 +144,11 @@ services:
       # NEXT_PUBLIC_SITE_URL must be set to this service's own URL once Render has assigned it.
       - key: API_FOOTBALL_KEY
         sync: false
+      # GOAL API, the second stats source added after the 2026-11-01 quota outage. Set by hand in
+      # the dashboard like every other secret. With it present the application prefers it over
+      # API-Football; see lib/services/stats.ts for why only one provider answers at a time.
+      - key: GOAL_API_KEY
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: PAYSTACK_SECRET_KEY

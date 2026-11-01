@@ -5,6 +5,7 @@ import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { bestMatch, levelFromCompetition, withSquadLevel } from "@/lib/matching/similarity";
 import { StatsAuthError, StatsPlanLimitError, StatsQuotaExhaustedError, StatsRateLimitError, createApiFootballProvider } from "@/lib/stats/api-football";
+import { createGoalApiProvider } from "@/lib/stats/goal-api";
 import { buildTeamForm } from "@/lib/stats/form";
 import { sampleStatsProvider } from "@/lib/stats/sample";
 import type { Lineup, MatchDetail, MatchEvent, MatchSummary, StatsProvider, TeamStatistics } from "@/lib/stats/types";
@@ -18,10 +19,36 @@ let cachedProvider: StatsProvider | null = null;
 
 export function statsProvider(): StatsProvider {
   if (cachedProvider) return cachedProvider;
-  const { STATS_MODE, API_FOOTBALL_KEY } = env();
-  const live = STATS_MODE === "live" || (STATS_MODE === "auto" && !!API_FOOTBALL_KEY);
-  if (live && !API_FOOTBALL_KEY) throw new AppError("STATS_UNAVAILABLE", "Match stats aren't configured yet.");
-  cachedProvider = live ? createApiFootballProvider(API_FOOTBALL_KEY!) : sampleStatsProvider;
+  const { STATS_MODE, STATS_PROVIDER, API_FOOTBALL_KEY, GOAL_API_KEY } = env();
+  const live = STATS_MODE === "live" || (STATS_MODE === "auto" && !!(API_FOOTBALL_KEY || GOAL_API_KEY));
+  if (!live) {
+    cachedProvider = sampleStatsProvider;
+    return cachedProvider;
+  }
+
+  /**
+   * One provider, wholly. Never two at once, and that is a correctness rule rather than a
+   * simplification.
+   *
+   * The obvious thing to want is GOAL API for the fixture list and API-Football for the detail
+   * panels it does not map yet. It cannot be done: the two number their teams, leagues and
+   * fixtures differently, so a fixture id from one addresses a different match at the other. GOAL
+   * compounds it by answering 200 with an empty list for an id of the wrong kind, so the mistake
+   * would not surface as an error - it would publish "no recent form" for a team with plenty, and
+   * statistics belonging to somebody else's game.
+   *
+   * So whichever provider is chosen answers everything, and the panels it has no data for are
+   * reported as unavailable. The match page has always done that honestly, because API-Football
+   * does not cover every competition either.
+   */
+  const preferGoal = STATS_PROVIDER === "goal" || (STATS_PROVIDER === "auto" && !!GOAL_API_KEY);
+  if (preferGoal) {
+    if (!GOAL_API_KEY) throw new AppError("STATS_UNAVAILABLE", "Match stats aren't configured yet.");
+    cachedProvider = createGoalApiProvider(GOAL_API_KEY);
+    return cachedProvider;
+  }
+  if (!API_FOOTBALL_KEY) throw new AppError("STATS_UNAVAILABLE", "Match stats aren't configured yet.");
+  cachedProvider = createApiFootballProvider(API_FOOTBALL_KEY);
   return cachedProvider;
 }
 

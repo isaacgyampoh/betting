@@ -15,6 +15,15 @@ const serverSchema = z.object({
   /** Firebase service-account JSON, for sending push. Optional: without it the app simply cannot send. */
   FCM_SERVICE_ACCOUNT: z.string().optional(),
   API_FOOTBALL_KEY: z.string().min(1).optional(),
+  /** GOAL API (api.goal-api.com). A second stats source; see lib/stats/goal-api.ts. */
+  GOAL_API_KEY: z.string().min(1).optional(),
+  /**
+   * Which stats provider to use, when more than one key is configured.
+   *
+   * `auto` prefers GOAL API, because its free allowance is roughly ten times API-Football's and
+   * running out of the latter is what took the match list down for a day on 1 November.
+   */
+  STATS_PROVIDER: z.enum(["auto", "goal", "api-football"]).default("auto"),
   /** auto = live when API_FOOTBALL_KEY is set, otherwise labelled sample data. */
   STATS_MODE: z.enum(["auto", "live", "sample"]).default("auto"),
   PAYSTACK_SECRET_KEY: z.string().min(1).optional(),
