@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { createApiFootballProvider, StatsPlanLimitError, StatsRateLimitError } from "@/lib/stats/api-football";
+import { StatsPlanLimitError, StatsQuotaExhaustedError, StatsRateLimitError, createApiFootballProvider } from "@/lib/stats/api-football";
 import { sampleStatsProvider } from "@/lib/stats/sample";
 import { FORM_GAMES, getMatchDetail, listMatches, lookupMatch } from "@/lib/services/stats";
 import { createSportyBetAdapter } from "@/lib/bookmakers/sportybet";
@@ -41,9 +41,52 @@ describe("API-Football client caching", () => {
     expect((await provider.fixture(999))?.home.name).toBe("Arsenal");
 
     // Past the window, the same cached row is no longer an acceptable answer.
+    //
+    // The rejection is now a typed StatsQuotaExhaustedError rather than an AppError carrying
+    // `code: "STATS_UNAVAILABLE"`, and that change is the point rather than an accident. `failing()`
+    // above is the real quota payload - `{ errors: { requests: … } }` - and nothing used to classify
+    // it: it fell through to the generic branch, which happened to throw an AppError. That
+    // fall-through is what made the 1 November outage unreadable, so this assertion was quietly
+    // pinning the defect while testing the staleness rule it actually cares about.
+    //
+    // The provider throws typed errors and lib/services/stats.ts maps them to AppError, which is
+    // how StatsRateLimitError and StatsPlanLimitError have always worked. The mapping is asserted
+    // below so the user-facing contract is still covered.
     await db.statsCache.updateMany({ data: { expiresAt: new Date(Date.now() - 3 * 60 * 60_000) } });
     vi.stubGlobal("fetch", vi.fn(async () => failing()));
-    await expect(provider.fixture(999)).rejects.toMatchObject({ code: "STATS_UNAVAILABLE" });
+    await expect(provider.fixture(999)).rejects.toBeInstanceOf(StatsQuotaExhaustedError);
+  });
+
+  // The user-facing half of the contract above: the typed provider error becomes the message a
+  // phone or a browser actually receives. Asserted through listMatches because that is the exact
+  // path that answered 503 all day on 1 November - /api/v1/matches calls it.
+  it("turns an exhausted quota into a message that says the limit returns tomorrow", async () => {
+    await db.statsCache.deleteMany();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ errors: { requests: "limit reached" }, response: [] }))),
+    );
+    // The integration environment sets no API_FOOTBALL_KEY, so statsProvider() would hand back the
+    // sample provider and never call out at all - the first version of this test passed an empty
+    // list instead of rejecting. The key is supplied here, and the module graph reset, because both
+    // statsProvider() and env() memoise and would otherwise keep the sample provider for the
+    // process. The value is a placeholder: every request is stubbed above.
+    const prior = { key: process.env.API_FOOTBALL_KEY, mode: process.env.STATS_MODE };
+    process.env.API_FOOTBALL_KEY = "integration-test-key";
+    process.env.STATS_MODE = "auto";
+    vi.resetModules();
+    const { listMatches } = await import("@/lib/services/stats");
+
+    await expect(listMatches("2026-10-05")).rejects.toMatchObject({
+      code: "STATS_UNAVAILABLE",
+      // Not "busy, try again in a minute". Retrying does not help until the provider's counter
+      // resets, and that wording is what had people refreshing all afternoon.
+      message: expect.stringContaining("tomorrow"),
+    });
+
+    process.env.API_FOOTBALL_KEY = prior.key;
+    process.env.STATS_MODE = prior.mode;
+    vi.resetModules();
   });
 
   // Building a slip researches a shortlist at once, and fixtures in the same league want the same

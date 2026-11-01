@@ -539,24 +539,29 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
   const STALE_GRACE_MS = 60 * 60_000;
 
   /**
-   * The same cache, kept far longer when the reason we cannot refresh is our own budget.
+   * A cached answer that is expired, but not so expired that showing it would be a lie.
    *
-   * An hour is right for a provider that answered with rubbish: the data may genuinely have moved
-   * on and showing an old copy would be a lie. It is the wrong window for an exhausted daily quota,
-   * which lasts until the provider's clock rolls over - the cached fixtures are not wrong, we
-   * simply are not allowed to ask again. Twelve hours of "yesterday's list" beats a day of 503s,
-   * which is what happened on 1 November.
+   * One hour, for every kind of failure. A wider window was tried during the 1 November quota
+   * outage - twelve hours when the reason we cannot refresh is our own budget rather than bad data,
+   * on the argument that the cached fixtures are not wrong and yesterday's list beats a day of
+   * 503s. It was wrong, and the integration test that already covered this case said so: its
+   * failing response is literally `{ errors: { requests: "limit reached" } }` and it asserts that
+   * three hours expired is not servable.
+   *
+   * The reason is in that test's own comment. This cache holds scores as well as fixture lists, and
+   * a score that is hours old is not "slightly out of date" - it is a scoreboard showing finished
+   * matches still in play. That is a worse failure than an honest 503, and it is the exact thing
+   * this window exists to prevent. Whether the refresh failed because the provider was down or
+   * because our budget was spent makes no difference to how misleading the old score is.
+   *
+   * A grace proportional to each entry's own TTL would be defensible - a settled match is cached
+   * for 24 hours precisely because it cannot change again - but that is a design change, not an
+   * incident fix.
    */
-  const STALE_GRACE_BUDGET_MS = 12 * 60 * 60_000;
-
-  /** A cached answer that is expired, but not so expired that showing it would be a lie. */
-  function servableStale<T>(
-    hit: { payload: unknown; expiresAt: Date } | null,
-    graceMs: number = STALE_GRACE_MS,
-  ): T[] | null {
+  function servableStale<T>(hit: { payload: unknown; expiresAt: Date } | null): T[] | null {
     if (!hit) return null;
     const expiredFor = Date.now() - hit.expiresAt.getTime();
-    if (expiredFor > graceMs) return null;
+    if (expiredFor > STALE_GRACE_MS) return null;
     return hit.payload as T[];
   }
 
@@ -671,9 +676,7 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
         quota,
         err,
       });
-      // Treated as a budget-class failure for caching purposes: the provider being unreachable is
-      // also a case where the cached copy is the best honest answer available.
-      const stale = servableStale<T>(hit, STALE_GRACE_BUDGET_MS);
+      const stale = servableStale<T>(hit);
       if (stale) return stale;
       throw new AppError("STATS_UNAVAILABLE", "Match stats are unavailable right now. Please try again later.", { cause: err });
     }
@@ -683,7 +686,7 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
     if (verdict.kind === "auth") {
       // Nothing retries its way out of a refused key. Loud in the log, invisible to the client.
       logger.error("stats.key_rejected", { endpoint, params, httpStatus, quota, message: verdict.message });
-      const stale = servableStale<T>(hit, STALE_GRACE_BUDGET_MS);
+      const stale = servableStale<T>(hit);
       if (stale) return stale;
       throw new StatsAuthError(endpoint, verdict.message);
     }
@@ -701,7 +704,7 @@ export function createApiFootballProvider(apiKey: string): StatsProvider {
         dailyLeft: quota.dailyLeft,
         perMinuteLimit: quota.perMinuteLimit,
       });
-      const stale = servableStale<T>(hit, STALE_GRACE_BUDGET_MS);
+      const stale = servableStale<T>(hit);
       if (stale) return stale;
       throw new StatsQuotaExhaustedError(endpoint, verdict.message, quota.dailyLimit);
     }
