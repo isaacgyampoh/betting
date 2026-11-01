@@ -228,6 +228,59 @@ describe.skipIf(!live)("GOAL API, live", () => {
     expect(stats.length + lineups.length, "neither panel was found in 25 finished fixtures").toBeGreaterThan(0);
   }, 240_000);
 
+  /**
+   * A well-covered competition, where the payload is rich and the trap lives.
+   *
+   * GOAL returns eleven rows for a small competition and twenty-five for a big one, and in the
+   * twenty-five some labels appear twice with different values - Aston Villa v Fulham carried
+   * `Ball Possession` as 9%/91% and then as 45%/55%. Reading the first published 9% possession
+   * for a match that had 45%.
+   *
+   * Both readings sum to 100, so a "percentages add up" check would have passed. What settles it
+   * is the pass count: 434 against 536 is 45%. So this compares possession against pass share,
+   * which is the assertion that actually catches it.
+   */
+  it("takes the corrected figure when a statistic is reported twice", async () => {
+    const { createGoalApiProvider } = await import("@/lib/stats/goal-api");
+    const provider = createGoalApiProvider(process.env.GOAL_API_KEY!);
+    const TOP = new Set(["England", "Italy", "Spain", "Germany", "France"]);
+
+    let rich: Awaited<ReturnType<typeof provider.statistics>> = [];
+    for (const offsetDays of [1, 2, 3]) {
+      const date = new Date(Date.now() - offsetDays * 86_400_000).toISOString().slice(0, 10);
+      const day = await provider.fixturesByDate(date);
+      for (const m of day.filter((x) => x.status === "FINISHED" && TOP.has(x.league.country))) {
+        const stats = await provider.statistics(m.id, m.home.id, true);
+        if (stats.length && stats[0].passesTotal !== null) { rich = stats; break; }
+      }
+      if (rich.length) break;
+    }
+    if (!rich.length) {
+      console.log("    no richly-covered fixture in the window; nothing to assert");
+      return;
+    }
+
+    const [home, away] = rich;
+    console.log(
+      `    ${home.team.name} v ${away.team.name}: possession ${home.possession}/${away.possession}  ` +
+        `shots ${home.shotsTotal}/${away.shotsTotal}  fouls ${home.fouls}/${away.fouls}  ` +
+        `passes ${home.passesTotal}/${away.passesTotal}  saves ${home.saves}/${away.saves}`,
+    );
+
+    // The rich tier really does carry these, so a null here means the mapping missed a label.
+    for (const k of ["shotsTotal", "fouls", "offsides", "saves", "passesTotal", "passesAccurate", "shotsBlocked"] as const) {
+      expect(home[k], `${k} should be mapped on a richly-covered match`).not.toBeNull();
+    }
+
+    // The duplicate-label check. Possession must agree with who actually had the ball.
+    const passShare = (home.passesTotal! / (home.passesTotal! + away.passesTotal!)) * 100;
+    expect(
+      Math.abs(home.possession! - passShare),
+      `possession ${home.possession}% disagrees with pass share ${passShare.toFixed(0)}% - ` +
+        "the wrong one of the duplicated Ball Possession rows was taken",
+    ).toBeLessThan(20);
+  }, 300_000);
+
   it("reports coverage as unknown, because the provider does not publish it", async () => {
     const { createGoalApiProvider } = await import("@/lib/stats/goal-api");
     const provider = createGoalApiProvider(process.env.GOAL_API_KEY!);

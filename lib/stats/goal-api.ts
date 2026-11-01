@@ -529,22 +529,30 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
     /**
      * Team statistics, home side first.
      *
-     * GOAL publishes eleven rows per half under `match.fullTime`, in its own vocabulary and with
-     * values as strings ("50%" for possession). Four of them have an equivalent in our model:
+     * Two things about this payload took a real match to discover, and both were got wrong first
+     * time by sampling a small competition.
      *
-     *   Corners -> corners · On Target -> shotsOnGoal · Off Target -> shotsOffGoal
-     *   Ball Possession -> possession
+     * **There are two tiers of coverage.** A lower-division fixture returns eleven rows - Corners,
+     * Throw In, Free Kick, Goal Kick, Penalty, Substitution, Attacks, Dangerous Attacks, On
+     * Target, Off Target, Ball Possession. A well-covered one returns twenty-five, adding Shots
+     * Total, Shots On/Off Goal, Shots Blocked, Shots Inside/Outside Box, Fouls, Offsides, Yellow
+     * Cards, Saves, Passes Total and Passes Accurate. Concluding from the small sample that "GOAL
+     * does not report fouls" was simply wrong: it reports them where the competition carries them,
+     * which is exactly what a nullable field is for.
      *
-     * The rest - Throw In, Free Kick, Goal Kick, Penalty, Substitution, Attacks, Dangerous
-     * Attacks - have no field here and are dropped rather than bent into one.
+     * **Labels repeat, with different values, and the later one is right.** Aston Villa v Fulham
+     * carried `Ball Possession` twice: 9%/91% and then 45%/55%. The first is nonsense for a 1-1,
+     * and the pass counts settle it - 434 against 536 is 45%. Barcelona v Alaves likewise gave
+     * 67%/33% then 77%/23%, against passes of 833 to 242, which is 77%. So the array appends a
+     * better-sourced set after a thinner one, and reading the *first* match - which is what
+     * `find` does, and what this did - published 9% possession for a match that had 45%.
      *
-     * Everything GOAL does not report stays null: fouls, cards, offsides, saves, passes, blocked
-     * and boxed shots, expected goals. Null in TeamStatistics means "not reported", never zero,
-     * and the match page distinguishes the two - so the honest gap shows as a gap.
+     * Hence findLast. A wrong number is worse than a missing one, because nothing about it looks
+     * wrong on the page.
      *
-     * shotsTotal is deliberately null rather than On Target + Off Target. That sum omits blocked
-     * shots, which GOAL does not publish, so it would be a plausible-looking number that is not
-     * the number.
+     * Rows with no field here - Throw In, Free Kick, Goal Kick, Penalty, Substitution, Attacks,
+     * Dangerous Attacks - are dropped rather than bent into one that nearly fits. Anything absent
+     * stays null, which in this model means "not reported" and renders differently from zero.
      */
     async statistics(fixtureId, _homeTeamId, settled) {
       type Row = { type?: string | null; home?: string | number | null; away?: string | number | null };
@@ -558,30 +566,34 @@ export function createGoalApiProvider(apiKey: string): StatsProvider {
       const refs = await teamRefs(fixtureId);
       if (!refs) return [];
 
-      const pick = (label: string, side: "home" | "away") => {
-        const row = rows.find((r) => (r.type ?? "").trim().toLowerCase() === label);
-        if (!row) return null;
-        // "50%" for possession; plain digits elsewhere.
-        return score(String(row[side] ?? "").replace("%", "").trim());
+      // findLast, not find: see the note above about repeated labels.
+      const pick = (side: "home" | "away", ...labels: string[]) => {
+        for (const label of labels) {
+          const row = rows.findLast((r) => (r.type ?? "").trim().toLowerCase() === label);
+          if (row) return score(String(row[side] ?? "").replace("%", "").trim());
+        }
+        return null;
       };
       const build = (team: typeof refs.home, side: "home" | "away"): TeamStatistics => ({
         team,
-        possession: pick("ball possession", side),
-        shotsTotal: null,
-        shotsOnGoal: pick("on target", side),
-        shotsOffGoal: pick("off target", side),
-        shotsBlocked: null,
-        shotsInsideBox: null,
-        shotsOutsideBox: null,
-        corners: pick("corners", side),
-        offsides: null,
-        fouls: null,
-        yellowCards: null,
-        redCards: null,
-        saves: null,
-        passesTotal: null,
-        passesAccurate: null,
-        expectedGoals: null,
+        possession: pick(side, "ball possession", "possession"),
+        shotsTotal: pick(side, "shots total", "total shots"),
+        // Both labels appear on a well-covered match and agree (3/5 on Villa v Fulham); the
+        // thin tier carries only "On Target".
+        shotsOnGoal: pick(side, "shots on goal", "on target"),
+        shotsOffGoal: pick(side, "shots off goal", "off target"),
+        shotsBlocked: pick(side, "shots blocked", "blocked shots"),
+        shotsInsideBox: pick(side, "shots inside box"),
+        shotsOutsideBox: pick(side, "shots outside box"),
+        corners: pick(side, "corners", "corner kicks"),
+        offsides: pick(side, "offsides"),
+        fouls: pick(side, "fouls"),
+        yellowCards: pick(side, "yellow cards"),
+        redCards: pick(side, "red cards"),
+        saves: pick(side, "saves", "goalkeeper saves"),
+        passesTotal: pick(side, "passes total", "total passes"),
+        passesAccurate: pick(side, "passes accurate", "accurate passes"),
+        expectedGoals: pick(side, "expected goals", "xg"),
       });
       return [build(refs.home, "home"), build(refs.away, "away")];
     },
