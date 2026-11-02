@@ -103,6 +103,9 @@ const PROXIED: ReadonlyArray<{ path: RegExp; methods: readonly string[] }> = [
   { path: /^\/api\/v1\/teams\/[^/]+$/, methods: ["GET", "HEAD"] },
   { path: /^\/api\/v1\/picks$/, methods: ["GET", "HEAD"] },
   { path: /^\/api\/v1\/picks\/track-record$/, methods: ["GET", "HEAD"] },
+  // Daily Special Picks. Public for the same reason the accumulator picks are: the selections are
+  // a published claim and the record beside them is the evidence for it.
+  { path: /^\/api\/v1\/special-picks$/, methods: ["GET", "HEAD"] },
   { path: /^\/api\/v1\/plans$/, methods: ["GET", "HEAD"] },
   { path: /^\/api\/v1\/bookmakers$/, methods: ["GET", "HEAD"] },
   { path: /^\/api\/v1\/bookmakers\/catalogue$/, methods: ["GET", "HEAD"] },

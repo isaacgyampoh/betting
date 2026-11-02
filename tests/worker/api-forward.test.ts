@@ -76,6 +76,7 @@ describe("the routes gameclaw.win forwards", () => {
       "/api/v1/teams/42",
       "/api/v1/picks",
       "/api/v1/picks/track-record",
+      "/api/v1/special-picks",
       "/api/v1/plans",
       "/api/v1/bookmakers",
       "/api/v1/bookmakers/catalogue",
