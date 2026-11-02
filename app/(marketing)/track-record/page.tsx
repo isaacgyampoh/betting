@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { PickCard } from "@/components/picks/pick-card";
+import { SpecialPickCard } from "@/components/picks/special-pick-card";
 import { getTrackRecord } from "@/lib/services/daily-picks";
+import { listSpecialHistory, specialPerformance } from "@/lib/services/special-picks";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -21,9 +23,14 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wi
   );
 }
 
+const MARKET_LABEL: Record<string, string> = { CORNERS: "Corners", SHOTS: "Shots", SHOTS_ON_TARGET: "Shots on target" };
+
+const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
 export default async function TrackRecordPage() {
-  const record = await getTrackRecord();
+  const [record, special, specialDays] = await Promise.all([getTrackRecord(), specialPerformance(), listSpecialHistory()]);
   const pct = (n: number | null) => (n === null ? "–" : `${n}%`);
+  const rate = (n: number | null) => (n === null ? "–" : `${Math.round(n * 100)}%`);
 
   return (
     <div className="space-y-6">
@@ -80,6 +87,84 @@ export default async function TrackRecordPage() {
           ))}
         </div>
       )}
+
+      {/* Daily Special Picks keeps its own record: a single selection settled from match statistics
+          is not comparable with an accumulator settled from the score, and averaging the two
+          together would describe neither. */}
+      <section id="special" className="space-y-4 border-t pt-6">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Daily Special Picks</h2>
+          <p className="text-sm text-muted-foreground">
+            Up to two single selections a day in statistical markets, settled from the match statistics. Every selection
+            published appears below with the price it was published at. Days where nothing met the threshold have no
+            entry — the gaps in the dates are those days.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-4">
+          <Stat label="Selections settled" value={String(special.won + special.lost)} />
+          <Stat label="Won" value={String(special.won)} tone={special.won > 0 ? "win" : undefined} />
+          <Stat label="Win rate" value={rate(special.winRate)} />
+          <Stat
+            label="Profit (1 unit each)"
+            value={special.stakedUnits === 0 ? "–" : `${special.profitUnits >= 0 ? "+" : ""}${special.profitUnits.toFixed(2)}`}
+            tone={special.stakedUnits === 0 ? undefined : special.profitUnits >= 0 ? "win" : "loss"}
+          />
+        </div>
+
+        {special.byMarket.some((m) => m.won + m.lost > 0) && (
+          <div className="overflow-hidden rounded-lg border bg-card">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground">
+                <tr className="border-b">
+                  <th className="px-4 py-2 text-left font-normal">Market</th>
+                  <th className="px-2 py-2 text-right font-normal">Published</th>
+                  <th className="px-2 py-2 text-right font-normal">Settled</th>
+                  <th className="px-2 py-2 text-right font-normal">Won</th>
+                  <th className="px-4 py-2 text-right font-normal">Win rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {special.byMarket.map((m) => (
+                  <tr key={m.kind} className="border-b last:border-0">
+                    <td className="px-4 py-2">{MARKET_LABEL[m.kind] ?? m.kind}</td>
+                    <td className="px-2 py-2 text-right">{m.total}</td>
+                    <td className="px-2 py-2 text-right">{m.won + m.lost}</td>
+                    <td className="px-2 py-2 text-right">{m.won}</td>
+                    <td className="px-4 py-2 text-right">{rate(m.winRate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {specialDays.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            No special picks have been published yet. This section fills in automatically, wins and losses alike.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            {specialDays.map((day) => (
+              <div key={day.date} className="space-y-3">
+                <h3 className="text-xs font-medium text-muted-foreground">{DAY.format(new Date(day.date))}</h3>
+                {day.picks.map((pick) => (
+                  <SpecialPickCard key={pick.position} pick={pick} />
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          Profit assumes one unit staked on each settled selection at the price published. The win rate counts settled
+          selections only: {special.pending} still running and {special.void} void.
+          {special.unpriced > 0 &&
+            ` ${special.unpriced} settled selection${special.unpriced === 1 ? " was" : "s were"} published without a verified price, so ${
+              special.unpriced === 1 ? "it is" : "they are"
+            } counted in the win rate but not in the profit.`}
+        </p>
+      </section>
 
       <p className="text-xs text-muted-foreground">
         ROI assumes one unit staked on each settled pick. Past results don&apos;t predict future ones. 18+.
