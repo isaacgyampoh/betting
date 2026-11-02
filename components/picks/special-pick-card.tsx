@@ -65,7 +65,7 @@ export function SpecialPickCard({ pick }: { pick: PublishedSpecialPick }) {
           <dd className={cn("gc-figure font-semibold", value !== null && (value > 0 ? "text-win" : "text-loss"))}>
             {value === null ? "–" : `${value >= 0 ? "+" : ""}${Math.round(value * 100)}%`}
           </dd>
-          <dd className="text-xs text-muted-foreground">chance × odds</dd>
+          <dd className="text-xs text-muted-foreground">per unit staked</dd>
         </div>
       </dl>
 

@@ -140,7 +140,7 @@ class _Figures extends StatelessWidget {
             value: value == null
                 ? '–'
                 : '${value >= 0 ? '+' : ''}${(value * 100).round()}%',
-            note: 'estimate × odds',
+            note: 'per unit staked',
             colour: value == null ? null : (value > 0 ? gc(context).win : gc(context).loss),
           ),
         ],
