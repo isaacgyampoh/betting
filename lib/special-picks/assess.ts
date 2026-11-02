@@ -141,15 +141,20 @@ export function quality(a: Assessment, oddsEdge: number | null): Quality {
  * the right answer on a quiet Tuesday is not the right answer on a full Saturday. Publishing
  * nothing is an acceptable outcome and the default is set expecting that to happen often.
  */
-export const DEFAULT_THRESHOLD = {
+export type Threshold = {
+  minRating: number;
+  minSample: number;
+  minProbability: number;
+  /** A line closer than this to the average is inside the noise, whatever the hit rate says. */
+  minMargin: number;
+};
+
+export const DEFAULT_THRESHOLD: Threshold = {
   minRating: 58,
   minSample: MIN_SAMPLE,
   minProbability: 0.6,
-  /** A line closer than this to the average is inside the noise, whatever the hit rate says. */
   minMargin: 0.75,
-} as const;
-
-export type Threshold = typeof DEFAULT_THRESHOLD;
+};
 
 export function qualifies(a: Assessment, q: Quality, t: Threshold = DEFAULT_THRESHOLD): boolean {
   return a.sample >= t.minSample && a.probability >= t.minProbability && a.margin >= t.minMargin && q.rating >= t.minRating;
