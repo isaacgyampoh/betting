@@ -144,6 +144,10 @@ final todaysPicksProvider = FutureProvider<Cached<List<DailyPick>>>(
   (ref) => ref.watch(repositoryProvider).todaysPicks(),
 );
 
+final specialPicksProvider = FutureProvider<Cached<SpecialPicksView>>(
+  (ref) => ref.watch(repositoryProvider).specialPicks(),
+);
+
 final trackRecordProvider = FutureProvider.family<Cached<TrackRecord>, RecordWindow>(
   (ref, window) => ref.watch(repositoryProvider).trackRecord(window: window),
 );

@@ -87,6 +87,16 @@ class FootballRepository {
     parse: CompetitionDirectory.fromJson,
   );
 
+  /// Today's Daily Special Picks and the record behind them.
+  ///
+  /// Public, so this works signed out. An empty list is a normal answer: some days nothing meets
+  /// the research threshold.
+  Future<Cached<SpecialPicksView>> specialPicks() => _read(
+    key: 'special:today',
+    fetch: () => _api.get<Map<String, dynamic>>('/special-picks'),
+    parse: SpecialPicksView.fromJson,
+  );
+
   Future<Cached<TrackRecord>> trackRecord({RecordWindow window = RecordWindow.all}) => _read(
     key: 'record:${window.query}',
     fetch: () =>

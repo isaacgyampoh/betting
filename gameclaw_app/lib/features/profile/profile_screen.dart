@@ -63,11 +63,25 @@ class ProfileScreen extends ConsumerWidget {
             const GcSectionHeader(title: 'Our record'),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
-              child: GcButton(
-                label: 'Every slip we have published',
-                kind: GcButtonKind.secondary,
-                icon: Icons.insights_outlined,
-                onPressed: () => context.push('/profile/record'),
+              child: Column(
+                children: [
+                  GcButton(
+                    label: 'Every slip we have published',
+                    kind: GcButtonKind.secondary,
+                    icon: Icons.insights_outlined,
+                    onPressed: () => context.push('/profile/record'),
+                  ),
+                  const SizedBox(height: GcSpace.sm),
+                  // Its own record, not folded into the slips': one selection graded from the
+                  // match statistics is not the same kind of bet as an accumulator graded from
+                  // the score, and one win rate across both would describe neither.
+                  GcButton(
+                    label: 'Daily special picks',
+                    kind: GcButtonKind.secondary,
+                    icon: Icons.today_outlined,
+                    onPressed: () => context.push('/claw/special'),
+                  ),
+                ],
               ),
             ),
             const GcSectionHeader(title: 'Staying in control'),

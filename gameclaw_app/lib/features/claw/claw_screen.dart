@@ -346,6 +346,11 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
                         style: GcType.caption.copyWith(fontSize: 11.5, color: gc(context).inkFaint),
                       ),
                     ),
+                  GcIconButton(
+                    icon: Icons.today_outlined,
+                    tooltip: 'Daily special picks',
+                    onPressed: () => context.push('/claw/special'),
+                  ),
                   if (chat.turns.isNotEmpty)
                     GcIconButton(
                       icon: Icons.edit_note_rounded,
@@ -413,7 +418,7 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
   }
 }
 
-class _Intro extends StatelessWidget {
+class _Intro extends ConsumerWidget {
   const _Intro({required this.onPick});
 
   final ValueChanged<String> onPick;
@@ -425,7 +430,10 @@ class _Intro extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final special = ref.watch(specialPicksProvider);
+    final published = special.hasValue ? special.value!.value.picks.length : 0;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.xl, GcSpace.gutter, GcSpace.lg),
       children: [
@@ -462,7 +470,64 @@ class _Intro extends StatelessWidget {
           'minute ago may not be now.',
           icon: Icons.info_outline_rounded,
         ),
+        const SizedBox(height: GcSpace.xl),
+        Text('Or read today’s research', style: GcType.label),
+        const SizedBox(height: GcSpace.sm),
+        _SpecialEntry(
+          published: published,
+          onTap: () => context.push('/claw/special'),
+        ),
       ],
+    );
+  }
+}
+
+/// The way in to Daily Special Picks.
+///
+/// Deliberately not one of the example prompts above: those send a message, this opens a screen.
+/// The count is only shown once the day's selections have actually loaded - promising two picks
+/// and then showing none is worse than saying nothing.
+class _SpecialEntry extends StatelessWidget {
+  const _SpecialEntry({required this.published, required this.onTap});
+
+  final int published;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(GcRadius.md),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: GcSpace.md, vertical: GcSpace.md),
+        decoration: BoxDecoration(
+          color: gc(context).surface,
+          borderRadius: BorderRadius.circular(GcRadius.md),
+          border: Border.all(color: gc(context).border),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.today_outlined, size: 18, color: gc(context).accentInk),
+            const SizedBox(width: GcSpace.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Daily special picks', style: GcType.bodyStrong.copyWith(fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text(
+                    published == 0
+                        ? 'Corners, shots and shots on target, researched'
+                        : '$published today, with the research behind ${published == 1 ? 'it' : 'them'}',
+                    style: GcType.caption.copyWith(color: gc(context).inkFaint),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20, color: gc(context).inkFaint),
+          ],
+        ),
+      ),
     );
   }
 }

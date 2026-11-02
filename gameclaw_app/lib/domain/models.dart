@@ -1466,3 +1466,210 @@ class MergeResult {
         .toList(growable: false),
   );
 }
+
+// ---------------------------------------------------------------------------
+// Daily Special Picks
+// ---------------------------------------------------------------------------
+
+/// One published special selection.
+///
+/// Three numbers travel separately and are kept separate all the way to the screen: [odds] is the
+/// bookmaker's price, [probability] is our own estimate of the chance, and [value] is what the two
+/// imply. Collapsing any two of them into one figure is how an estimate gets read as a price.
+class SpecialPick {
+  const SpecialPick({
+    required this.position,
+    required this.home,
+    required this.away,
+    required this.competition,
+    required this.country,
+    required this.kickoffUtc,
+    required this.marketLabel,
+    required this.marketKind,
+    required this.line,
+    required this.isOver,
+    required this.bookmaker,
+    required this.odds,
+    required this.probability,
+    required this.confidence,
+    required this.reason,
+    required this.sample,
+    required this.mean,
+    required this.hitRate,
+    required this.status,
+    required this.actual,
+  });
+
+  final int position;
+  final String home;
+  final String away;
+  final String? competition;
+  final String? country;
+  final DateTime kickoffUtc;
+
+  /// How the server words the market, e.g. "Match corners". Never re-worded here.
+  final String marketLabel;
+  final String marketKind;
+  final double line;
+  final bool isOver;
+
+  /// The bookmaker the price was read from. Null means it was published without a verified price.
+  final String? bookmaker;
+  final double? odds;
+
+  /// Our estimate, 0..1. An estimate, never a price, and labelled as one wherever it is shown.
+  final double probability;
+  final String confidence;
+
+  /// The research, in the server's own words. Shown in full.
+  final String reason;
+
+  /// How many recent matches the estimate was built on, and what they averaged.
+  final int? sample;
+  final double? mean;
+  final double? hitRate;
+
+  final PickStatus status;
+
+  /// What the match actually produced, once it has been graded.
+  final double? actual;
+
+  /// Chance times price, minus the stake. Null without a price, because it cannot be computed.
+  double? get value => odds == null ? null : probability * odds! - 1;
+
+  String get selection => '${isOver ? 'Over' : 'Under'} ${_trimLine(line)}';
+
+  static String _trimLine(double line) =>
+      line == line.roundToDouble() ? line.toStringAsFixed(0) : line.toString();
+
+  factory SpecialPick.fromJson(Map<String, dynamic> json) {
+    final match = json['match'] as Map<String, dynamic>? ?? const {};
+    final market = json['market'] as Map<String, dynamic>? ?? const {};
+    final price = json['price'] as Map<String, dynamic>? ?? const {};
+    final evidence = json['evidence'] as Map<String, dynamic>? ?? const {};
+
+    return SpecialPick(
+      position: (json['position'] as num?)?.toInt() ?? 0,
+      home: match['home'] as String? ?? '',
+      away: match['away'] as String? ?? '',
+      competition: match['competition'] as String?,
+      country: match['country'] as String?,
+      kickoffUtc: DateTime.parse(match['kickoffAt'] as String).toUtc(),
+      marketLabel: market['label'] as String? ?? '',
+      marketKind: market['kind'] as String? ?? '',
+      line: (market['line'] as num?)?.toDouble() ?? 0,
+      isOver: (market['outcome'] as String?) != 'UNDER',
+      bookmaker: price['bookmaker'] as String?,
+      odds: (price['odds'] as num?)?.toDouble(),
+      probability: (json['probability'] as num?)?.toDouble() ?? 0,
+      confidence: json['confidence'] as String? ?? '',
+      reason: json['reason'] as String? ?? '',
+      sample: (evidence['sample'] as num?)?.toInt(),
+      mean: (evidence['mean'] as num?)?.toDouble(),
+      hitRate: (evidence['hitRate'] as num?)?.toDouble(),
+      status: PickStatusX.parse(json['status'] as String?),
+      actual: (json['actual'] as num?)?.toDouble(),
+    );
+  }
+}
+
+/// How one market type has performed.
+class SpecialMarketRecord {
+  const SpecialMarketRecord({
+    required this.kind,
+    required this.total,
+    required this.won,
+    required this.lost,
+    required this.winRate,
+  });
+
+  final String kind;
+  final int total;
+  final int won;
+  final int lost;
+
+  /// 0..1, null until something in this market has settled.
+  final double? winRate;
+
+  int get settled => won + lost;
+
+  factory SpecialMarketRecord.fromJson(Map<String, dynamic> json) => SpecialMarketRecord(
+    kind: json['kind'] as String? ?? '',
+    total: (json['total'] as num?)?.toInt() ?? 0,
+    won: (json['won'] as num?)?.toInt() ?? 0,
+    lost: (json['lost'] as num?)?.toInt() ?? 0,
+    winRate: (json['winRate'] as num?)?.toDouble(),
+  );
+}
+
+/// The published record for special picks. Losses included, voids reported as voids.
+class SpecialPerformance {
+  const SpecialPerformance({
+    required this.total,
+    required this.won,
+    required this.lost,
+    required this.voided,
+    required this.pending,
+    required this.winRate,
+    required this.profitUnits,
+    required this.stakedUnits,
+    required this.unpriced,
+    required this.byMarket,
+  });
+
+  final int total;
+  final int won;
+  final int lost;
+  final int voided;
+  final int pending;
+
+  /// 0..1 over settled selections only, null before anything settles. Zero settled is not 0%.
+  final double? winRate;
+
+  /// Profit in units at the prices published, one unit staked per settled selection.
+  final double profitUnits;
+  final int stakedUnits;
+
+  /// Settled selections published without a verified price. In the win rate, not in the profit,
+  /// and shown rather than dropped - leaving them out would flatter the figures.
+  final int unpriced;
+
+  final List<SpecialMarketRecord> byMarket;
+
+  int get settled => won + lost;
+
+  factory SpecialPerformance.fromJson(Map<String, dynamic> json) => SpecialPerformance(
+    total: (json['total'] as num?)?.toInt() ?? 0,
+    won: (json['won'] as num?)?.toInt() ?? 0,
+    lost: (json['lost'] as num?)?.toInt() ?? 0,
+    voided: (json['void'] as num?)?.toInt() ?? 0,
+    pending: (json['pending'] as num?)?.toInt() ?? 0,
+    winRate: (json['winRate'] as num?)?.toDouble(),
+    profitUnits: (json['profitUnits'] as num?)?.toDouble() ?? 0,
+    stakedUnits: (json['stakedUnits'] as num?)?.toInt() ?? 0,
+    unpriced: (json['unpriced'] as num?)?.toInt() ?? 0,
+    byMarket: (json['byMarket'] as List<dynamic>? ?? const [])
+        .map((m) => SpecialMarketRecord.fromJson(m as Map<String, dynamic>))
+        .toList(growable: false),
+  );
+}
+
+/// Today's selections and the record behind them, as one response.
+///
+/// An empty [picks] is a normal answer rather than an error: the research threshold is set
+/// expecting days where nothing qualifies, and the screen says so.
+class SpecialPicksView {
+  const SpecialPicksView({required this.picks, required this.performance});
+
+  final List<SpecialPick> picks;
+  final SpecialPerformance performance;
+
+  factory SpecialPicksView.fromJson(Map<String, dynamic> json) => SpecialPicksView(
+    picks: (json['picks'] as List<dynamic>? ?? const [])
+        .map((p) => SpecialPick.fromJson(p as Map<String, dynamic>))
+        .toList(growable: false),
+    performance: SpecialPerformance.fromJson(
+      json['performance'] as Map<String, dynamic>? ?? const {},
+    ),
+  );
+}

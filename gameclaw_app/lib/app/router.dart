@@ -14,6 +14,7 @@ import '../features/favourites/favourites_screen.dart';
 import '../features/home/live_centre.dart';
 import '../features/match/match_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/special/special_picks_screen.dart';
 import '../features/team/team_screen.dart';
 import '../theme/tokens.dart';
 import 'shell.dart';
@@ -97,7 +98,17 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/claw', builder: (_, __) => const ClawScreen())],
+            routes: [
+              GoRoute(
+                path: '/claw',
+                builder: (_, __) => const ClawScreen(),
+                // Pushed inside the tab rather than above the shell: the day's selections are
+                // something you read and come back from, so the bottom bar stays put.
+                routes: [
+                  GoRoute(path: 'special', builder: (_, __) => const SpecialPicksScreen()),
+                ],
+              ),
+            ],
           ),
           StatefulShellBranch(
             routes: [
