@@ -48,11 +48,12 @@ const weak = sample([9, 10, 9, 10, 9, 10, 9, 10]);
 type Samples = Record<string, Observation[]>;
 
 /** Runs generation with the three outside edges stubbed. Returns the real result. */
-async function generate(fixtures: ReturnType<typeof fixture>[], samples: Samples) {
+async function generate(fixtures: ReturnType<typeof fixture>[], samples: Samples, live = ["sportybet"]) {
   vi.doMock("@/lib/bookmakers/registry", () => ({
-    connectedBookmakers: () => [{ slug: "sportybet", mode: "live", capabilities: { events: true } }],
+    getAdapter: (slug: string) => ({ slug, mode: live.includes(slug) ? "live" : "mock", capabilities: { events: true } }),
   }));
   vi.doMock("@/lib/bookmakers/live/sportybet", () => ({ listUpcomingWithOffers: async () => fixtures }));
+  vi.doMock("@/lib/bookmakers/live/footballcom", () => ({ listUpcomingWithOffers: async () => fixtures }));
   vi.doMock("@/lib/services/stats", () => ({
     // The stats fixture id is derived from the bookmaker id so each fixture maps to its own match.
     lookupMatch: async (home: string) => {
@@ -83,6 +84,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.doUnmock("@/lib/bookmakers/registry");
   vi.doUnmock("@/lib/bookmakers/live/sportybet");
+  vi.doUnmock("@/lib/bookmakers/live/footballcom");
   vi.doUnmock("@/lib/services/stats");
   vi.doUnmock("@/lib/special-picks/research");
 });
@@ -104,6 +106,20 @@ describe("publishing the day's selections", () => {
     // Every row carries a verified price from the offer it came from, never a made-up one.
     expect(rows.every((r) => r.odds !== null && r.bookmaker === "sportybet")).toBe(true);
     expect(rows.map((r) => Number(r.odds)).sort()).toEqual([1.85, 1.9]);
+  });
+
+  // The bug this replaces: the slug came from the first live adapter in the registry while the
+  // offers were always read from SportyBet, so a price could be published under another name.
+  it("records the bookmaker the price was actually read from", async () => {
+    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")])], { "1": strong }, ["footballcom"]);
+    expect((await db.specialPick.findFirstOrThrow({})).bookmaker).toBe("footballcom");
+  });
+
+  it("publishes nothing when no bookmaker is connected to live prices", async () => {
+    const result = await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")])], { "1": strong }, []);
+    expect(result.published).toBe(0);
+    expect(result.skipped.join(" ")).toContain("No bookmaker is connected");
+    expect(await db.specialPick.count()).toBe(0);
   });
 
   it("publishes one when only one qualifies", async () => {

@@ -31,6 +31,33 @@ import { coverage, describeEvidence, MIN_COVERAGE, research } from "@/lib/specia
  */
 const RESEARCH_BUDGET_FIXTURES = 10;
 
+/**
+ * Where the prices come from, named rather than inferred.
+ *
+ * Both are the Hopegaming platform, so they list the same markets under the same raw names and the
+ * same `listUpcomingWithOffers`. Only these two: the market vocabulary in `markets.ts` was measured
+ * against them, and a price read from one bookmaker must never be published under another's name.
+ *
+ * That is the mistake this replaces. It used to take the first live adapter the registry offered
+ * and then read offers from SportyBet regardless, so a day when SportyBet was not the first live
+ * adapter would have published SportyBet's prices labelled as somebody else's.
+ */
+const PRICE_SOURCES = [
+  { slug: "sportybet", load: () => import("@/lib/bookmakers/live/sportybet") },
+  { slug: "footballcom", load: () => import("@/lib/bookmakers/live/footballcom") },
+] as const;
+
+async function priceSource() {
+  const { getAdapter } = await import("@/lib/bookmakers/registry");
+  for (const candidate of PRICE_SOURCES) {
+    const adapter = getAdapter(candidate.slug);
+    if (adapter.mode !== "live" || !adapter.capabilities.events) continue;
+    const { listUpcomingWithOffers } = await candidate.load();
+    return { slug: candidate.slug, listUpcomingWithOffers };
+  }
+  return null;
+}
+
 export type SpecialResult = {
   date: string;
   published: number;
@@ -57,17 +84,15 @@ export async function generateSpecialPicks(now = new Date(), threshold: Threshol
   const already = await db.specialPick.count({ where: { forDate: new Date(date) } });
   if (already >= 2) return { date, published: 0, skipped: ["Today's selections are already published."] };
 
-  const { connectedBookmakers } = await import("@/lib/bookmakers/registry");
-  const source = connectedBookmakers().find((a) => a.mode === "live" && a.capabilities.events);
+  const source = await priceSource();
   if (!source) {
     logger.warn("special.no_live_bookmaker", { date });
     return { date, published: 0, skipped: ["No bookmaker is connected to live prices, so no odds could be verified."] };
   }
 
   // Prices first. A selection with no verified market and price is not a selection.
-  const { listUpcomingWithOffers } = await import("@/lib/bookmakers/live/sportybet");
-  const fixtures = await listUpcomingWithOffers({ hours: 36, pages: 3 }).catch((err: unknown) => {
-    logger.error("special.offers_failed", { date, err: String(err) });
+  const fixtures = await source.listUpcomingWithOffers({ hours: 36, pages: 3 }).catch((err: unknown) => {
+    logger.error("special.offers_failed", { date, bookmaker: source.slug, err: String(err) });
     return [];
   });
 
