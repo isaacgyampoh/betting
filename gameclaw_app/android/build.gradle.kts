@@ -46,6 +46,26 @@ subprojects {
     }
 }
 
+// Make the app wait for the plugin modules' Kotlin.
+//
+// `firebase_core` and `receive_sharing_intent` still apply the Kotlin Gradle Plugin themselves
+// rather than Flutter's built-in Kotlin, and AGP does not wire the app's javac to their Kotlin
+// output. On a clean release build the app compiled first and failed with "cannot find symbol:
+// class ReceiveSharingIntentPlugin" against the line Flutter generates in
+// GeneratedPluginRegistrant.java. An incremental build hid it, because the classes were already
+// on disk from a previous run.
+//
+// Removable once those plugins migrate to built-in Kotlin, which the build already warns about.
+gradle.projectsEvaluated {
+    val app = project(":app")
+    subprojects.filter { it != app }.forEach { library ->
+        listOf("Debug", "Release").forEach { variant ->
+            val kotlin = library.tasks.findByName("compile${variant}Kotlin") ?: return@forEach
+            app.tasks.findByName("compile${variant}JavaWithJavac")?.dependsOn(kotlin)
+        }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
