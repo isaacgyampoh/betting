@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { ghanaDate } from "@/lib/services/daily-picks";
+import { readViaApi } from "@/lib/services/remote-data";
 import { lookupMatch } from "@/lib/services/stats";
 import { assess, DEFAULT_THRESHOLD, edge, quality, qualifies, type Threshold } from "@/lib/special-picks/assess";
 import { candidatesFrom, dedupe, type SpecialCandidate } from "@/lib/special-picks/candidates";
@@ -253,8 +254,18 @@ export type PublishedSpecialPick = {
   actual: number | null;
 };
 
-/** Today's published selections, in the order they were published. At most two. */
+/**
+ * Today's published selections, in the order they were published. At most two.
+ *
+ * On the Worker this reads through the API, because only Render can reach the database - see
+ * `remote-data.ts`. Only for today: the endpoint publishes today's selections and nothing else,
+ * so any other date has to come from Postgres or not at all.
+ */
 export async function listSpecialPicks(date = ghanaDate()): Promise<PublishedSpecialPick[]> {
+  if (date === ghanaDate()) {
+    const remote = await readViaApi<{ picks: PublishedSpecialPick[] }>("/special-picks");
+    if (remote) return remote.picks;
+  }
   const rows = await db.specialPick.findMany({
     where: { forDate: new Date(date) },
     orderBy: { position: "asc" },
@@ -272,6 +283,9 @@ export type SpecialPickDay = { date: string; picks: PublishedSpecialPick[] };
  * visible as a gap in the dates rather than hidden by renumbering.
  */
 export async function listSpecialHistory(days = 60): Promise<SpecialPickDay[]> {
+  const remote = await readViaApi<{ history: SpecialPickDay[] }>("/special-picks?history=1");
+  if (remote?.history) return remote.history;
+
   const rows = await db.specialPick.findMany({
     orderBy: [{ forDate: "desc" }, { position: "asc" }],
     // Two a day, so this is `days` days of history with room for a day that published once.
@@ -352,6 +366,9 @@ export type SpecialPerformance = {
  * over everything including pending would drift as the day went on.
  */
 export async function specialPerformance(): Promise<SpecialPerformance> {
+  const remote = await readViaApi<{ performance: SpecialPerformance }>("/special-picks");
+  if (remote?.performance) return remote.performance;
+
   const rows = await db.specialPick.findMany({
     select: { status: true, odds: true, marketKind: true },
   });
