@@ -140,8 +140,9 @@ export async function generateSpecialPicks(now = new Date(), threshold: Threshol
       const a = assess(r.observations, candidate.line, candidate.outcome);
       if (!a) continue;
 
-      const q = quality(a, edge(a.probability, candidate.odds));
-      if (!qualifies(a, q, threshold)) continue;
+      const value = edge(a.probability, candidate.odds);
+      const q = quality(a, value);
+      if (!qualifies(a, q, value, threshold)) continue;
 
       assessed.push({
         candidate,

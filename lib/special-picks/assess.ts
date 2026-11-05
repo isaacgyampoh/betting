@@ -147,6 +147,27 @@ export type Threshold = {
   minProbability: number;
   /** A line closer than this to the average is inside the noise, whatever the hit rate says. */
   minMargin: number;
+  /**
+   * The least expected return per unit staked worth publishing.
+   *
+   * This is the gate the first four days did not have, and without it the feature published bets
+   * it believed were bad. Three of its first four selections carried negative value - one at
+   * -12.4%, "over 4.5 corners" at 1.04 - because a strong finding scores highly on evidence,
+   * clearance and depth before the price is considered at all, and the price only ever adjusted
+   * the rating by a few points.
+   *
+   * A well-evidenced finding and a good bet are different things. Sixteen matches under 13.5 shots
+   * on target is real; at 1.08 against our own estimate of 0.90 it is still a losing bet, because
+   * the bookmaker had the same sixteen matches. What this feature is for is the gap between what
+   * the statistics say and what the price says, so where there is no gap there is nothing to
+   * publish.
+   *
+   * Five per cent rather than zero: our own estimate is a shrunk hit rate from eight to sixteen
+   * matches, and an edge of one or two per cent is comfortably inside its error. It also disposes
+   * of very short prices without a separate rule - 1.04 would need a better than certain chance to
+   * clear it.
+   */
+  minEdge: number;
 };
 
 export const DEFAULT_THRESHOLD: Threshold = {
@@ -154,8 +175,17 @@ export const DEFAULT_THRESHOLD: Threshold = {
   minSample: MIN_SAMPLE,
   minProbability: 0.6,
   minMargin: 0.75,
+  minEdge: 0.05,
 };
 
-export function qualifies(a: Assessment, q: Quality, t: Threshold = DEFAULT_THRESHOLD): boolean {
+/**
+ * The bar a selection must clear to be published at all.
+ *
+ * `oddsEdge` is required rather than optional, and a null one fails: a selection with no usable
+ * price cannot be shown to be worth taking, and "we could not work out whether this is good value"
+ * is not a reason to publish something.
+ */
+export function qualifies(a: Assessment, q: Quality, oddsEdge: number | null, t: Threshold = DEFAULT_THRESHOLD): boolean {
+  if (oddsEdge === null || oddsEdge < t.minEdge) return false;
   return a.sample >= t.minSample && a.probability >= t.minProbability && a.margin >= t.minMargin && q.rating >= t.minRating;
 }

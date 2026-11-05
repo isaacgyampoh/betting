@@ -114,7 +114,7 @@ describe("the bar for publishing", () => {
   const good = assess(obs([13, 12, 14, 11, 13, 12, 14, 13, 12, 13]), 9.5, "OVER")!;
 
   it("passes a candidate that is clear on every count", () => {
-    expect(qualifies(good, quality(good, 0.15))).toBe(true);
+    expect(qualifies(good, quality(good, 0.15), 0.15)).toBe(true);
   });
 
   // A line inside the noise is a coin toss however good the hit rate looks.
@@ -122,16 +122,71 @@ describe("the bar for publishing", () => {
     const onTheLine = assess(obs([10, 10, 10, 10, 10, 10, 10, 10]), 9.5, "OVER")!;
     expect(onTheLine.hitRate).toBe(1);
     expect(onTheLine.margin).toBeLessThan(DEFAULT_THRESHOLD.minMargin);
-    expect(qualifies(onTheLine, quality(onTheLine, null))).toBe(false);
+    expect(qualifies(onTheLine, quality(onTheLine, 0.2), 0.2)).toBe(false);
   });
 
   it("rejects a weak probability however pretty the price", () => {
     const coinToss = assess(obs([10, 9, 11, 8, 12, 9, 11, 10]), 9.5, "OVER")!;
-    expect(qualifies(coinToss, quality(coinToss, 0.5))).toBe(false);
+    expect(qualifies(coinToss, quality(coinToss, 0.5), 0.5)).toBe(false);
   });
 
   it("is configurable, because a quiet Tuesday is not a full Saturday", () => {
     const strict = { ...DEFAULT_THRESHOLD, minRating: 99 };
-    expect(qualifies(good, quality(good, 0.15), strict)).toBe(false);
+    expect(qualifies(good, quality(good, 0.15), 0.15, strict)).toBe(false);
+  });
+});
+
+/**
+ * The gate the feature shipped without, and the one that matters most.
+ *
+ * Its first four published selections included three with negative expected value - "over 4.5
+ * corners" at 1.04 against an estimate of 0.84, which is a 12% loss per unit staked every time it
+ * is taken, and which won. Winning is not the test. A well-evidenced finding the bookmaker has
+ * already priced is not a bet worth publishing, and the evidence being strong is exactly why it
+ * passed everything else.
+ */
+describe("a price that does not reward the finding", () => {
+  // Sixteen of sixteen under the line, which is as strong as the evidence gets.
+  const overwhelming = assess(obs(Array(16).fill(8)), 13.5, "UNDER")!;
+
+  it("refuses a selection our own estimate says is a losing bet", () => {
+    expect(overwhelming.probability).toBeCloseTo(0.9, 5);
+    const value = edge(overwhelming.probability, 1.08); // 0.9 x 1.08 - 1
+    expect(value).toBeLessThan(0);
+    // Everything else about it is excellent, and it is still not published.
+    expect(quality(overwhelming, value).rating).toBeGreaterThan(DEFAULT_THRESHOLD.minRating);
+    expect(qualifies(overwhelming, quality(overwhelming, value), value)).toBe(false);
+  });
+
+  it("refuses an edge too thin to be distinguishable from estimation error", () => {
+    const value = edge(overwhelming.probability, 1.14); // +2.6%
+    expect(value).toBeGreaterThan(0);
+    expect(value!).toBeLessThan(DEFAULT_THRESHOLD.minEdge);
+    expect(qualifies(overwhelming, quality(overwhelming, value), value)).toBe(false);
+  });
+
+  it("publishes the same finding once the price is worth taking", () => {
+    const value = edge(overwhelming.probability, 1.25); // +12.5%
+    expect(qualifies(overwhelming, quality(overwhelming, value), value)).toBe(true);
+  });
+
+  // Very short prices need no rule of their own. Shrinkage caps the estimate at (n+2)/(n+4), so
+  // sixteen matches - the most this feature ever reads - cannot exceed 0.90, and at 0.90 no price
+  // under about 1.17 clears five per cent. The unbackable end of the book is therefore unreachable
+  // by construction rather than by a rule somebody has to remember to keep in step.
+  it("disposes of unbackable prices without a separate rule", () => {
+    const best = assess(obs(Array(16).fill(8)), 13.5, "UNDER")!;
+    expect(best.probability).toBeCloseTo(0.9, 5);
+
+    for (const odds of [1.01, 1.04, 1.08, 1.14]) {
+      expect(edge(best.probability, odds)!).toBeLessThan(DEFAULT_THRESHOLD.minEdge);
+    }
+    expect(edge(best.probability, 1.18)!).toBeGreaterThan(DEFAULT_THRESHOLD.minEdge);
+  });
+
+  // "We could not tell whether this is good value" is not a reason to publish something.
+  it("refuses a selection with no usable price at all", () => {
+    expect(qualifies(overwhelming, quality(overwhelming, null), null)).toBe(false);
+    expect(qualifies(overwhelming, quality(overwhelming, null), edge(0.9, 1))).toBe(false);
   });
 });
