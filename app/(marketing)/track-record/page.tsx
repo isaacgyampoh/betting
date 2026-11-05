@@ -25,6 +25,9 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wi
 
 const MARKET_LABEL: Record<string, string> = { CORNERS: "Corners", SHOTS: "Shots", SHOTS_ON_TARGET: "Shots on target" };
 
+const SLIP_LABEL: Record<string, string> = { WON: "slip won", LOST: "slip lost", VOID: "void", PENDING: "running" };
+const SLIP_TONE: Record<string, string> = { WON: "text-win", LOST: "text-loss", VOID: "", PENDING: "" };
+
 const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
 export default async function TrackRecordPage() {
@@ -95,22 +98,30 @@ export default async function TrackRecordPage() {
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Daily Special Picks</h2>
           <p className="text-sm text-muted-foreground">
-            Up to two single selections a day in statistical markets, settled from the match statistics. Every selection
-            published appears below with the price it was published at. Days where nothing met the threshold have no
-            entry — the gaps in the dates are those days.
+            Two selections a day in statistical markets, published together as one 2 odds slip and settled from the
+            match statistics. Both have to land. Every selection appears below with the price it was published at, and
+            days where nothing met the threshold have no entry — the gaps in the dates are those days.
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-4">
-          <Stat label="Selections settled" value={String(special.won + special.lost)} />
+          <Stat label="Slips settled" value={String(special.won + special.lost)} />
           <Stat label="Won" value={String(special.won)} tone={special.won > 0 ? "win" : undefined} />
           <Stat label="Win rate" value={rate(special.winRate)} />
           <Stat
-            label="Profit (1 unit each)"
+            label="Profit (1 unit a slip)"
             value={special.stakedUnits === 0 ? "–" : `${special.profitUnits >= 0 ? "+" : ""}${special.profitUnits.toFixed(2)}`}
             tone={special.stakedUnits === 0 ? undefined : special.profitUnits >= 0 ? "win" : "loss"}
           />
         </div>
+
+        {/* The legs underneath, because a slip hides which half was wrong. */}
+        {special.legs.won + special.legs.lost > 0 && (
+          <p className="text-sm text-muted-foreground">
+            Underneath those slips: {special.legs.total} selections, {special.legs.won} landed and {special.legs.lost}{" "}
+            did not{special.legs.void > 0 ? `, ${special.legs.void} void` : ""}.
+          </p>
+        )}
 
         {special.byMarket.some((m) => m.won + m.lost > 0) && (
           <div className="overflow-hidden rounded-lg border bg-card">
@@ -147,7 +158,17 @@ export default async function TrackRecordPage() {
           <div className="space-y-5">
             {specialDays.map((day) => (
               <div key={day.date} className="space-y-3">
-                <h3 className="text-xs font-medium text-muted-foreground">{DAY.format(new Date(day.date))}</h3>
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 className="text-xs font-medium text-muted-foreground">{DAY.format(new Date(day.date))}</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {day.slip.combinedOdds !== null && (
+                      <>
+                        <span className="gc-figure text-foreground">{day.slip.combinedOdds.toFixed(2)}</span> the slip ·{" "}
+                      </>
+                    )}
+                    <span className={cn(SLIP_TONE[day.slip.status])}>{SLIP_LABEL[day.slip.status]}</span>
+                  </p>
+                </div>
                 {day.picks.map((pick) => (
                   <SpecialPickCard key={pick.position} pick={pick} />
                 ))}
@@ -157,10 +178,10 @@ export default async function TrackRecordPage() {
         )}
 
         <p className="text-xs text-muted-foreground">
-          Profit assumes one unit staked on each settled selection at the price published. The win rate counts settled
-          selections only: {special.pending} still running and {special.void} void.
+          Profit assumes one unit staked on each settled slip at the combined price published. The win rate counts
+          settled slips only: {special.pending} still running and {special.void} void.
           {special.unpriced > 0 &&
-            ` ${special.unpriced} settled selection${special.unpriced === 1 ? " was" : "s were"} published without a verified price, so ${
+            ` ${special.unpriced} settled slip${special.unpriced === 1 ? "" : "s"} had a leg published without a verified price, so ${
               special.unpriced === 1 ? "it is" : "they are"
             } counted in the win rate but not in the profit.`}
         </p>

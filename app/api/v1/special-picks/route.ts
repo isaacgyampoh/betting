@@ -1,5 +1,5 @@
 import { ok, route } from "@/lib/api";
-import { listSpecialHistory, listSpecialPicks, specialPerformance } from "@/lib/services/special-picks";
+import { listSpecialHistory, specialPerformance, specialToday, SPECIAL_TARGET } from "@/lib/services/special-picks";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +21,20 @@ export const dynamic = "force-dynamic";
 export const GET = route(async (req: Request) => {
   const wantsHistory = new URL(req.url).searchParams.get("history") === "1";
 
-  const [picks, performance, history] = await Promise.all([
-    listSpecialPicks(),
+  const [today, performance, history] = await Promise.all([
+    specialToday(),
     specialPerformance(),
     wantsHistory ? listSpecialHistory() : Promise.resolve(undefined),
   ]);
 
-  return ok({ picks, performance, ...(history ? { history } : {}) });
+  return ok({
+    target: SPECIAL_TARGET,
+    today,
+    // Kept alongside `today` on purpose: a release build of the Android app is already in people's
+    // hands reading this field, and it updates when somebody installs a new one, not when this
+    // deploys. Removable once no shipped client reads it.
+    picks: today?.picks ?? [],
+    performance,
+    ...(history ? { history } : {}),
+  });
 });

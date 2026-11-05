@@ -94,13 +94,18 @@ class _Body extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.xs, GcSpace.gutter, 0),
           child: Text(
-            'Up to two selections a day in statistical markets — corners, shots, shots on target — '
-            'each researched from the teams’ recent matches and priced from a live bookmaker '
-            'market. Some days nothing meets the threshold.',
+            'Two selections a day in statistical markets — corners, shots, shots on target — researched '
+            'from the teams’ recent matches, priced from a live bookmaker market and published together '
+            'as one ${view.target} odds slip. Both have to land. Some days nothing meets the threshold.',
             style: GcType.body.copyWith(color: gc(context).inkMuted),
           ),
         ),
         const GcSectionHeader(title: 'Today'),
+        if (view.today != null && view.today!.slip.combinedOdds != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(GcSpace.gutter, 0, GcSpace.gutter, GcSpace.md),
+            child: _SlipLine(day: view.today!),
+          ),
         if (view.picks.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: GcSpace.gutter),
@@ -138,6 +143,38 @@ class _Body extends StatelessWidget {
 }
 
 /// The published record. Losses counted, voids reported as voids, nothing excluded to improve it.
+/// The day's selections are one bet, so the page says what that bet is worth.
+class _SlipLine extends StatelessWidget {
+  const _SlipLine({required this.day});
+
+  final SpecialDay day;
+
+  @override
+  Widget build(BuildContext context) {
+    final odds = day.slip.combinedOdds!;
+    final colour = switch (day.slip.status) {
+      PickStatus.won => gc(context).win,
+      PickStatus.lost => gc(context).loss,
+      _ => gc(context).inkMuted,
+    };
+
+    return Row(
+      children: [
+        Text(odds.toStringAsFixed(2), style: GcType.figure.copyWith(fontSize: 18, color: colour)),
+        const SizedBox(width: GcSpace.sm),
+        Expanded(
+          child: Text(
+            day.picks.length == 1
+                ? 'the slip, on one selection'
+                : 'the slip, across ${day.picks.length} selections — both have to land',
+            style: GcType.caption,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _Record extends StatelessWidget {
   const _Record({required this.record});
 
@@ -179,7 +216,7 @@ class _Record extends StatelessWidget {
         const SizedBox(height: GcSpace.lg),
         Row(
           children: [
-            // Settled, not published: a selection still running is not evidence of anything yet.
+            // Settled, not published: a slip still running is not evidence of anything yet.
             _Stat(label: 'Settled', value: '${record.settled}'),
             _Stat(label: 'Won', value: '${record.won}', colour: gc(context).win),
             _Stat(label: 'Lost', value: '${record.lost}', colour: gc(context).loss),
@@ -206,7 +243,7 @@ class _Record extends StatelessWidget {
                 const SizedBox(width: GcSpace.sm),
                 Expanded(
                   child: Text(
-                    'One unit staked on each settled selection returns '
+                    'One unit staked on each settled slip returns '
                     '${profit >= 0 ? '+' : ''}${profit.toStringAsFixed(2)} units '
                     'across ${record.stakedUnits} priced.',
                     style: GcType.caption,
@@ -220,10 +257,20 @@ class _Record extends StatelessWidget {
         if (record.unpriced > 0) ...[
           const SizedBox(height: GcSpace.md),
           GcNote(
-            '${record.unpriced} settled ${record.unpriced == 1 ? 'selection was' : 'selections were'} '
+            '${record.unpriced} settled ${record.unpriced == 1 ? 'slip had a leg' : 'slips had a leg'} '
             'published without a verified price, so ${record.unpriced == 1 ? 'it is' : 'they are'} '
             'in the win rate but not in the profit.',
             icon: Icons.info_outline_rounded,
+          ),
+        ],
+        if (record.legs.settled > 0) ...[
+          const SizedBox(height: GcSpace.md),
+          // A slip hides which half was wrong, so the legs are reported too.
+          Text(
+            'Underneath those slips: ${record.legs.total} selections, ${record.legs.won} landed and '
+            '${record.legs.lost} did not'
+            '${record.legs.voided > 0 ? ', ${record.legs.voided} void' : ''}.',
+            style: GcType.caption,
           ),
         ],
         if (record.byMarket.any((m) => m.settled > 0)) ...[

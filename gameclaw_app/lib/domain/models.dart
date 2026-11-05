@@ -1602,6 +1602,71 @@ class SpecialMarketRecord {
   );
 }
 
+/// How a day's selections settle, once they are treated as one slip.
+///
+/// Both have to land. A void leg drops out at 1.00 rather than sinking the slip, and the day is
+/// still running while any leg is.
+class SpecialSlip {
+  const SpecialSlip({required this.combinedOdds, required this.status, required this.target});
+
+  /// Null while any leg is unsettled, or when a leg was published without a price.
+  final double? combinedOdds;
+  final PickStatus status;
+
+  /// What the target was on the day, so an old slip is not judged against a newer rule.
+  final int target;
+
+  factory SpecialSlip.fromJson(Map<String, dynamic> json) => SpecialSlip(
+    combinedOdds: (json['combinedOdds'] as num?)?.toDouble(),
+    status: PickStatusX.parse(json['status'] as String?),
+    target: (json['target'] as num?)?.toInt() ?? 2,
+  );
+}
+
+/// One published day: the slip, and the selections it is made of.
+class SpecialDay {
+  const SpecialDay({required this.date, required this.slip, required this.picks});
+
+  final String date;
+  final SpecialSlip slip;
+  final List<SpecialPick> picks;
+
+  factory SpecialDay.fromJson(Map<String, dynamic> json) => SpecialDay(
+    date: json['date'] as String? ?? '',
+    slip: SpecialSlip.fromJson(json['slip'] as Map<String, dynamic>? ?? const {}),
+    picks: (json['picks'] as List<dynamic>? ?? const [])
+        .map((p) => SpecialPick.fromJson(p as Map<String, dynamic>))
+        .toList(growable: false),
+  );
+}
+
+/// How the individual selections have fared, underneath the slips.
+class SpecialLegs {
+  const SpecialLegs({
+    required this.total,
+    required this.won,
+    required this.lost,
+    required this.voided,
+    required this.pending,
+  });
+
+  final int total;
+  final int won;
+  final int lost;
+  final int voided;
+  final int pending;
+
+  int get settled => won + lost;
+
+  factory SpecialLegs.fromJson(Map<String, dynamic> json) => SpecialLegs(
+    total: (json['total'] as num?)?.toInt() ?? 0,
+    won: (json['won'] as num?)?.toInt() ?? 0,
+    lost: (json['lost'] as num?)?.toInt() ?? 0,
+    voided: (json['void'] as num?)?.toInt() ?? 0,
+    pending: (json['pending'] as num?)?.toInt() ?? 0,
+  );
+}
+
 /// The published record for special picks. Losses included, voids reported as voids.
 class SpecialPerformance {
   const SpecialPerformance({
@@ -1614,25 +1679,30 @@ class SpecialPerformance {
     required this.profitUnits,
     required this.stakedUnits,
     required this.unpriced,
+    required this.legs,
     required this.byMarket,
   });
 
+  /// Days published. A day is one slip, and a slip is the thing that wins or loses.
   final int total;
   final int won;
   final int lost;
   final int voided;
   final int pending;
 
-  /// 0..1 over settled selections only, null before anything settles. Zero settled is not 0%.
+  /// 0..1 over settled days only, null before anything settles. Zero settled is not 0%.
   final double? winRate;
 
-  /// Profit in units at the prices published, one unit staked per settled selection.
+  /// Profit in units at the combined prices published, one unit staked per settled slip.
   final double profitUnits;
   final int stakedUnits;
 
-  /// Settled selections published without a verified price. In the win rate, not in the profit,
-  /// and shown rather than dropped - leaving them out would flatter the figures.
+  /// Settled slips with a leg published without a verified price. In the win rate, not in the
+  /// profit, and shown rather than dropped - leaving them out would flatter the figures.
   final int unpriced;
+
+  /// The selections underneath, because a slip hides which half was wrong.
+  final SpecialLegs legs;
 
   final List<SpecialMarketRecord> byMarket;
 
@@ -1648,6 +1718,7 @@ class SpecialPerformance {
     profitUnits: (json['profitUnits'] as num?)?.toDouble() ?? 0,
     stakedUnits: (json['stakedUnits'] as num?)?.toInt() ?? 0,
     unpriced: (json['unpriced'] as num?)?.toInt() ?? 0,
+    legs: SpecialLegs.fromJson(json['legs'] as Map<String, dynamic>? ?? const {}),
     byMarket: (json['byMarket'] as List<dynamic>? ?? const [])
         .map((m) => SpecialMarketRecord.fromJson(m as Map<String, dynamic>))
         .toList(growable: false),
@@ -1659,17 +1730,31 @@ class SpecialPerformance {
 /// An empty [picks] is a normal answer rather than an error: the research threshold is set
 /// expecting days where nothing qualifies, and the screen says so.
 class SpecialPicksView {
-  const SpecialPicksView({required this.picks, required this.performance});
+  const SpecialPicksView({required this.today, required this.performance, required this.target});
 
-  final List<SpecialPick> picks;
+  /// Null on a day nothing was published, which is a normal day.
+  final SpecialDay? today;
   final SpecialPerformance performance;
 
-  factory SpecialPicksView.fromJson(Map<String, dynamic> json) => SpecialPicksView(
-    picks: (json['picks'] as List<dynamic>? ?? const [])
-        .map((p) => SpecialPick.fromJson(p as Map<String, dynamic>))
-        .toList(growable: false),
-    performance: SpecialPerformance.fromJson(
-      json['performance'] as Map<String, dynamic>? ?? const {},
-    ),
-  );
+  /// The combined odds the day's selections are published to reach.
+  final int target;
+
+  List<SpecialPick> get picks => today?.picks ?? const [];
+
+  factory SpecialPicksView.fromJson(Map<String, dynamic> json) {
+    final today = json['today'] as Map<String, dynamic>?;
+    return SpecialPicksView(
+      // `today` is the shape to read. The older top-level `picks` is still accepted so a phone
+      // running against an API that predates the slip keeps working rather than emptying out.
+      today: today != null
+          ? SpecialDay.fromJson(today)
+          : (json['picks'] as List<dynamic>? ?? const []).isEmpty
+          ? null
+          : SpecialDay.fromJson(<String, dynamic>{'date': '', 'slip': <String, dynamic>{}, 'picks': json['picks']}),
+      performance: SpecialPerformance.fromJson(
+        json['performance'] as Map<String, dynamic>? ?? const {},
+      ),
+      target: (json['target'] as num?)?.toInt() ?? 2,
+    );
+  }
 }

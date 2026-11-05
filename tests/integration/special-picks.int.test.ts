@@ -140,55 +140,142 @@ describe("grading reads the match, and refuses to guess", () => {
   });
 });
 
+/**
+ * The day is the bet.
+ *
+ * Two selections published together are one slip staked once, so the record counts days, not
+ * selections. Counting them separately described a product nobody has - and flattered it, because
+ * a day where one leg won and the other lost reads as 50% rather than as the loss it was.
+ */
 describe("the published record is not flattered", () => {
-  it("counts losses, and takes the win rate over settled selections only", async () => {
+  it("scores a day as one slip: one leg losing loses the day", async () => {
     await db.specialPick.createMany({
       data: [
         { ...base, position: 1, status: "WON", odds: 2.0 },
         { ...base, position: 2, statsFixtureId: 2, marketKind: "SHOTS", status: "LOST", odds: 1.9 },
-        { ...base, forDate: new Date("2026-11-01"), position: 1, statsFixtureId: 3, status: "VOID", odds: 1.8 },
-        { ...base, forDate: new Date("2026-11-01"), position: 2, statsFixtureId: 4, status: "PENDING", odds: 2.2 },
       ],
     });
     const { specialPerformance } = await import("@/lib/services/special-picks");
     const p = await specialPerformance();
 
-    expect(p.total).toBe(4);
-    expect(p.won).toBe(1);
+    expect(p.total).toBe(1); // one day
     expect(p.lost).toBe(1);
-    expect(p.void).toBe(1);
-    expect(p.pending).toBe(1);
-    // One from two settled. The void is neither a win nor a loss and is reported as itself.
-    expect(p.winRate).toBeCloseTo(0.5, 5);
+    expect(p.won).toBe(0);
+    expect(p.winRate).toBe(0);
+    // The legs are still reported, because a slip hides which half was wrong.
+    expect(p.legs).toMatchObject({ total: 2, won: 1, lost: 1 });
   });
 
-  it("computes profit from the price actually published", async () => {
+  it("wins a day only when every leg wins, and pays the combined odds", async () => {
     await db.specialPick.createMany({
       data: [
-        { ...base, position: 1, status: "WON", odds: 2.5 }, // +1.5
-        { ...base, position: 2, statsFixtureId: 2, status: "LOST", odds: 1.9 }, // -1
+        { ...base, position: 1, status: "WON", odds: 1.5 },
+        { ...base, position: 2, statsFixtureId: 2, marketKind: "SHOTS", status: "WON", odds: 1.6 },
       ],
     });
     const { specialPerformance } = await import("@/lib/services/special-picks");
     const p = await specialPerformance();
-    expect(p.profitUnits).toBeCloseTo(0.5, 5);
-    expect(p.stakedUnits).toBe(2);
+
+    expect(p.won).toBe(1);
+    expect(p.winRate).toBe(1);
+    // 1.5 x 1.6 = 2.4, so one unit returns 1.4.
+    expect(p.profitUnits).toBeCloseTo(1.4, 5);
+    expect(p.stakedUnits).toBe(1);
+  });
+
+  it("counts a losing day as one unit, not one per leg", async () => {
+    await db.specialPick.createMany({
+      data: [
+        { ...base, position: 1, status: "LOST", odds: 1.5 },
+        { ...base, position: 2, statsFixtureId: 2, marketKind: "SHOTS", status: "LOST", odds: 1.6 },
+      ],
+    });
+    const { specialPerformance } = await import("@/lib/services/special-picks");
+    const p = await specialPerformance();
+
+    expect(p.profitUnits).toBeCloseTo(-1, 5);
+    expect(p.stakedUnits).toBe(1);
+    expect(p.legs.lost).toBe(2);
+  });
+
+  // A bookmaker's rule, not one to invent: a void leg drops out at 1.00 rather than sinking a slip.
+  it("drops a void leg out of the slip instead of losing the day", async () => {
+    await db.specialPick.createMany({
+      data: [
+        { ...base, position: 1, status: "WON", odds: 2.4 },
+        { ...base, position: 2, statsFixtureId: 2, marketKind: "SHOTS", status: "VOID", odds: 1.6 },
+      ],
+    });
+    const { specialPerformance } = await import("@/lib/services/special-picks");
+    const p = await specialPerformance();
+
+    expect(p.won).toBe(1);
+    expect(p.profitUnits).toBeCloseTo(1.4, 5); // the surviving leg alone
+    expect(p.legs.void).toBe(1);
+  });
+
+  it("voids the day when every leg voided", async () => {
+    await db.specialPick.createMany({
+      data: [
+        { ...base, position: 1, status: "VOID", odds: 2.0 },
+        { ...base, position: 2, statsFixtureId: 2, status: "VOID", odds: 1.9 },
+      ],
+    });
+    const { specialPerformance } = await import("@/lib/services/special-picks");
+    const p = await specialPerformance();
+
+    expect(p.void).toBe(1);
+    expect(p.winRate).toBeNull();
+    expect(p.stakedUnits).toBe(0);
+  });
+
+  it("leaves a day running while any leg is", async () => {
+    await db.specialPick.createMany({
+      data: [
+        { ...base, position: 1, status: "WON", odds: 2.0 },
+        { ...base, position: 2, statsFixtureId: 2, status: "PENDING", odds: 1.9 },
+      ],
+    });
+    const { specialPerformance } = await import("@/lib/services/special-picks");
+    const p = await specialPerformance();
+
+    expect(p.pending).toBe(1);
+    expect(p.won).toBe(0);
+    expect(p.winRate).toBeNull();
   });
 
   // Dropping these from the denominator would be exactly the flattering arithmetic to avoid.
-  it("reports selections published without a price rather than hiding them", async () => {
+  it("reports a day it could not price rather than hiding it", async () => {
     await db.specialPick.createMany({
       data: [
         { ...base, position: 1, status: "WON", odds: null, bookmaker: null },
-        { ...base, position: 2, statsFixtureId: 2, status: "LOST", odds: 1.9 },
+        { ...base, position: 2, statsFixtureId: 2, status: "WON", odds: 1.9 },
       ],
     });
     const { specialPerformance } = await import("@/lib/services/special-picks");
     const p = await specialPerformance();
+
     expect(p.unpriced).toBe(1);
-    expect(p.stakedUnits).toBe(1);
+    expect(p.stakedUnits).toBe(0);
+    expect(p.won).toBe(1); // it still won; it just cannot be scored in units
+    expect(p.winRate).toBe(1);
+  });
+
+  it("separates days that are settled from days that are not", async () => {
+    await db.specialPick.createMany({
+      data: [
+        { ...base, position: 1, status: "WON", odds: 2.0 },
+        { ...base, position: 2, statsFixtureId: 2, status: "WON", odds: 1.9 },
+        { ...base, forDate: new Date("2026-11-01"), position: 1, statsFixtureId: 3, status: "PENDING", odds: 2.2 },
+      ],
+    });
+    const { specialPerformance } = await import("@/lib/services/special-picks");
+    const p = await specialPerformance();
+
     expect(p.total).toBe(2);
-    expect(p.winRate).toBeCloseTo(0.5, 5);
+    expect(p.won).toBe(1);
+    expect(p.pending).toBe(1);
+    expect(p.winRate).toBe(1); // over settled days only
   });
 
   it("has no win rate at all before anything is settled", async () => {

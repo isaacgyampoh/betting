@@ -5,13 +5,13 @@ import { PickCard } from "@/components/picks/pick-card";
 import { SpecialPickCard } from "@/components/picks/special-pick-card";
 import { requireAdultPage } from "@/lib/auth-pages";
 import { getTodaysPicks } from "@/lib/services/daily-picks";
-import { listSpecialPicks } from "@/lib/services/special-picks";
+import { specialToday } from "@/lib/services/special-picks";
 
 export const metadata: Metadata = { title: "Daily picks" };
 
 export default async function PicksPage() {
   const { user } = await requireAdultPage("/picks");
-  const [picks, special] = await Promise.all([getTodaysPicks(user.id), listSpecialPicks()]);
+  const [picks, special] = await Promise.all([getTodaysPicks(user.id), specialToday()]);
 
   return (
     <div className="space-y-8">
@@ -46,9 +46,9 @@ export default async function PicksPage() {
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Daily Special Picks</h2>
           <p className="text-sm text-muted-foreground">
-            Up to two single selections a day in statistical markets — corners, shots, shots on target — each researched
-            from the teams&apos; recent matches and priced from a live bookmaker market. Some days nothing meets the
-            threshold, and on those days nothing is published.{" "}
+            Two selections a day in statistical markets — corners, shots, shots on target — researched from the teams&apos;
+            recent matches, priced from a live bookmaker market and published together as one 2 odds slip. Both have to
+            land. Some days nothing meets the threshold, and on those days nothing is published.{" "}
             <Link href="/track-record#special" className="text-primary hover:underline">
               See the record
             </Link>
@@ -56,14 +56,20 @@ export default async function PicksPage() {
           </p>
         </div>
 
-        {special.length === 0 ? (
+        {special === null ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
             No special pick today. Either the research is not in yet, or nothing met the threshold — which is a normal
             day, not a fault.
           </p>
         ) : (
           <div className="space-y-3">
-            {special.map((p) => (
+            {special.slip.combinedOdds !== null && (
+              <p className="text-sm text-muted-foreground">
+                Together: <span className="gc-figure font-medium text-foreground">{special.slip.combinedOdds.toFixed(2)}</span>{" "}
+                {special.picks.length === 1 ? "on one selection" : `across ${special.picks.length} selections`}.
+              </p>
+            )}
+            {special.picks.map((p) => (
               <SpecialPickCard key={p.position} pick={p} />
             ))}
           </div>

@@ -89,8 +89,10 @@ afterEach(() => {
   vi.doUnmock("@/lib/special-picks/research");
 });
 
-const corners = (line: string, odds = 1.9) => offer("Corners - Over/Under", "Over", line, odds);
-const shots = (line: string, odds = 1.85) => offer("Shots on Target Over/Under", "Over", line, odds);
+// Prices that reach the 2.00 target: a pair comfortably, and either one on its own, so a test
+// about publishing one selection is not really a test about the target.
+const corners = (line: string, odds = 2.2) => offer("Corners - Over/Under", "Over", line, odds);
+const shots = (line: string, odds = 2.1) => offer("Shots on Target Over/Under", "Over", line, odds);
 
 describe("publishing the day's selections", () => {
   it("publishes two when two qualify, from different matches", async () => {
@@ -105,7 +107,7 @@ describe("publishing the day's selections", () => {
     expect(new Set(rows.map((r) => r.statsFixtureId)).size).toBe(2);
     // Every row carries a verified price from the offer it came from, never a made-up one.
     expect(rows.every((r) => r.odds !== null && r.bookmaker === "sportybet")).toBe(true);
-    expect(rows.map((r) => Number(r.odds)).sort()).toEqual([1.85, 1.9]);
+    expect(rows.map((r) => Number(r.odds)).sort()).toEqual([2.1, 2.2]);
   });
 
   // The bug this replaces: the slug came from the first live adapter in the registry while the
