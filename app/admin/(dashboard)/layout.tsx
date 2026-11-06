@@ -26,6 +26,7 @@ export const dynamic = "force-dynamic";
 
 const TABS = [
   { href: "/admin", label: "Overview" },
+  { href: "/admin/picks", label: "Slip desk" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/health", label: "Health" },
   { href: "/admin/settings", label: "Settings" },

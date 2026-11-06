@@ -109,17 +109,47 @@ export async function settleSpecialSlips(now = new Date()): Promise<number> {
 
   let closed = 0;
   for (const slip of open) {
-    if (!slip.picks.length || slip.picks.some((p) => p.status === "PENDING")) continue;
-
-    const live = slip.picks.filter((p) => p.status !== "VOID");
-    const status = !live.length ? "VOID" : live.every((p) => p.status === "WON") ? "WON" : "LOST";
-
+    const status = slipOutcome(slip.picks);
+    if (!status) continue;
     await db.specialSlip.update({ where: { id: slip.id }, data: { status, settledAt: now } });
     closed++;
   }
 
   if (closed) logger.info("special.slips_settled", { closed });
   return closed;
+}
+
+/**
+ * What an open slip's legs add up to, or null while it is still running.
+ *
+ * Extracted so that it has exactly one definition. The nightly job is not the only thing that can
+ * complete a slip - voiding its last open leg from the admin desk does too - and a second copy of
+ * this rule written next to that button is how the two would quietly come to disagree about a slip
+ * with one void leg and one winner.
+ */
+export function slipOutcome(picks: readonly { status: string }[]): "WON" | "LOST" | "VOID" | null {
+  if (!picks.length || picks.some((p) => p.status === "PENDING")) return null;
+  const live = picks.filter((p) => p.status !== "VOID");
+  return !live.length ? "VOID" : live.every((p) => p.status === "WON") ? "WON" : "LOST";
+}
+
+/**
+ * Applies that rule to one slip, after something changed a leg on it.
+ *
+ * Idempotent and narrow: it will close a slip whose legs are all graded and otherwise leave the
+ * row alone. It never reopens a settled slip, because a published result that can be taken back is
+ * not a record.
+ */
+export async function rollUpSlip(slipId: string, now = new Date()): Promise<"WON" | "LOST" | "VOID" | null> {
+  const slip = await db.specialSlip.findUnique({
+    where: { id: slipId },
+    include: { picks: { select: { status: true } } },
+  });
+  if (!slip || slip.status !== "PENDING") return null;
+  const status = slipOutcome(slip.picks);
+  if (!status) return null;
+  await db.specialSlip.update({ where: { id: slip.id }, data: { status, settledAt: now } });
+  return status;
 }
 
 /**

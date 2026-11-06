@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Finding, Severity } from "@/lib/special-picks/integrity";
 
 /** A headline number. */
 export function Stat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
@@ -63,5 +64,51 @@ export function Pager({ page, pages, base }: { page: number; pages: number; base
         </Link>
       )}
     </div>
+  );
+}
+
+/**
+ * A finding from the integrity rules.
+ *
+ * Three severities map to three tones and nothing else does. `info` is deliberately quiet: a price
+ * moving against us is the market's opinion, not our mistake, and colouring it like a fault would
+ * teach whoever reads this page to stop reading the colours.
+ */
+export function SeverityPill({ severity }: { severity: Severity | null }) {
+  if (!severity) return <Pill state="ok">clean</Pill>;
+  if (severity === "bad") return <Pill state="bad">needs attention</Pill>;
+  if (severity === "warn") return <Pill state="warn">check</Pill>;
+  return <Pill state="idle">note</Pill>;
+}
+
+export function FindingList({ findings }: { findings: readonly Finding[] }) {
+  if (!findings.length) return null;
+  const tone = { bad: "border-red-500/40 text-red-200", warn: "border-amber-400/40 text-amber-200", info: "border-zinc-600/50 text-zinc-400" };
+  return (
+    <ul className="space-y-1.5">
+      {findings.map((f, i) => (
+        <li key={`${f.code}-${i}`} className={`rounded border-l-2 bg-zinc-900/60 py-1.5 pl-3 pr-2 text-xs ${tone[f.severity]}`}>
+          <code className="mr-2 text-[10px] uppercase tracking-wider opacity-60">{f.code}</code>
+          {f.message}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Expected return per unit staked, shown whether or not it is a problem.
+ *
+ * The figure that was never on screen. A leg at 1.06 against our own estimate of 0.90 reads as a
+ * safe price and a strong finding, and only the product of the two says it loses money.
+ */
+export function Ev({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-zinc-600">no price</span>;
+  const tone = value < 0 ? "text-red-300" : value < 0.05 ? "text-amber-300" : "text-[#CCFF2E]";
+  return (
+    <span className={`tabular-nums font-medium ${tone}`}>
+      {value >= 0 ? "+" : "−"}
+      {Math.abs(value * 100).toFixed(1)}%
+    </span>
   );
 }

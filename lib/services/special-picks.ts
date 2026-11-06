@@ -49,7 +49,13 @@ const PRICE_SOURCES = [
   { slug: "footballcom", load: () => import("@/lib/bookmakers/live/footballcom") },
 ] as const;
 
-async function priceSource() {
+/**
+ * The bookmaker whose prices a run will use, chosen the same way every time.
+ *
+ * Exported so the admin dry run asks the same question the generator does. A dry run that picked
+ * its own source could report a clean day for a feed the real run never reads.
+ */
+export async function priceSource() {
   const { getAdapter } = await import("@/lib/bookmakers/registry");
   for (const candidate of PRICE_SOURCES) {
     const adapter = getAdapter(candidate.slug);
