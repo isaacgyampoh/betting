@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SpecialSlip } from "@/components/picks/special-slip";
+import { shareSize } from "./image/route";
 import { specialSlipByReference } from "@/lib/services/special-picks";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +28,8 @@ export async function generateMetadata({ params }: PageProps<"/special/[referenc
     title,
     description,
     alternates: { canonical: `/special/${slip.reference}` },
-    openGraph: { title, description, url, images: [{ url: `${url}/image`, width: 1080, height: 1350 }] },
+    // The real dimensions, because a preview card that is told the wrong ones letterboxes.
+    openGraph: { title, description, url, images: [{ url: `${url}/image`, ...shareSize(slip.legs.length) }] },
     twitter: { card: "summary_large_image", title, description, images: [`${url}/image`] },
   };
 }
