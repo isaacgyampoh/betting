@@ -105,11 +105,11 @@ describe("convert targets", () => {
     const bookable = BOOKMAKER_SLUGS.filter((s) => getAdapter(s).capabilities.createCode);
     // Order follows BOOKMAKER_SLUGS, not the order they were connected in.
     //
-    // MSport is absent despite MSPORT_MODE=live above, and that is the point: its integration is
-    // finished and its endpoints answer 200 from an ordinary connection, but they return 403 to
-    // the deployed Worker, every time. It is listed in REFUSED_BY_BOOKMAKER until MSport lifts
-    // that, so it is never offered as somewhere a slip can actually be booked.
-    expect(bookable).toEqual(["sportybet", "footballcom"]);
+    // MSport is here again. It was absent from 18 October, when its WAF began answering 403 to
+    // every request, and came back some time before 2026-11-06 - the integration never changed.
+    // betPawa is not here: it reads booking codes but creating one is a different endpoint that
+    // is not built, so it is somewhere a slip comes from and not somewhere it can be booked.
+    expect(bookable).toEqual(["sportybet", "msport", "footballcom"]);
     // And every bookmaker we can book at, we can also read from: a one-way conversion is useless.
     for (const slug of bookable) expect(getAdapter(slug).capabilities.loadCode, slug).toBe(true);
   });

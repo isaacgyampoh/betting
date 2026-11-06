@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { createAdapter } from "@/lib/bookmakers/registry";
+import { createAdapter, REFUSED_BY_BOOKMAKER } from "@/lib/bookmakers/registry";
 import { listUpcoming, getEventMarkets } from "@/lib/bookmakers/live/msport";
 import type { BookmakerEventInfo } from "@/lib/bookmakers/types";
 
@@ -14,19 +14,15 @@ const sportybet = createAdapter("sportybet", "live");
 /**
  * Whether MSport is answering us at all, and why not.
  *
- * MSport sits behind Cloudflare and its WAF returns 403 "Attention Required" to our requests -
- * observed from the deployed Worker first and, as of 18 Oct 2026, from an ordinary connection too.
- * The integration itself is finished: the endpoints, the market map and the booking format were all
- * verified before the block went up.
+ * MSport's WAF answered 403 to everything from 18 October. As of 2026-11-06 it serves us again -
+ * 400 fixtures, 266 markets on one of them with 113 mapped - so it is out of REFUSED_BY_BOOKMAKER
+ * and these run for real.
  *
- * So the block is theirs to lift, by an allowlist or an official integration, and not something to
- * engineer around - working around a provider's own access control would breach their terms and
- * would have to be kept secret from them, which is a reliable sign it is the wrong move.
- *
- * This file therefore asserts the block rather than failing on it. Every test below skips while we
- * are refused, and `is still being refused` fails the moment MSport starts answering - which is the
- * signal to take msport out of REFUSED_BY_BOOKMAKER and let these run again. A suite that is simply
- * red every night teaches people to stop reading it.
+ * The gate below stays, because the block may come back and a suite that is simply red every
+ * night teaches people to stop reading it. It is narrower than it was: it used to conclude
+ * "refused" when it could not find a fixture at least an hour out, and MSport's feed returns the
+ * live window - 304 of 400 already in play, none more than twenty minutes away - so it reported a
+ * block that had already lifted. Not finding a convenient fixture is not a refusal.
  */
 let refused = false;
 let refusal = "";
@@ -49,11 +45,20 @@ describe.skipIf(!live)("MSport live API", () => {
       refusal = "listUpcoming returned no fixtures (MSport's WAF answers 403)";
       return;
     }
+    // Only an empty feed means refused. Everything past here is about finding a fixture worth
+    // testing against, and failing at that is this test's problem, not MSport's.
     // At least an hour out, because bookmakers refuse a game about to kick off, and with a real
     // market list: plenty of obscure fixtures carry only a handful of prices, and testing whichever
     // one happens to be first tests the luck of the draw rather than the adapter.
-    const soonest = Date.now() + 60 * 60_000;
-    const candidates = fixtures.filter((f) => f.status === "NOT_STARTED" && f.kickoffAt.getTime() > soonest);
+    // Not started is the requirement; "an hour out" was not. MSport's feed is the live window, so
+    // asking for an hour's notice found nothing at all and looked like a block.
+    //
+    // Furthest kick-off first, because a bookmaker refuses to book a game about to start and the
+    // feed is ordered soonest-first - taking the head of it picked a fixture minutes away and the
+    // booking test failed on a game that was simply too close.
+    const candidates = fixtures
+      .filter((f) => f.status === "NOT_STARTED")
+      .sort((a, b) => b.kickoffAt.getTime() - a.kickoffAt.getTime());
     for (const candidate of candidates.slice(0, 8)) {
       const got = (await getEventMarkets(candidate.externalId)).offers;
       const has = (id: string) => got.some((o) => o.raw.marketId === id && o.market);
@@ -65,16 +70,17 @@ describe.skipIf(!live)("MSport live API", () => {
     }
     if (!target) {
       refused = true;
+      // Deliberately not a refusal: the feed answered, we just did not find a fixture carrying
+      // both markets this test wants. Left as a skip with the reason attached.
       refusal = `no MSport fixture with a full market list among ${candidates.length} candidates`;
     }
   }, 120_000);
 
-  it("is still being refused by MSport, which is theirs to lift", () => {
-    expect(
-      refused,
-      `MSport is answering again (${refusal || "fixtures and markets both loaded"}) - ` +
-        "remove msport from REFUSED_BY_BOOKMAKER and re-run this file",
-    ).toBe(true);
+  it("is answering us, and is not in the refusal map", () => {
+    expect(refused, `MSport appears to be refusing us again (${refusal}) - put it back in REFUSED_BY_BOOKMAKER`).toBe(
+      false,
+    );
+    expect(REFUSED_BY_BOOKMAKER.msport).toBeUndefined();
   });
 
   it("lists real upcoming fixtures", (ctx) => {
@@ -111,6 +117,11 @@ describe.skipIf(!live)("MSport live API", () => {
 
   it("books a code and reads back the same picks", async (ctx) => {
     if (refused) return ctx.skip();
+    // A game minutes from kick-off is refused by the bookmaker, which is correct of it and not
+    // something this test can assert around.
+    const minutesOut = (target!.kickoffAt.getTime() - Date.now()) / 60_000;
+    if (minutesOut < 15) return ctx.skip();
+
     const main = offers.find((o) => o.raw.marketId === "1" && o.market);
     const total = offers.find((o) => o.raw.marketId === "18" && o.market);
     expect(main).toBeDefined();
@@ -146,13 +157,23 @@ describe.skipIf(!live)("converting a real slip from SportyBet to MSport", () => 
     const { listUpcomingWithOffers } = await import("@/lib/bookmakers/live/sportybet");
     const sbFixtures = await listUpcomingWithOffers({ hours: 72, pages: 3 });
 
-    // Find a fixture MSport also lists, with a 1X2 price on both sides.
-    const msFixtures = await listUpcoming({ pages: 3 });
-    const msIds = new Set(msFixtures.filter((f) => f.status === "NOT_STARTED").map((f) => f.externalId));
-    const shared = sbFixtures.find(
-      (f) => msIds.has(f.event.externalId) && f.offers.some((o) => o.raw.marketId === "1" && o.market),
-    );
-    expect(shared, "no fixture listed by both bookmakers right now").toBeDefined();
+    // Ask MSport for the fixture by id rather than intersecting the two feeds.
+    //
+    // That premise is the whole reason conversion between these two is exact - both run the
+    // hopegaming platform and carry the same Sportradar event ids - so asking by id is what the
+    // converter does and what is worth testing. Intersecting the lists tested something else and
+    // failed for an unrelated reason: MSport's feed returns the live window, so it never contains
+    // the fixtures SportyBet lists for the next three days.
+    const priced = sbFixtures.filter((f) => f.offers.some((o) => o.raw.marketId === "1" && o.market));
+    let shared: (typeof priced)[number] | undefined;
+    for (const candidate of priced.slice(0, 10)) {
+      const got = await getEventMarkets(candidate.event.externalId).catch(() => null);
+      if (got && got.offers.length > 0) {
+        shared = candidate;
+        break;
+      }
+    }
+    expect(shared, `MSport carried none of the first ${Math.min(priced.length, 10)} SportyBet fixtures by id`).toBeDefined();
 
     const pick = shared!.offers.find((o) => o.raw.marketId === "1" && o.market)!;
     const sbCode = await sportybet.createCode([{ eventExternalId: shared!.event.externalId, raw: pick.raw }]);

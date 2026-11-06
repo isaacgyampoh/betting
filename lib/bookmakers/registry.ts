@@ -63,9 +63,18 @@ export function sampleDataAllowed(): boolean {
  *
  * Removing a slug from this map is all it takes to switch one back on.
  */
-export const REFUSED_BY_BOOKMAKER: Partial<Record<BookmakerSlug, string>> = {
-  msport: "MSport is not accepting requests from our servers at the moment.",
-};
+/**
+ * A bookmaker turning us away right now. Empty is the healthy state.
+ *
+ * MSport was here from 18 October, when its WAF began answering 403 to everything. Re-checked on
+ * 2026-11-06 and it serves us again: 400 fixtures, 266 markets on one of them with 113 mapped,
+ * and a bogus booking code correctly refused. The integration never changed, so taking it out of
+ * this map is the whole fix.
+ *
+ * Worth re-checking rather than assuming, which is what this entry shows: a block recorded once
+ * stays recorded, and the bookmaker it describes may have moved on months ago.
+ */
+export const REFUSED_BY_BOOKMAKER: Partial<Record<BookmakerSlug, string>> = {};
 
 /**
  * Bookmakers whose integration works as far as it goes, and whose remaining step is ours to take.
@@ -91,7 +100,15 @@ export const AWAITING_SETUP: Partial<Record<BookmakerSlug, string>> = {
  * implying we never built it. Code detection and market mapping still work, so a pasted MSport
  * code is still recognised as an MSport code and named as one.
  */
-function refusedByBookmaker(
+/**
+ * Exported for its tests.
+ *
+ * The behaviour it implements - a finished integration that says it is being turned away, rather
+ * than looking unbuilt - has to stay covered whether or not any bookmaker is currently refusing
+ * us. Testing it through whichever one happens to be blocked ties the suite to an outage: when
+ * MSport started answering again on 2026-11-06, five tests failed that were not about MSport.
+ */
+export function refusedByBookmaker(
   adapter: BookmakerAdapter,
   reason: string,
   /**

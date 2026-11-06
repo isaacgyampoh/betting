@@ -18,15 +18,13 @@ describe("a destination that cannot book", () => {
     process.env.ONEXBET_MODE = "live";
   });
 
-  it("MSport reports it cannot book, and says it is refusing us", async () => {
+  // MSport was the example here while its WAF refused us. It answers again as of 2026-11-06, so
+  // it is now a destination like any other - and the refusal wording it used to prove is covered
+  // by tests/services/refused-bookmaker.test.ts, against the wrapper rather than a bookmaker that
+  // might recover.
+  it("MSport can book again, now that it answers us", async () => {
     const { getAdapter } = await import("@/lib/bookmakers/registry");
-    const msport = getAdapter("msport");
-
-    expect(msport.capabilities.createCode).toBe(false);
-    await expect(msport.createCode([])).rejects.toMatchObject({
-      code: "BOOKMAKER_NOT_CONNECTED",
-      message: expect.stringContaining("not accepting requests from our servers"),
-    });
+    expect(getAdapter("msport").capabilities.createCode).toBe(true);
   });
 
   // The 1xBet platform reads fixtures and prices perfectly well. What it cannot do is book, and

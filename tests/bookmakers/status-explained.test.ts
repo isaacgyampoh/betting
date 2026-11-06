@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AWAITING_SETUP, REFUSED_BY_BOOKMAKER } from "@/lib/bookmakers/registry";
+import { createAdapter, AWAITING_SETUP, REFUSED_BY_BOOKMAKER } from "@/lib/bookmakers/registry";
 import { BOOKMAKER_SLUGS } from "@/lib/bookmakers/types";
 
 /**
@@ -45,10 +45,20 @@ describe("a bookmaker that cannot be converted to explains itself", () => {
     }
   });
 
-  it("keeps MSport listed as refused rather than unsupported, because the integration is finished", () => {
-    // It reads as "their servers are turning us away", not "we never built it" - the distinction
-    // the refusal map exists for. Verified again on 18 Oct 2026: Cloudflare answers 403.
-    expect(REFUSED_BY_BOOKMAKER.msport).toBeTruthy();
+  // MSport lived in the refusal map from 18 October, when its WAF began answering 403 to
+  // everything. Re-checked 2026-11-06: it serves us again, so it is in neither map and is simply
+  // available. Nothing about the integration changed in between.
+  it("lists MSport as available, because it answers us again", () => {
+    expect(REFUSED_BY_BOOKMAKER.msport).toBeUndefined();
     expect(AWAITING_SETUP.msport).toBeUndefined();
+    expect(createAdapter("msport", "live").capabilities).toEqual({ loadCode: true, createCode: true, events: true });
+  });
+
+  // The two maps mean different things and a bookmaker must never be in both: one says the
+  // bookmaker is turning us away, the other that the remaining step is ours.
+  it("never puts a bookmaker in both maps", () => {
+    for (const slug of Object.keys(REFUSED_BY_BOOKMAKER)) {
+      expect(AWAITING_SETUP[slug as keyof typeof AWAITING_SETUP], slug).toBeUndefined();
+    }
   });
 });

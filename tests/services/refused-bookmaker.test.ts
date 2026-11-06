@@ -1,32 +1,30 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
+import { createAdapter, refusedByBookmaker, AWAITING_SETUP, REFUSED_BY_BOOKMAKER } from "@/lib/bookmakers/registry";
 
 /**
- * MSport's integration is finished and its endpoints answer 200 from an ordinary connection. From
- * the deployed Worker the identical request returns 403, every time, on every endpoint, while
- * SportyBet and Football.com answer the same Worker. That is MSport declining this origin.
+ * What a finished integration does while the bookmaker is turning us away.
  *
- * The product's job is to say so, not to engineer around it: working past a provider's own access
- * control would breach their terms and would have to be kept from them.
+ * Some bookmakers refuse our origin outright - MSport's WAF answered 403 to everything from 18
+ * October until some time before 6 November. The product's job is to say so, not to engineer
+ * around it: working past a provider's own access control would breach their terms and would have
+ * to be kept from them.
+ *
+ * This tests the wrapper rather than whichever bookmaker is currently blocked. The previous
+ * version used MSport, and when MSport started answering again five tests failed that had nothing
+ * to do with MSport - a suite tied to somebody else's outage.
  */
+const REASON = "Example is not accepting requests from our servers at the moment.";
+
 describe("a bookmaker that refuses our servers", () => {
-  beforeEach(() => {
-    vi.resetModules();
-    process.env.ALLOW_SAMPLE_DATA = "0";
-    process.env.SPORTYBET_MODE = "live";
-    process.env.MSPORT_MODE = "live";
-  });
+  const refused = () => refusedByBookmaker(createAdapter("sportybet", "live"), REASON);
 
-  it("reports no capabilities, even though its adapter is live", async () => {
-    const { getAdapter } = await import("@/lib/bookmakers/registry");
-    const msport = getAdapter("msport");
-
-    expect(msport.capabilities).toEqual({ loadCode: false, createCode: false, events: false });
+  it("reports no capabilities, even though its adapter is live", () => {
+    expect(createAdapter("sportybet", "live").capabilities.loadCode).toBe(true);
+    expect(refused().capabilities).toEqual({ loadCode: false, createCode: false, events: false });
   });
 
   it("says it is being refused, not that it was never built", async () => {
-    const { getAdapter } = await import("@/lib/bookmakers/registry");
-
-    await getAdapter("msport")
+    await refused()
       .loadCode("ABC123")
       .then(
         () => expect.unreachable("should have refused"),
@@ -41,25 +39,36 @@ describe("a bookmaker that refuses our servers", () => {
   });
 
   it("will not book a code at a bookmaker that is turning us away", async () => {
-    const { getAdapter } = await import("@/lib/bookmakers/registry");
-    await expect(getAdapter("msport").createCode([])).rejects.toMatchObject({
-      code: "BOOKMAKER_NOT_CONNECTED",
-    });
+    await expect(refused().createCode([])).rejects.toMatchObject({ code: "BOOKMAKER_NOT_CONNECTED" });
   });
 
-  it("leaves the bookmakers that do answer us alone", async () => {
-    const { getAdapter } = await import("@/lib/bookmakers/registry");
-    const sporty = getAdapter("sportybet");
+  // Code detection is a pure function, so a pasted code is still recognised and named - which is
+  // how the user gets told which bookmaker it belongs to and why it cannot be used.
+  it("still recognises the code format it cannot serve", () => {
+    const a = refused();
+    expect(a.name).toBe("SportyBet");
+    expect(a.normalizeCode("abc123")).toBeTruthy();
+  });
 
+  it("keeps reading fixtures when only booking is refused", async () => {
+    // The 1xBet platform shape: it serves its feed perfectly and only declines to book, and that
+    // reading is what lets a slip be priced against it.
+    const pricing = refusedByBookmaker(createAdapter("1xbet", "live"), REASON, true);
+    expect(pricing.capabilities.events).toBe(true);
+    await expect(pricing.loadCode("ABC123")).rejects.toMatchObject({ code: "BOOKMAKER_NOT_CONNECTED" });
+  });
+
+  it("leaves the bookmakers that do answer us alone", () => {
+    const sporty = createAdapter("sportybet", "live");
     expect(sporty.capabilities.loadCode).toBe(true);
     expect(sporty.capabilities.createCode).toBe(true);
   });
 
-  // Code detection is a pure function, so a pasted MSport code is still recognised and named -
-  // which is how the user gets told which bookmaker it belongs to and why it cannot be used.
-  it("still recognises the code format it cannot serve", async () => {
-    const { getAdapter } = await import("@/lib/bookmakers/registry");
-    expect(getAdapter("msport").name).toBe("MSport");
-    expect(getAdapter("msport").slug).toBe("msport");
+  // Empty is the healthy state, and the one we are in. A bookmaker listed here is one we have
+  // measured as refusing us, not one we have assumed is.
+  it("lists only bookmakers measured as refusing us", () => {
+    expect(Object.keys(REFUSED_BY_BOOKMAKER)).toEqual([]);
+    // The four that are built but cannot book belong in the other map, with a different message.
+    expect(Object.keys(AWAITING_SETUP).sort()).toEqual(["1xbet", "22bet", "betwinner", "paripesa"]);
   });
 });
