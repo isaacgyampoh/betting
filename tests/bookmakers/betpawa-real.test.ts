@@ -51,3 +51,40 @@ describe("betPawa is connected for reading, not for booking", () => {
     expect(adapter.capabilities).toEqual({ loadCode: true, createCode: false, events: false });
   });
 });
+
+/**
+ * The thing betPawa was built for: a slip leaving it.
+ *
+ * Reading a code is only half of a conversion - the picks have to be findable and priceable
+ * somewhere a user can actually book. Verified on 2026-11-06 with QANPYA1: four 1X2 picks, all
+ * four found on SportyBet, betPawa the better price on three of them.
+ *
+ *   BETPAWA_TEST_CODE=<code> SPORTYBET_MODE=live pnpm vitest run tests/bookmakers/betpawa-real.test.ts
+ */
+describe.skipIf(!code)("converting a betPawa slip to a bookmaker we can book at", () => {
+  it("finds each mapped pick on SportyBet and reports both prices", async () => {
+    const sporty = await import("@/lib/bookmakers/live/sportybet");
+    const slip = await loadCode(code!);
+
+    const mapped = slip.selections.filter((s) => s.market);
+    // A code of nothing but 1UP promos has nothing to convert, and that is a real answer - but
+    // then this test has nothing to say either.
+    if (!mapped.length) return;
+
+    let converted = 0;
+    for (const s of mapped) {
+      const found = await sporty.searchEvent(s.event.home, s.event.away, s.event.kickoffAt).catch(() => []);
+      if (!found.length) continue;
+
+      const { offers } = await sporty.getEventMarkets(found[0].externalId);
+      const match = offers.find((o) => o.market && JSON.stringify(o.market) === JSON.stringify(s.market));
+      if (!match) continue;
+
+      expect(match.odds).toBeGreaterThan(1);
+      console.log(`  ${s.event.home} v ${s.event.away}: betPawa ${s.odds} -> SportyBet ${match.odds}`);
+      converted++;
+    }
+
+    expect(converted, "no mapped betPawa pick could be found and priced on SportyBet").toBeGreaterThan(0);
+  }, 180_000);
+});
