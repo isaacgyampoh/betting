@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { choose } from "@/lib/services/special-picks";
+import { choose, combinedOdds, SPECIAL_BAND, SPECIAL_IDEAL, SPECIAL_LEGS } from "@/lib/services/special-picks";
 
 /**
- * Which two go up.
+ * Which matches go on the day's slip.
  *
- * The brief is specific here and the rules pull against each other: publish the two strongest, but
- * never two correlated outcomes from the same match, and never manufacture a second to fill the
- * quota. So strength is not the only input - a slightly weaker candidate on another fixture beats
- * a stronger one on the same.
+ * The slip is the product, so the combination is what is chosen - not the best legs, which is how
+ * a day's research once went out as 1.08 and 1.23, each defensible alone and together worth 1.33.
+ * The rules pull against each other: land near 2.00, never put two lines from one match on the
+ * same accumulator, and never add a leg just to reach the target.
  */
-const cand = (id: string, kind: string, rating: number, odds = 1.9, probability = 0.7) =>
+const cand = (id: string, kind: string, rating: number, odds: number, probability = 0.8) =>
   ({
     candidate: {
-      event: { externalId: id, home: "H", away: "A", kickoffAt: new Date(), competition: null, country: null, status: "NOT_STARTED" },
+      event: { externalId: id, home: `H${id}`, away: `A${id}`, kickoffAt: new Date(), competition: null, country: null, status: "NOT_STARTED" },
       bookmaker: "sportybet",
       market: { kind, side: "MATCH", period: "FT" },
       rawMarketName: "x",
@@ -20,110 +20,119 @@ const cand = (id: string, kind: string, rating: number, odds = 1.9, probability 
       outcome: "OVER",
       odds,
     },
-    statsFixtureId: 1,
+    statsFixtureId: Number(id.replace(/\D/g, "")) || 1,
     rating,
     confidence: "medium",
     probability,
     reason: "",
-    evidence: {},
+    evidence: { sample: 8 },
   }) as unknown as Parameters<typeof choose>[0][number];
 
-describe("choosing the day's selections", () => {
-  it("publishes the two strongest when they are different matches", () => {
-    const got = choose([cand("m1", "CORNERS", 70), cand("m2", "SHOTS", 65), cand("m3", "CORNERS", 60)]);
-    expect(got.map((c) => c.candidate.event.externalId)).toEqual(["m1", "m2"]);
-  });
+const total = (picks: ReturnType<typeof choose>) => picks.reduce((t, p) => t * p.candidate.odds, 1);
 
-  // The correlation rule. Two corner lines on one game are nearly one bet.
-  it("never takes two selections from the same match", () => {
-    const got = choose([cand("m1", "CORNERS", 80), cand("m1", "SHOTS", 79), cand("m2", "CORNERS", 50)]);
+describe("building the day's slip", () => {
+  it("combines two matches whose prices land on the target", () => {
+    const got = choose([cand("m1", "CORNERS", 80, 1.45), cand("m2", "SHOTS", 75, 1.4)]);
+
     expect(got).toHaveLength(2);
-    expect(got[1].candidate.event.externalId).toBe("m2");
+    expect(total(got)).toBeCloseTo(2.03, 5);
   });
 
-  it("prefers a different statistic for the second selection", () => {
-    // m2 rates higher than m3 but repeats the first pick's market; m3 is taken instead.
-    const got = choose([cand("m1", "CORNERS", 80), cand("m2", "CORNERS", 70), cand("m3", "SHOTS", 68)]);
-    expect(got.map((c) => c.candidate.market.kind)).toEqual(["CORNERS", "SHOTS"]);
-  });
-
-  it("falls back to the same statistic rather than publishing one, when that is all there is", () => {
-    const got = choose([cand("m1", "CORNERS", 80), cand("m2", "CORNERS", 70)]);
-    expect(got).toHaveLength(2);
-    expect(got[1].candidate.event.externalId).toBe("m2");
-  });
-
-  // Nothing is invented to reach two.
-  it("publishes one when only one qualifies, and it is long enough on its own", () => {
-    expect(choose([cand("m1", "CORNERS", 80, 2.4)])).toHaveLength(1);
-  });
-
-  it("publishes nothing when the only candidate is too short to reach the target alone", () => {
-    expect(choose([cand("m1", "CORNERS", 80, 1.9)])).toEqual([]);
-  });
-
-  it("publishes one when every other candidate is the same match", () => {
+  it("takes three when three are what reaches the target", () => {
+    // No pair gets there: 1.27 x 1.27 is 1.61. All three make 2.05.
     const got = choose([
-      cand("m1", "CORNERS", 80, 2.4),
-      cand("m1", "SHOTS", 75, 2.4),
-      cand("m1", "SHOTS_ON_TARGET", 70, 2.4),
+      cand("m1", "CORNERS", 80, 1.27),
+      cand("m2", "SHOTS", 79, 1.27),
+      cand("m3", "SHOTS_ON_TARGET", 78, 1.27),
     ]);
-    expect(got).toHaveLength(1);
+
+    expect(got).toHaveLength(3);
+    expect(total(got)).toBeGreaterThanOrEqual(SPECIAL_BAND.min);
   });
 
-  it("publishes nothing when nothing qualifies", () => {
-    expect(choose([])).toEqual([]);
+  it("never puts more than three on a slip", () => {
+    const got = choose([
+      cand("m1", "CORNERS", 80, 1.2),
+      cand("m2", "SHOTS", 79, 1.2),
+      cand("m3", "SHOTS_ON_TARGET", 78, 1.2),
+      cand("m4", "CORNERS", 77, 1.2),
+      cand("m5", "SHOTS", 76, 1.2),
+    ]);
+    expect(got.length).toBeLessThanOrEqual(SPECIAL_LEGS.max);
+  });
+
+  // Nothing is added to reach the target, and nothing short of it is published.
+  it("publishes nothing when no combination reaches the target", () => {
+    const got = choose([cand("m1", "CORNERS", 90, 1.2), cand("m2", "SHOTS", 89, 1.2)]);
+    expect(got).toEqual([]);
+  });
+
+  it("publishes nothing when every combination overshoots the band", () => {
+    const got = choose([cand("m1", "CORNERS", 90, 1.9), cand("m2", "SHOTS", 89, 1.9)]);
+    expect(got).toEqual([]);
+    expect(1.9 * 1.9).toBeGreaterThan(SPECIAL_BAND.max);
+  });
+
+  it("never publishes a single selection, however long its price", () => {
+    expect(choose([cand("m1", "CORNERS", 95, 2.0)])).toEqual([]);
+  });
+
+  // Two lines on one match are nearly one bet, and an accumulator whose legs cannot fail
+  // independently is not an accumulator.
+  it("never puts two selections from the same match on the slip", () => {
+    const got = choose([cand("m1", "CORNERS", 90, 1.45), cand("m1", "SHOTS", 89, 1.4), cand("m2", "CORNERS", 50, 1.4)]);
+
+    expect(new Set(got.map((c) => c.candidate.event.externalId)).size).toBe(got.length);
   });
 });
 
-/**
- * Two odds, meaning what it already means elsewhere in this codebase: the slip must *reach* 2.00,
- * and among the ways of reaching it the best chance wins.
- *
- * This is the rule the first four days did not have. Each selection was ranked on its own merits,
- * so the day published 1.08 and 1.23 - both defensible alone, together worth 1.33 for a day of
- * research.
- */
-describe("reaching two odds", () => {
-  it("refuses a pair that does not reach the target", () => {
-    // 1.3 x 1.4 = 1.82, and neither is long enough by itself.
-    expect(choose([cand("m1", "CORNERS", 90, 1.3), cand("m2", "SHOTS", 85, 1.4)])).toEqual([]);
-  });
-
-  it("takes a pair that reaches it over two higher-rated selections that do not", () => {
+describe("choosing between the combinations that reach it", () => {
+  it("prefers the one most likely to come in", () => {
     const got = choose([
-      cand("m1", "CORNERS", 95, 1.08),
-      cand("m2", "SHOTS", 94, 1.23),
-      cand("m3", "CORNERS", 60, 1.45),
-      cand("m4", "SHOTS", 59, 1.5),
+      cand("m1", "CORNERS", 60, 1.45, 0.9),
+      cand("m2", "SHOTS", 59, 1.4, 0.9),
+      cand("m3", "CORNERS", 95, 1.45, 0.7),
+      cand("m4", "SHOTS", 94, 1.4, 0.7),
     ]);
-    expect(got.map((c) => c.candidate.event.externalId)).toEqual(["m3", "m4"]);
-    expect(got[0].candidate.odds * got[1].candidate.odds).toBeGreaterThanOrEqual(2);
+
+    // m3 and m4 rate highest. m1 and m2 are likelier, and the slip is a bet, not a ranking.
+    expect(got.map((c) => c.candidate.event.externalId).sort()).toEqual(["m1", "m2"]);
   });
 
-  it("prefers the best combined chance among the pairs that reach it", () => {
+  it("prefers landing inside 1.99-2.01 over merely inside the band", () => {
     const got = choose([
-      cand("m1", "CORNERS", 80, 2.0, 0.6),
-      cand("m2", "SHOTS", 70, 2.0, 0.85),
-      cand("m3", "SHOTS", 75, 2.0, 0.8),
+      cand("m1", "CORNERS", 80, 1.42),
+      cand("m2", "SHOTS", 79, 1.41),
+      cand("m3", "CORNERS", 78, 1.4),
+      cand("m4", "SHOTS", 77, 1.5),
     ]);
-    // m2 and m3 together are 0.68; either with m1 is less, despite m1 rating highest.
-    expect(got.map((c) => c.candidate.event.externalId).sort()).toEqual(["m2", "m3"]);
+
+    const t = total(got);
+    expect(t).toBeGreaterThanOrEqual(SPECIAL_IDEAL.min);
+    expect(t).toBeLessThanOrEqual(SPECIAL_IDEAL.max);
   });
 
-  it("breaks a tie by landing closest to the target rather than padding it with price", () => {
+  it("keeps every published slip inside the band", () => {
     const got = choose([
-      cand("m1", "CORNERS", 80, 1.45, 0.8),
-      cand("m2", "SHOTS", 79, 1.45, 0.8),
-      cand("m3", "SHOTS", 78, 4.0, 0.8),
+      cand("m1", "CORNERS", 80, 1.33),
+      cand("m2", "SHOTS", 79, 1.5),
+      cand("m3", "SHOTS_ON_TARGET", 78, 1.45),
+      cand("m4", "CORNERS", 77, 1.2),
     ]);
-    // 1.45 x 1.45 = 2.1025, against 1.45 x 4.0 = 5.8 for the same chance.
-    const total = got[0].candidate.odds * got[1].candidate.odds;
-    expect(total).toBeCloseTo(2.1025, 5);
+
+    expect(got.length).toBeGreaterThanOrEqual(SPECIAL_LEGS.min);
+    expect(total(got)).toBeGreaterThanOrEqual(SPECIAL_BAND.min);
+    expect(total(got)).toBeLessThanOrEqual(SPECIAL_BAND.max);
+  });
+});
+
+describe("the combined price", () => {
+  it("is the legs multiplied, not added", () => {
+    expect(combinedOdds([1.45, 1.4])).toBe(2.03);
+    expect(combinedOdds([1.27, 1.27, 1.27])).toBe(2.048);
   });
 
-  it("still never pairs two selections from the same match to reach it", () => {
-    const got = choose([cand("m1", "CORNERS", 90, 1.5), cand("m1", "SHOTS", 89, 1.5), cand("m2", "CORNERS", 50, 1.4)]);
-    expect(new Set(got.map((c) => c.candidate.event.externalId)).size).toBe(got.length);
+  it("is one for an empty slip, so a missing leg cannot read as a price", () => {
+    expect(combinedOdds([])).toBe(1);
   });
 });

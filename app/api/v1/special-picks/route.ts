@@ -33,7 +33,7 @@ export const GET = route(async (req: Request) => {
     // Kept alongside `today` on purpose: a release build of the Android app is already in people's
     // hands reading this field, and it updates when somebody installs a new one, not when this
     // deploys. Removable once no shipped client reads it.
-    picks: today?.picks ?? [],
+    picks: today?.legs ?? [],
     performance,
     ...(history ? { history } : {}),
   });

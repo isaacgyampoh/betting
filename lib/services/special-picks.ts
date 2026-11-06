@@ -59,6 +59,29 @@ async function priceSource() {
   return null;
 }
 
+/**
+ * The public name of a slip.
+ *
+ * Derived from the date rather than random, so it is stable if a slip is ever rebuilt and so a
+ * share link from a screenshot is still resolvable. Short enough to read aloud.
+ */
+export function slipReference(date: string): string {
+  return `GC${date.slice(2).replace(/-/g, "")}`;
+}
+
+/** The research in a sentence, for the top of the slip and the share image. */
+function summarise(picks: readonly Assessed[], total: number): string {
+  const markets = [...new Set(picks.map((p) => marketLabel(p.candidate.market).toLowerCase()))];
+  const sample = Math.min(...picks.map((p) => Number((p.evidence as { sample?: number }).sample ?? 0)));
+  const list = markets.length === 1 ? markets[0] : `${markets.slice(0, -1).join(", ")} and ${markets.at(-1)}`;
+
+  return (
+    `${picks.length} selections at ${total.toFixed(2)}, on ${list}. ` +
+    `Each one is drawn from at least ${sample} recent matches for the sides involved, and was ` +
+    `priced above our own estimate of its chance at the time of publishing.`
+  );
+}
+
 export type SpecialResult = {
   date: string;
   published: number;
@@ -82,8 +105,8 @@ export async function generateSpecialPicks(now = new Date(), threshold: Threshol
 
   // Idempotent by construction: the unique indexes make a duplicate publish impossible, and
   // checking first means a rerun is cheap rather than merely safe.
-  const already = await db.specialPick.count({ where: { forDate: new Date(date) } });
-  if (already >= 2) return { date, published: 0, skipped: ["Today's selections are already published."] };
+  const already = await db.specialSlip.count({ where: { forDate: new Date(date) } });
+  if (already) return { date, published: 0, skipped: ["Today's slip is already published."] };
 
   const source = await priceSource();
   if (!source) {
@@ -171,7 +194,37 @@ export async function generateSpecialPicks(now = new Date(), threshold: Threshol
   }
 
   const chosen = choose(assessed);
-  if (chosen.length < 2) skipped.push("Only one selection met the threshold today, so only one was published.");
+  if (!chosen.length) {
+    return {
+      date,
+      published: 0,
+      skipped: [
+        `No combination of today's ${assessed.length} qualifying selections landed between ` +
+          `${SPECIAL_BAND.min} and ${SPECIAL_BAND.max}, so no slip was published.`,
+      ],
+    };
+  }
+
+  const total = combinedOdds(chosen.map((c) => c.candidate.odds));
+
+  // The slip first, then its legs. A leg with no slip is not a product, and the day's unique index
+  // on the slip is what makes a concurrent rerun lose cleanly rather than publish a second one.
+  let slip;
+  try {
+    slip = await db.specialSlip.create({
+      data: {
+        forDate: new Date(date),
+        reference: slipReference(date),
+        combinedOdds: total,
+        target: SPECIAL_TARGET,
+        summary: summarise(chosen, total),
+        lastVerifiedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    logger.info("special.slip_exists", { date, err: String(err) });
+    return { date, published: 0, skipped: ["Today's slip is already published."] };
+  }
 
   let published = 0;
   for (const [i, pick] of chosen.entries()) {
@@ -179,6 +232,7 @@ export async function generateSpecialPicks(now = new Date(), threshold: Threshol
     try {
       await db.specialPick.create({
         data: {
+          slipId: slip.id,
           forDate: new Date(date),
           position: i + 1,
           statsFixtureId: pick.statsFixtureId,
@@ -213,78 +267,92 @@ export async function generateSpecialPicks(now = new Date(), threshold: Threshol
     }
   }
 
-  logger.info("special.published", { date, published, considered: assessed.length });
+  logger.info("special.published", { date, published, combinedOdds: total, considered: assessed.length });
   return { date, published, skipped };
 }
 
 /**
- * What the day's selections have to be worth together.
+ * What the day's slip has to be worth, and how close it has to get.
  *
- * Two odds, which in this codebase already means a definite thing: `buildTargetSlip` requires a
- * slip to *reach* its target and then prefers the combination that gets there with the best chance,
- * breaking ties by landing closest. Special picks follow the same rule so that "2 odds" means the
- * same on both pages.
+ * Two odds, meaning the accumulator and not the legs. `IDEAL` is what the search aims at and
+ * `BAND` is what it will accept when nothing lands on the nose - a slip at 1.93 built from strong
+ * research is worth more than a contrived 2.00, and a slip at 2.60 is not the product that was
+ * asked for however good its legs are.
  *
- * This replaces ranking the two selections independently, which is how the first four days
- * published 1.08 and 1.23 - each defensible alone, and together worth 1.33 for a day's research.
+ * Nothing is ever added to reach the band. A combination that does not reach it is not published,
+ * which is why the band has a floor as well as a ceiling.
  */
 export const SPECIAL_TARGET = 2;
+export const SPECIAL_IDEAL = { min: 1.99, max: 2.01 } as const;
+export const SPECIAL_BAND = { min: 1.9, max: 2.1 } as const;
+
+/** Legs on a slip. Two or three, never one, never four. */
+export const SPECIAL_LEGS = { min: 2, max: 3 } as const;
 
 /**
- * The day's selections, as a pair that reaches the target.
+ * The day's slip: the combination whose odds land in the band with the best chance of coming in.
  *
- * The two are chosen as one slip rather than as the two best singles, because the target is a
- * property of the pair. From the pairs that reach it:
+ * Every combination of two and three candidates is considered, because the target is a property
+ * of the combination and ranking legs independently is what published 1.08 and 1.23 as a day's
+ * work. Within the band:
  *
- *   * different matches always - two lines on one game are nearly the same bet, and the brief
- *     forbids filling the quota with correlated outcomes;
- *   * then the best combined chance, because reaching 2.00 is the requirement and the chance of
- *     actually getting there is what distinguishes one way of doing it from another;
- *   * then a different statistic where that is a free choice between equals;
- *   * then closest to the target, so the slip is not padded with price for its own sake.
+ *   * different matches always - two lines on one game are nearly one bet, and a slip is only an
+ *     accumulator if its legs can fail independently;
+ *   * then the best combined chance, which is what actually distinguishes two ways of reaching
+ *     2.00;
+ *   * then landing inside the ideal 1.99-2.01 rather than merely inside the band;
+ *   * then fewer legs, because every extra leg is another way to lose;
+ *   * then a varied set of statistics, as a tie-break between equals.
  *
- * Nothing is manufactured to reach two. A single selection is published when it reaches the target
- * on its own and no pair does; otherwise nothing is, which is a normal day.
+ * Returns an empty array when nothing qualifies, which is a normal day and not a failure.
  */
-export function choose(assessed: readonly Assessed[], target = SPECIAL_TARGET): Assessed[] {
+export function choose(assessed: readonly Assessed[]): Assessed[] {
   const ranked = [...assessed].sort((a, b) => b.rating - a.rating);
 
-  type Pair = { picks: Assessed[]; total: number; probability: number; varied: boolean };
-  let best: Pair | null = null;
+  type Combination = { picks: Assessed[]; total: number; probability: number; ideal: boolean; varied: number };
+  let best: Combination | null = null;
 
-  // Chance first, then variety, then closeness. Variety is a preference and the combined chance is
-  // the slip's actual quality, so a genuinely likelier pair is not passed over to put two different
-  // statistics on the page - the correlation rule that matters is "different matches", and that is
-  // a hard filter above.
-  const better = (a: Pair, b: Pair | null) => {
+  const better = (a: Combination, b: Combination | null) => {
     if (!b) return true;
     if (Math.abs(a.probability - b.probability) > 1e-9) return a.probability > b.probability;
-    if (a.varied !== b.varied) return a.varied;
-    return a.total < b.total - 1e-9;
+    if (a.ideal !== b.ideal) return a.ideal;
+    if (a.picks.length !== b.picks.length) return a.picks.length < b.picks.length;
+    if (a.varied !== b.varied) return a.varied > b.varied;
+    return Math.abs(a.total - SPECIAL_TARGET) < Math.abs(b.total - SPECIAL_TARGET) - 1e-9;
   };
 
+  const consider = (picks: Assessed[]) => {
+    const fixtures = new Set(picks.map((c) => c.candidate.event.externalId));
+    if (fixtures.size !== picks.length) return;
+
+    const total = picks.reduce((t, c) => t * c.candidate.odds, 1);
+    if (total < SPECIAL_BAND.min - 1e-9 || total > SPECIAL_BAND.max + 1e-9) return;
+
+    const combination: Combination = {
+      picks,
+      total,
+      probability: picks.reduce((t, c) => t * c.probability, 1),
+      ideal: total >= SPECIAL_IDEAL.min - 1e-9 && total <= SPECIAL_IDEAL.max + 1e-9,
+      varied: new Set(picks.map((c) => c.candidate.market.kind)).size,
+    };
+    if (better(combination, best)) best = combination;
+  };
+
+  // Deliberately exhaustive over a shortlist that is already small - a day's qualifying candidates
+  // number in the tens, and three nested loops over that is nothing next to one provider call.
   for (let i = 0; i < ranked.length; i++) {
     for (let j = i + 1; j < ranked.length; j++) {
-      const [x, y] = [ranked[i], ranked[j]];
-      if (x.candidate.event.externalId === y.candidate.event.externalId) continue;
-
-      const total = x.candidate.odds * y.candidate.odds;
-      if (total < target - 1e-9) continue;
-
-      const pair: Pair = {
-        picks: [x, y],
-        total,
-        probability: x.probability * y.probability,
-        varied: x.candidate.market.kind !== y.candidate.market.kind,
-      };
-      if (better(pair, best)) best = pair;
+      consider([ranked[i], ranked[j]]);
+      for (let k = j + 1; k < ranked.length; k++) consider([ranked[i], ranked[j], ranked[k]]);
     }
   }
-  if (best) return best.picks;
 
-  // No pair reaches it. One selection can, if it is long enough by itself.
-  const single = ranked.filter((c) => c.candidate.odds >= target - 1e-9);
-  return single.length ? [single[0]] : [];
+  return best ? (best as Combination).picks : [];
+}
+
+/** The combined price of a set of legs, rounded the way it is stored and displayed. */
+export function combinedOdds(odds: readonly number[]): number {
+  return Math.round(odds.reduce((t, o) => t * o, 1) * 1000) / 1000;
 }
 
 export type PublishedSpecialPick = {
@@ -321,7 +389,7 @@ export async function listSpecialPicks(date = ghanaDate()): Promise<PublishedSpe
   return rows.map(toView);
 }
 
-export type SpecialPickDay = { date: string; slip: SpecialSlip; picks: PublishedSpecialPick[] };
+export type SpecialPickDay = SpecialSlipView;
 
 /**
  * Every day that has been published, newest first.
@@ -334,20 +402,47 @@ export async function listSpecialHistory(days = 60): Promise<SpecialPickDay[]> {
   const remote = await readViaApi<{ history: SpecialPickDay[] }>("/special-picks?history=1");
   if (remote?.history) return remote.history;
 
-  const rows = await db.specialPick.findMany({
-    orderBy: [{ forDate: "desc" }, { position: "asc" }],
-    // Two a day, so this is `days` days of history with room for a day that published once.
-    take: days * 2,
+  const rows = await db.specialSlip.findMany({
+    orderBy: { forDate: "desc" },
+    take: days,
+    include: { picks: { orderBy: { position: "asc" } } },
   });
+  return rows.map(toSlipView);
+}
 
-  const byDate = new Map<string, PublishedSpecialPick[]>();
-  for (const r of rows) {
-    const key = r.forDate.toISOString().slice(0, 10);
-    const list = byDate.get(key) ?? [];
-    list.push(toView(r));
-    byDate.set(key, list);
-  }
-  return [...byDate.entries()].map(([date, picks]) => ({ date, slip: slipFor(picks), picks }));
+type SlipRow = Awaited<ReturnType<typeof db.specialSlip.findMany<{ include: { picks: true } }>>>[number];
+
+function toSlipView(row: SlipRow): SpecialSlipView {
+  const legs = [...row.picks].sort((a, b) => a.position - b.position).map(toView);
+  // The price now, as opposed to the price it was published at. Null the moment any leg stops
+  // being priced, because a partial total would read as the slip's and be wrong.
+  const latest = legs.map((l) => l.price.odds);
+  const currentOdds = latest.every((o) => o !== null) ? combinedOdds(latest as number[]) : null;
+
+  return {
+    reference: row.reference,
+    date: row.forDate.toISOString().slice(0, 10),
+    combinedOdds: Number(row.combinedOdds),
+    currentOdds,
+    target: Number(row.target),
+    summary: row.summary,
+    status: row.status,
+    publishedAt: row.publishedAt.toISOString(),
+    lastVerifiedAt: row.lastVerifiedAt?.toISOString() ?? null,
+    legs,
+  };
+}
+
+/** One published slip by its public reference, for the share page. Null when there is no such slip. */
+export async function specialSlipByReference(reference: string): Promise<SpecialSlipView | null> {
+  const remote = await readViaApi<{ slip: SpecialSlipView | null }>(`/special-picks/${encodeURIComponent(reference)}`);
+  if (remote) return remote.slip;
+
+  const row = await db.specialSlip.findUnique({
+    where: { reference },
+    include: { picks: { orderBy: { position: "asc" } } },
+  });
+  return row ? toSlipView(row) : null;
 }
 
 type SpecialPickRow = Awaited<ReturnType<typeof db.specialPick.findMany>>[number];
@@ -387,12 +482,21 @@ function toView(r: SpecialPickRow): PublishedSpecialPick {
 /** How a day's selections settle, once they are treated as one slip. */
 export type SlipStatus = "PENDING" | "WON" | "LOST" | "VOID";
 
-export type SpecialSlip = {
-  /** Null while any leg is unsettled, or when a leg was published without a price. */
-  combinedOdds: number | null;
-  status: SlipStatus;
-  /** What the target was on the day, so an old slip is not judged against a newer rule. */
+export type SpecialSlipView = {
+  /** Short, public, URL-safe: what a share link and a share image are keyed on. */
+  reference: string;
+  date: string;
+  /** The price the slip was published at, from the legs' published prices. */
+  combinedOdds: number;
+  /** The combined price as it stands now, if every leg still prices. Null when a leg no longer does. */
+  currentOdds: number | null;
   target: number;
+  summary: string;
+  status: SlipStatus;
+  publishedAt: string;
+  /** When the legs were last checked against the bookmaker. A morning price is not a price now. */
+  lastVerifiedAt: string | null;
+  legs: PublishedSpecialPick[];
 };
 
 /**
@@ -410,7 +514,7 @@ const oddsOf = (p: Settleable): number | null => {
   return raw === null || raw === undefined ? null : Number(raw);
 };
 
-export function slipFor(picks: readonly Settleable[], target = SPECIAL_TARGET): SpecialSlip {
+export function slipFor(picks: readonly Settleable[], target = SPECIAL_TARGET): { combinedOdds: number | null; status: SlipStatus; target: number } {
   if (!picks.length) return { combinedOdds: null, status: "VOID", target };
   if (picks.some((p) => p.status === "PENDING")) return { combinedOdds: null, status: "PENDING", target };
 
@@ -423,10 +527,17 @@ export function slipFor(picks: readonly Settleable[], target = SPECIAL_TARGET): 
   return { combinedOdds, status: live.every((p) => p.status === "WON") ? "WON" : "LOST", target };
 }
 
-/** Today's selections as the slip they are. Null on a day nothing was published. */
-export async function specialToday(date = ghanaDate()): Promise<SpecialPickDay | null> {
-  const picks = await listSpecialPicks(date);
-  return picks.length ? { date, slip: slipFor(picks), picks } : null;
+/** Today's slip. Null on a day nothing was published, which is a normal day. */
+export async function specialToday(date = ghanaDate()): Promise<SpecialSlipView | null> {
+  if (date === ghanaDate()) {
+    const remote = await readViaApi<{ today: SpecialSlipView | null }>("/special-picks");
+    if (remote) return remote.today;
+  }
+  const row = await db.specialSlip.findUnique({
+    where: { forDate: new Date(date) },
+    include: { picks: { orderBy: { position: "asc" } } },
+  });
+  return row ? toSlipView(row) : null;
 }
 
 export type SpecialPerformance = {
@@ -470,17 +581,12 @@ export async function specialPerformance(): Promise<SpecialPerformance> {
   const remote = await readViaApi<{ performance: SpecialPerformance }>("/special-picks");
   if (remote?.performance) return remote.performance;
 
-  const rows = await db.specialPick.findMany({
-    select: { forDate: true, status: true, odds: true, marketKind: true },
-  });
-
-  // Grouped by day, because the day is the bet. Two selections published together are one slip
-  // staked once, so counting them as two independent wins would describe a product nobody has.
-  const byDay = new Map<string, typeof rows>();
-  for (const r of rows) {
-    const key = r.forDate.toISOString().slice(0, 10);
-    byDay.set(key, [...(byDay.get(key) ?? []), r]);
-  }
+  // The slip is the bet, so the record counts slips. The legs are read alongside for the detail
+  // underneath, because a slip hides which leg was wrong.
+  const [slips, rows] = await Promise.all([
+    db.specialSlip.findMany({ select: { status: true, combinedOdds: true, picks: { select: { status: true, odds: true } } } }),
+    db.specialPick.findMany({ select: { status: true, marketKind: true } }),
+  ]);
 
   let won = 0;
   let lost = 0;
@@ -490,8 +596,7 @@ export async function specialPerformance(): Promise<SpecialPerformance> {
   let stakedUnits = 0;
   let unpriced = 0;
 
-  for (const picks of byDay.values()) {
-    const slip = slipFor(picks);
+  for (const slip of slips) {
     if (slip.status === "PENDING") {
       pending++;
       continue;
@@ -503,12 +608,16 @@ export async function specialPerformance(): Promise<SpecialPerformance> {
     if (slip.status === "WON") won++;
     else lost++;
 
-    if (slip.combinedOdds === null) {
+    // Settled at the price the surviving legs were published at. A void leg drops out, so the
+    // stored combined price is not always the one that pays.
+    const live = slip.picks.filter((p) => p.status !== "VOID");
+    const priced = live.length > 0 && live.every((p) => p.odds !== null);
+    if (!priced) {
       unpriced++;
       continue;
     }
     stakedUnits += 1;
-    profitUnits += slip.status === "WON" ? slip.combinedOdds - 1 : -1;
+    profitUnits += slip.status === "WON" ? combinedOdds(live.map((p) => Number(p.odds))) - 1 : -1;
   }
 
   const settled = won + lost;
@@ -523,7 +632,7 @@ export async function specialPerformance(): Promise<SpecialPerformance> {
   });
 
   return {
-    total: byDay.size,
+    total: slips.length,
     won,
     lost,
     void: voided,

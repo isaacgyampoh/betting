@@ -46,6 +46,7 @@ async function subscriber(email: string) {
 
 beforeEach(async () => {
   await db.notificationDelivery.deleteMany({ where: { eventKey: KEY } });
+  await db.specialSlip.deleteMany({}); // cascades to its legs
   await db.specialPick.deleteMany({});
   await db.pushSubscription.deleteMany({ where: { endpoint: { startsWith: "https://push.example/" } } });
   await db.profile.deleteMany({ where: { email: { endsWith: "@notify.test" } } });

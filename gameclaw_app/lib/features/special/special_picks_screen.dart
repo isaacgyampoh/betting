@@ -8,18 +8,15 @@ import '../../domain/models.dart';
 import '../../theme/palette.dart';
 import '../../theme/tokens.dart';
 import '../../ui/components/gc_button.dart';
+import '../../ui/components/gc_special_slip_card.dart';
 import '../../ui/components/gc_skeleton.dart';
-import '../../ui/components/gc_special_pick_card.dart';
 import '../../ui/components/gc_states.dart';
 
-/// Daily Special Picks: up to two researched selections a day in statistical markets.
+/// The Daily Special Slip: one researched accumulator a day.
 ///
-/// Separate from the slip record because it is a different kind of bet settled a different way -
-/// one selection graded from the match statistics, rather than an accumulator graded from the
-/// score. Averaging the two records together would describe neither.
-///
-/// Nothing here is hidden behind a plan or a sign-in. The selections are a published claim and the
-/// record under them is the evidence for it.
+/// One publication, not a stack of cards. The legs are rows inside a single panel because they are
+/// one bet - an accumulator shown as separate cards invites reading each as its own tip, which is
+/// what this replaced.
 class SpecialPicksScreen extends ConsumerWidget {
   const SpecialPicksScreen({super.key});
 
@@ -34,12 +31,7 @@ class SpecialPicksScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                GcSpace.sm,
-                GcSpace.sm,
-                GcSpace.gutter,
-                GcSpace.sm,
-              ),
+              padding: const EdgeInsets.fromLTRB(GcSpace.sm, GcSpace.sm, GcSpace.gutter, GcSpace.sm),
               child: Row(
                 children: [
                   GcIconButton(
@@ -49,7 +41,7 @@ class SpecialPicksScreen extends ConsumerWidget {
                     onPressed: () => context.canPop() ? context.pop() : context.go('/claw'),
                   ),
                   const SizedBox(width: GcSpace.xs),
-                  Expanded(child: Text('Special picks', style: GcType.display)),
+                  Expanded(child: Text('Special slip', style: GcType.display)),
                 ],
               ),
             ),
@@ -94,33 +86,26 @@ class _Body extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.xs, GcSpace.gutter, 0),
           child: Text(
-            'Two selections a day in statistical markets — corners, shots, shots on target — researched '
-            'from the teams’ recent matches, priced from a live bookmaker market and published together '
-            'as one ${view.target} odds slip. Both have to land. Some days nothing meets the threshold.',
+            'One researched accumulator a day: two or three matches in statistical markets — corners, '
+            'shots, shots on target — combined to about ${view.target}.00. Every leg has to land. Some '
+            'days no combination reaches the target.',
             style: GcType.body.copyWith(color: gc(context).inkMuted),
           ),
         ),
         const GcSectionHeader(title: 'Today'),
-        if (view.today != null && view.today!.slip.combinedOdds != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(GcSpace.gutter, 0, GcSpace.gutter, GcSpace.md),
-            child: _SlipLine(day: view.today!),
-          ),
-        if (view.picks.isEmpty)
+        if (view.today == null)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: GcSpace.gutter),
             child: GcNote(
-              'Nothing today. Either the research has not run yet, or nothing met the threshold — '
-              'which is a normal day, not a fault.',
+              'No slip today. Either the research has not run yet, or no combination reached the '
+              'target — which is a normal day, not a fault.',
               icon: Icons.inbox_outlined,
             ),
           )
         else
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: GcSpace.gutter),
-            child: Column(
-              children: [for (final pick in view.picks) GcSpecialPickCard(pick: pick)],
-            ),
+            child: GcSpecialSlipCard(slip: view.today!),
           ),
         const GcSectionHeader(title: 'The record'),
         Padding(
@@ -131,9 +116,8 @@ class _Body extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: GcSpace.gutter),
           child: GcNote(
-            'The estimate is ours, from the teams’ recent matches. It is not the bookmaker’s price '
-            'and it is not a guarantee. Prices move after publishing; the one shown is what was '
-            'verified when the selection went up.',
+            'Research, not a guarantee. The estimate beside each selection is ours, from the teams’ '
+            'recent matches; the odds are the bookmaker’s and move after publishing.',
             icon: Icons.info_outline_rounded,
           ),
         ),
@@ -143,38 +127,6 @@ class _Body extends StatelessWidget {
 }
 
 /// The published record. Losses counted, voids reported as voids, nothing excluded to improve it.
-/// The day's selections are one bet, so the page says what that bet is worth.
-class _SlipLine extends StatelessWidget {
-  const _SlipLine({required this.day});
-
-  final SpecialDay day;
-
-  @override
-  Widget build(BuildContext context) {
-    final odds = day.slip.combinedOdds!;
-    final colour = switch (day.slip.status) {
-      PickStatus.won => gc(context).win,
-      PickStatus.lost => gc(context).loss,
-      _ => gc(context).inkMuted,
-    };
-
-    return Row(
-      children: [
-        Text(odds.toStringAsFixed(2), style: GcType.figure.copyWith(fontSize: 18, color: colour)),
-        const SizedBox(width: GcSpace.sm),
-        Expanded(
-          child: Text(
-            day.picks.length == 1
-                ? 'the slip, on one selection'
-                : 'the slip, across ${day.picks.length} selections — both have to land',
-            style: GcType.caption,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _Record extends StatelessWidget {
   const _Record({required this.record});
 
@@ -184,8 +136,7 @@ class _Record extends StatelessWidget {
   Widget build(BuildContext context) {
     if (record.total == 0) {
       return const GcNote(
-        'No special picks have been published yet. This fills in automatically, wins and losses '
-        'alike.',
+        'No slips have been published yet. This fills in automatically, wins and losses alike.',
         icon: Icons.history_rounded,
       );
     }
@@ -244,8 +195,8 @@ class _Record extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'One unit staked on each settled slip returns '
-                    '${profit >= 0 ? '+' : ''}${profit.toStringAsFixed(2)} units '
-                    'across ${record.stakedUnits} priced.',
+                    '${profit >= 0 ? '+' : ''}${profit.toStringAsFixed(2)} units across '
+                    '${record.stakedUnits} priced.',
                     style: GcType.caption,
                   ),
                 ),
@@ -265,7 +216,7 @@ class _Record extends StatelessWidget {
         ],
         if (record.legs.settled > 0) ...[
           const SizedBox(height: GcSpace.md),
-          // A slip hides which half was wrong, so the legs are reported too.
+          // A slip hides which leg was wrong, so the legs are reported too.
           Text(
             'Underneath those slips: ${record.legs.total} selections, ${record.legs.won} landed and '
             '${record.legs.lost} did not'
@@ -273,50 +224,7 @@ class _Record extends StatelessWidget {
             style: GcType.caption,
           ),
         ],
-        if (record.byMarket.any((m) => m.settled > 0)) ...[
-          const SizedBox(height: GcSpace.lg),
-          for (final market in record.byMarket) _MarketRow(market: market),
-        ],
       ],
-    );
-  }
-}
-
-class _MarketRow extends StatelessWidget {
-  const _MarketRow({required this.market});
-
-  final SpecialMarketRecord market;
-
-  static const _labels = {
-    'CORNERS': 'Corners',
-    'SHOTS': 'Shots',
-    'SHOTS_ON_TARGET': 'Shots on target',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: GcSpace.sm),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(_labels[market.kind] ?? market.kind, style: GcType.body.copyWith(fontSize: 14)),
-          ),
-          Text(
-            '${market.won}/${market.settled} settled',
-            style: GcType.caption.copyWith(color: gc(context).inkFaint),
-          ),
-          const SizedBox(width: GcSpace.md),
-          SizedBox(
-            width: 44,
-            child: Text(
-              market.winRate == null ? '–' : '${(market.winRate! * 100).round()}%',
-              textAlign: TextAlign.right,
-              style: GcType.figureSm,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

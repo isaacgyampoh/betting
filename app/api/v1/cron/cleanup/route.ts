@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   // stats outage must not take the cleanup down with it.
   const special = await settleSpecialPicks().catch((err) => {
     logger.warn("cron.settle_special_failed", { err });
-    return { settled: 0, voided: 0, waiting: 0 };
+    return { settled: 0, voided: 0, waiting: 0, slips: 0 };
   });
   // Prices are re-read once a day, which is all two cron triggers afford. The published price is
   // never overwritten; a move is a new row in the history.

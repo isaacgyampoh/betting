@@ -348,7 +348,7 @@ class _ClawScreenState extends ConsumerState<ClawScreen> {
                     ),
                   GcIconButton(
                     icon: Icons.today_outlined,
-                    tooltip: 'Daily special picks',
+                    tooltip: 'Daily Special Slip',
                     onPressed: () => context.push('/claw/special'),
                   ),
                   if (chat.turns.isNotEmpty)
@@ -432,7 +432,7 @@ class _Intro extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final special = ref.watch(specialPicksProvider);
-    final published = special.hasValue ? special.value!.value.picks.length : 0;
+    final published = special.hasValue ? (special.value!.value.today?.legs.length ?? 0) : 0;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(GcSpace.gutter, GcSpace.xl, GcSpace.gutter, GcSpace.lg),
@@ -513,12 +513,12 @@ class _SpecialEntry extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Daily special picks', style: GcType.bodyStrong.copyWith(fontSize: 14)),
+                  Text('Daily Special Slip', style: GcType.bodyStrong.copyWith(fontSize: 14)),
                   const SizedBox(height: 2),
                   Text(
                     published == 0
-                        ? 'Corners, shots and shots on target, researched'
-                        : '$published today, with the research behind ${published == 1 ? 'it' : 'them'}',
+                        ? 'One researched accumulator, around 2 odds'
+                        : '$published matches today, combined into one slip',
                     style: GcType.caption.copyWith(color: gc(context).inkFaint),
                   ),
                 ],

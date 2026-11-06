@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { listSpecialHistory, listSpecialPicks, specialPerformance } from "@/lib/services/special-picks";
+import { listSpecialHistory, listSpecialPicks, specialPerformance, specialToday } from "@/lib/services/special-picks";
 import { ghanaDate } from "@/lib/services/daily-picks";
 
 /**
@@ -55,6 +55,7 @@ function stubApi(body: unknown, ok = true) {
 
 beforeEach(async () => {
   requested.length = 0;
+  await db.specialSlip.deleteMany({}); // cascades to its legs
   await db.specialPick.deleteMany({});
   vi.stubEnv("GC_DATA_API_BASE", API);
 });
@@ -123,8 +124,19 @@ describe("on Render, where the database is right there", () => {
   it("goes straight to Postgres and makes no request", async () => {
     stubApi({ picks: [remotePick], performance: { total: 99 } });
 
+    const slip = await db.specialSlip.create({
+      data: {
+        forDate: new Date(ghanaDate()),
+        reference: "GCLOCAL",
+        combinedOdds: 1.9,
+        target: 2,
+        summary: "From the database.",
+      },
+    });
+
     await db.specialPick.create({
       data: {
+        slipId: slip.id,
         forDate: new Date(ghanaDate()),
         position: 1,
         statsFixtureId: 777,
@@ -151,10 +163,11 @@ describe("on Render, where the database is right there", () => {
       },
     });
 
-    const picks = await listSpecialPicks();
+    const today = await specialToday();
     const record = await specialPerformance();
 
-    expect(picks[0].match.home).toBe("Local");
+    expect(today!.legs[0].match.home).toBe("Local");
+    expect(today!.reference).toBe("GCLOCAL");
     expect(record.total).toBe(1);
     expect(requested).toEqual([]);
   });

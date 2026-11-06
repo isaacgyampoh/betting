@@ -106,6 +106,8 @@ const PROXIED: ReadonlyArray<{ path: RegExp; methods: readonly string[] }> = [
   // Daily Special Picks. Public for the same reason the accumulator picks are: the selections are
   // a published claim and the record beside them is the evidence for it.
   { path: /^\/api\/v1\/special-picks$/, methods: ["GET", "HEAD"] },
+  // One published slip by its public reference, which is what a shared link resolves to.
+  { path: /^\/api\/v1\/special-picks\/[A-Za-z0-9-]+$/, methods: ["GET", "HEAD"] },
   { path: /^\/api\/v1\/plans$/, methods: ["GET", "HEAD"] },
   { path: /^\/api\/v1\/bookmakers$/, methods: ["GET", "HEAD"] },
   { path: /^\/api\/v1\/bookmakers\/catalogue$/, methods: ["GET", "HEAD"] },

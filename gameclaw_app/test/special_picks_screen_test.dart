@@ -33,6 +33,19 @@ void main() {
     'actual': null,
   };
 
+  Map<String, dynamic> slipOf(List<Map<String, dynamic>> legs, {num combined = 2.03, String status = 'PENDING'}) => {
+    'reference': 'GC261105',
+    'date': '2026-11-05',
+    'combinedOdds': combined,
+    'currentOdds': combined,
+    'target': 2,
+    'summary': '${legs.length} selections at $combined.',
+    'status': status,
+    'publishedAt': '2026-11-05T07:00:00.000Z',
+    'lastVerifiedAt': '2026-11-05T07:30:00.000Z',
+    'legs': legs,
+  };
+
   Future<void> pump(WidgetTester tester, Map<String, dynamic> payload) async {
     final view = SpecialPicksView.fromJson(payload);
     await tester.pumpWidget(
@@ -51,41 +64,52 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('shows both of the day’s selections', (tester) async {
+  testWidgets('shows the day as one slip, with its combined price and every leg', (tester) async {
     await pump(tester, {
-      'picks': [
+      'target': 2,
+      'today': slipOf([
         pick(1, 'Arsenal', 'Chelsea', 'CORNERS', 'Match corners'),
         pick(2, 'Spurs', 'Everton', 'SHOTS_ON_TARGET', 'Match shots on target'),
-      ],
-      'performance': {'total': 2, 'won': 0, 'lost': 0, 'pending': 2, 'winRate': null},
+      ]),
+      'performance': {'total': 1, 'won': 0, 'lost': 0, 'pending': 1, 'winRate': null},
     });
+
+    expect(find.text('Daily Special Slip'), findsOneWidget);
+    expect(find.text('2.03'), findsOneWidget);
+    expect(find.text('combined odds'), findsOneWidget);
+    expect(find.text('GAMECLAW'), findsOneWidget);
+    expect(find.textContaining('GC261105'), findsOneWidget);
+
+    // One bet, so one share control rather than one per match.
+    expect(find.text('Share slip'), findsOneWidget);
 
     expect(find.text('Arsenal v Chelsea'), findsOneWidget);
     expect(find.text('Spurs v Everton'), findsOneWidget);
-    expect(find.text('TODAY'), findsOneWidget);
-
-    // Two selections fill the screen, so the record is below them rather than missing.
-    await tester.scrollUntilVisible(find.text('THE RECORD'), 200, maxScrolls: 20);
-    expect(find.text('THE RECORD'), findsOneWidget);
   });
 
-  testWidgets('shows one when only one qualified', (tester) async {
+  testWidgets('shows three legs when three were published', (tester) async {
     await pump(tester, {
-      'picks': [pick(1, 'Arsenal', 'Chelsea', 'CORNERS', 'Match corners')],
+      'target': 2,
+      'today': slipOf([
+        pick(1, 'Arsenal', 'Chelsea', 'CORNERS', 'Match corners'),
+        pick(2, 'Spurs', 'Everton', 'SHOTS', 'Match shots'),
+        pick(3, 'Napoli', 'Inter', 'SHOTS_ON_TARGET', 'Match shots on target'),
+      ]),
       'performance': {'total': 1, 'pending': 1},
     });
 
-    expect(find.text('Arsenal v Chelsea'), findsOneWidget);
-    expect(find.textContaining('nothing met the threshold'), findsNothing);
+    expect(find.textContaining('3 matches'), findsOneWidget);
+    expect(find.text('Napoli v Inter'), findsOneWidget);
+    expect(find.text('Share slip'), findsOneWidget);
   });
 
   testWidgets('a day with nothing qualifying says so, and is not an error', (tester) async {
     await pump(tester, {
-      'picks': <dynamic>[],
+      'today': null,
       'performance': {'total': 0},
     });
 
-    expect(find.textContaining('nothing met the threshold'), findsOneWidget);
+    expect(find.textContaining('no combination reached the'), findsOneWidget);
     expect(find.textContaining('a normal day, not a fault'), findsOneWidget);
     // The section is still there; only its contents changed.
     expect(find.text('TODAY'), findsOneWidget);
@@ -93,7 +117,7 @@ void main() {
 
   testWidgets('no win rate is shown before anything has settled', (tester) async {
     await pump(tester, {
-      'picks': <dynamic>[],
+      'today': null,
       'performance': {'total': 2, 'won': 0, 'lost': 0, 'pending': 2, 'winRate': null},
     });
 
@@ -105,7 +129,7 @@ void main() {
 
   testWidgets('the record counts losses and reports voids as voids', (tester) async {
     await pump(tester, {
-      'picks': <dynamic>[],
+      'today': null,
       'performance': {
         'total': 5,
         'won': 1,
@@ -116,9 +140,7 @@ void main() {
         'profitUnits': 0.05,
         'stakedUnits': 2,
         'unpriced': 0,
-        'byMarket': [
-          {'kind': 'CORNERS', 'total': 3, 'won': 1, 'lost': 1, 'winRate': 0.5},
-        ],
+        'legs': {'total': 5, 'won': 3, 'lost': 1, 'void': 1, 'pending': 0},
       },
     });
 
@@ -126,13 +148,14 @@ void main() {
     expect(find.text('Won'), findsOneWidget);
     expect(find.text('Lost'), findsOneWidget);
     expect(find.text('Void'), findsOneWidget);
-    expect(find.text('Corners'), findsOneWidget);
     expect(find.textContaining('+0.05 units'), findsOneWidget);
+    // The legs underneath, because a slip hides which one was wrong.
+    expect(find.textContaining('Underneath those slips'), findsOneWidget);
   });
 
   testWidgets('an unpriced selection is named rather than quietly dropped', (tester) async {
     await pump(tester, {
-      'picks': <dynamic>[],
+      'today': null,
       'performance': {
         'total': 2,
         'won': 1,
@@ -149,10 +172,10 @@ void main() {
 
   testWidgets('an empty record invites nothing and promises nothing', (tester) async {
     await pump(tester, {
-      'picks': <dynamic>[],
+      'today': null,
       'performance': {'total': 0},
     });
 
-    expect(find.textContaining('No special picks have been published yet'), findsOneWidget);
+    expect(find.textContaining('No slips have been published yet'), findsOneWidget);
   });
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { PickCard } from "@/components/picks/pick-card";
-import { SpecialPickCard } from "@/components/picks/special-pick-card";
+import { SpecialSlip } from "@/components/picks/special-slip";
 import { getTrackRecord } from "@/lib/services/daily-picks";
 import { listSpecialHistory, specialPerformance } from "@/lib/services/special-picks";
 import { cn } from "@/lib/utils";
@@ -25,10 +25,8 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wi
 
 const MARKET_LABEL: Record<string, string> = { CORNERS: "Corners", SHOTS: "Shots", SHOTS_ON_TARGET: "Shots on target" };
 
-const SLIP_LABEL: Record<string, string> = { WON: "slip won", LOST: "slip lost", VOID: "void", PENDING: "running" };
-const SLIP_TONE: Record<string, string> = { WON: "text-win", LOST: "text-loss", VOID: "", PENDING: "" };
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gameclaw.win";
 
-const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
 export default async function TrackRecordPage() {
   const [record, special, specialDays] = await Promise.all([getTrackRecord(), specialPerformance(), listSpecialHistory()]);
@@ -98,9 +96,9 @@ export default async function TrackRecordPage() {
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Daily Special Picks</h2>
           <p className="text-sm text-muted-foreground">
-            Two selections a day in statistical markets, published together as one 2 odds slip and settled from the
-            match statistics. Both have to land. Every selection appears below with the price it was published at, and
-            days where nothing met the threshold have no entry — the gaps in the dates are those days.
+            One researched accumulator a day: two or three matches in statistical markets, combined to about 2.00 and
+            settled from the match statistics. Every leg has to land. Each slip appears below exactly as published,
+            and days where no combination reached the target have no entry — the gaps in the dates are those days.
           </p>
         </div>
 
@@ -156,23 +154,8 @@ export default async function TrackRecordPage() {
           </p>
         ) : (
           <div className="space-y-5">
-            {specialDays.map((day) => (
-              <div key={day.date} className="space-y-3">
-                <div className="flex items-baseline justify-between gap-3">
-                  <h3 className="text-xs font-medium text-muted-foreground">{DAY.format(new Date(day.date))}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {day.slip.combinedOdds !== null && (
-                      <>
-                        <span className="gc-figure text-foreground">{day.slip.combinedOdds.toFixed(2)}</span> the slip ·{" "}
-                      </>
-                    )}
-                    <span className={cn(SLIP_TONE[day.slip.status])}>{SLIP_LABEL[day.slip.status]}</span>
-                  </p>
-                </div>
-                {day.picks.map((pick) => (
-                  <SpecialPickCard key={pick.position} pick={pick} />
-                ))}
-              </div>
+            {specialDays.map((slip) => (
+              <SpecialSlip key={slip.reference} slip={slip} shareUrl={`${SITE}/special/${slip.reference}`} />
             ))}
           </div>
         )}

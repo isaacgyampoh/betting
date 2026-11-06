@@ -176,59 +176,46 @@ void main() {
   });
 
   group('a day with nothing published', () {
-    test('an empty list is a valid answer, not a parse failure', () {
+    test('no slip is a valid answer, not a parse failure', () {
       final view = SpecialPicksView.fromJson({
-        'picks': <dynamic>[],
+        'today': null,
         'performance': {'total': 0},
       });
-      expect(view.picks, isEmpty);
+      expect(view.today, isNull);
       expect(view.performance.total, 0);
       expect(view.performance.winRate, isNull);
     });
 
     test('a missing performance object does not throw', () {
-      final view = SpecialPicksView.fromJson({'picks': <dynamic>[]});
-      expect(view.performance.total, 0);
+      expect(SpecialPicksView.fromJson({'today': null}).performance.total, 0);
+    });
+
+    test('a response with no fields at all does not throw', () {
+      final view = SpecialPicksView.fromJson({});
+      expect(view.today, isNull);
+      expect(view.target, 2);
     });
   });
 
-  test('the whole response parses as the endpoint returns it', () {
-    final view = SpecialPicksView.fromJson({
-      'picks': [pickJson(), pickJson()..['position'] = 2],
-      'performance': {
-        'total': 5,
-        'won': 1,
-        'lost': 1,
-        'void': 1,
-        'pending': 2,
-        'winRate': 0.5,
-        'profitUnits': 0.05,
-        'stakedUnits': 2,
-        'unpriced': 0,
-        'byMarket': [
-          {'kind': 'CORNERS', 'total': 3, 'won': 1, 'lost': 0, 'winRate': 1},
-        ],
-      },
-    });
-
-    expect(view.picks, hasLength(2));
-    expect(view.picks.last.position, 2);
-    expect(view.performance.winRate, 0.5);
-    expect(view.performance.byMarket.single.kind, 'CORNERS');
-  });
-
-  /// The day is the bet.
+  /// The slip is the bet.
   ///
-  /// Two selections published together are one 2 odds slip staked once. The app has to read that
-  /// or it reports a record nobody has: a day where one leg won and the other lost is a loss, not
-  /// a 50% day.
+  /// Two or three selections published together are one accumulator staked once. The app has to
+  /// read it that way or it reports a record nobody has: a day where one leg won and another lost
+  /// is a loss, not a 50% day.
   group('the day as one slip', () {
-    Map<String, dynamic> response({String status = 'PENDING', num? combined = 2.1}) => {
+    Map<String, dynamic> response({String status = 'PENDING', num combined = 2.03, num? current = 2.03}) => {
       'target': 2,
       'today': {
+        'reference': 'GC261105',
         'date': '2026-11-05',
-        'slip': {'combinedOdds': combined, 'status': status, 'target': 2},
-        'picks': [pickJson(), pickJson()..['position'] = 2],
+        'combinedOdds': combined,
+        'currentOdds': current,
+        'target': 2,
+        'summary': '2 selections at 2.03, on match corners.',
+        'status': status,
+        'publishedAt': '2026-11-05T07:00:00.000Z',
+        'lastVerifiedAt': '2026-11-05T07:30:00.000Z',
+        'legs': [pickJson(), pickJson()..['position'] = 2],
       },
       'performance': {
         'total': 3,
@@ -237,52 +224,60 @@ void main() {
         'void': 1,
         'pending': 0,
         'winRate': 0.5,
-        'profitUnits': 1.1,
+        'profitUnits': 1.03,
         'stakedUnits': 2,
         'unpriced': 0,
         'legs': {'total': 6, 'won': 3, 'lost': 2, 'void': 1, 'pending': 0},
       },
     };
 
-    test('reads the combined odds and the slip status', () {
-      final view = SpecialPicksView.fromJson(response(status: 'WON', combined: 2.4));
+    test('reads the slip, its reference and every leg', () {
+      final view = SpecialPicksView.fromJson(response(status: 'WON'));
+
       expect(view.target, 2);
-      expect(view.today!.slip.combinedOdds, 2.4);
-      expect(view.today!.slip.status, PickStatus.won);
-      expect(view.today!.picks, hasLength(2));
+      expect(view.today!.reference, 'GC261105');
+      expect(view.today!.combinedOdds, 2.03);
+      expect(view.today!.status, PickStatus.won);
+      expect(view.today!.legs, hasLength(2));
+      expect(view.today!.summary, contains('2.03'));
     });
 
-    test('a running slip has no combined odds yet', () {
-      final view = SpecialPicksView.fromJson(response(combined: null));
-      expect(view.today!.slip.combinedOdds, isNull);
-      expect(view.today!.slip.status, PickStatus.pending);
+    test('keeps the published price apart from the price now', () {
+      final view = SpecialPicksView.fromJson(response(combined: 2.03, current: 2.4));
+      expect(view.today!.combinedOdds, 2.03);
+      expect(view.today!.currentOdds, 2.4);
+      expect(view.today!.moved, isTrue);
     });
 
-    test('the record counts days, and reports the legs underneath', () {
+    test('does not call it moved when it has not', () {
+      expect(SpecialPicksView.fromJson(response()).today!.moved, isFalse);
+    });
+
+    test('a leg that no longer prices leaves no current total, rather than a wrong one', () {
+      final view = SpecialPicksView.fromJson(response(current: null));
+      expect(view.today!.currentOdds, isNull);
+      expect(view.today!.moved, isFalse);
+      expect(view.today!.combinedOdds, 2.03); // as published, always
+    });
+
+    test('carries when the prices were last checked', () {
+      final view = SpecialPicksView.fromJson(response());
+      expect(view.today!.lastVerifiedAt, DateTime.utc(2026, 11, 5, 7, 30));
+    });
+
+    test('the record counts slips, and reports the legs underneath', () {
       final p = SpecialPicksView.fromJson(response()).performance;
-      expect(p.total, 3); // days, not selections
+      expect(p.total, 3); // slips, not selections
       expect(p.settled, 2);
       expect(p.winRate, 0.5);
       expect(p.legs.total, 6);
       expect(p.legs.won, 3);
-      expect(p.legs.lost, 2);
       expect(p.legs.voided, 1);
     });
 
     test('a day with nothing published has no slip at all', () {
       final view = SpecialPicksView.fromJson({'target': 2, 'today': null, 'performance': {'total': 0}});
       expect(view.today, isNull);
-      expect(view.picks, isEmpty);
-    });
-
-    // A phone in somebody's hand may be talking to an API that predates the slip.
-    test('still reads a response that only has a flat list of picks', () {
-      final view = SpecialPicksView.fromJson({
-        'picks': [pickJson()],
-        'performance': {'total': 1},
-      });
-      expect(view.picks, hasLength(1));
-      expect(view.today!.slip.combinedOdds, isNull);
     });
   });
 }

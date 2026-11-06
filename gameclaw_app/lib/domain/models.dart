@@ -1601,40 +1601,58 @@ class SpecialMarketRecord {
     winRate: (json['winRate'] as num?)?.toDouble(),
   );
 }
-
-/// How a day's selections settle, once they are treated as one slip.
+/// One day's published accumulator.
 ///
-/// Both have to land. A void leg drops out at 1.00 rather than sinking the slip, and the day is
-/// still running while any leg is.
+/// The slip is the product and its legs hang off it: two or three selections researched separately
+/// and published as one bet staked once. Every leg has to land.
 class SpecialSlip {
-  const SpecialSlip({required this.combinedOdds, required this.status, required this.target});
+  const SpecialSlip({
+    required this.reference,
+    required this.date,
+    required this.combinedOdds,
+    required this.currentOdds,
+    required this.target,
+    required this.summary,
+    required this.status,
+    required this.publishedAt,
+    required this.lastVerifiedAt,
+    required this.legs,
+  });
 
-  /// Null while any leg is unsettled, or when a leg was published without a price.
-  final double? combinedOdds;
+  /// Short, public, URL-safe: what a share link and a share image are keyed on.
+  final String reference;
+  final String date;
+
+  /// The price it was published at. This is the record, and it is never rewritten.
+  final double combinedOdds;
+
+  /// The price now, if every leg still prices. Null the moment one does not, because a partial
+  /// total would read as the slip's and be wrong.
+  final double? currentOdds;
+  final double target;
+  final String summary;
   final PickStatus status;
+  final DateTime publishedAt;
 
-  /// What the target was on the day, so an old slip is not judged against a newer rule.
-  final int target;
+  /// When the legs were last checked against the bookmaker. A morning price is not a price now.
+  final DateTime? lastVerifiedAt;
+
+  final List<SpecialPick> legs;
+
+  /// True when the price has moved since publishing, by enough to be worth saying.
+  bool get moved => currentOdds != null && (currentOdds! - combinedOdds).abs() >= 0.01;
 
   factory SpecialSlip.fromJson(Map<String, dynamic> json) => SpecialSlip(
-    combinedOdds: (json['combinedOdds'] as num?)?.toDouble(),
-    status: PickStatusX.parse(json['status'] as String?),
-    target: (json['target'] as num?)?.toInt() ?? 2,
-  );
-}
-
-/// One published day: the slip, and the selections it is made of.
-class SpecialDay {
-  const SpecialDay({required this.date, required this.slip, required this.picks});
-
-  final String date;
-  final SpecialSlip slip;
-  final List<SpecialPick> picks;
-
-  factory SpecialDay.fromJson(Map<String, dynamic> json) => SpecialDay(
+    reference: json['reference'] as String? ?? '',
     date: json['date'] as String? ?? '',
-    slip: SpecialSlip.fromJson(json['slip'] as Map<String, dynamic>? ?? const {}),
-    picks: (json['picks'] as List<dynamic>? ?? const [])
+    combinedOdds: (json['combinedOdds'] as num?)?.toDouble() ?? 0,
+    currentOdds: (json['currentOdds'] as num?)?.toDouble(),
+    target: (json['target'] as num?)?.toDouble() ?? 2,
+    summary: json['summary'] as String? ?? '',
+    status: PickStatusX.parse(json['status'] as String?),
+    publishedAt: DateTime.tryParse(json['publishedAt'] as String? ?? '')?.toUtc() ?? DateTime.now().toUtc(),
+    lastVerifiedAt: DateTime.tryParse(json['lastVerifiedAt'] as String? ?? '')?.toUtc(),
+    legs: (json['legs'] as List<dynamic>? ?? const [])
         .map((p) => SpecialPick.fromJson(p as Map<String, dynamic>))
         .toList(growable: false),
   );
@@ -1733,24 +1751,16 @@ class SpecialPicksView {
   const SpecialPicksView({required this.today, required this.performance, required this.target});
 
   /// Null on a day nothing was published, which is a normal day.
-  final SpecialDay? today;
+  final SpecialSlip? today;
   final SpecialPerformance performance;
 
-  /// The combined odds the day's selections are published to reach.
+  /// The combined odds a day's slip is published to reach.
   final int target;
-
-  List<SpecialPick> get picks => today?.picks ?? const [];
 
   factory SpecialPicksView.fromJson(Map<String, dynamic> json) {
     final today = json['today'] as Map<String, dynamic>?;
     return SpecialPicksView(
-      // `today` is the shape to read. The older top-level `picks` is still accepted so a phone
-      // running against an API that predates the slip keeps working rather than emptying out.
-      today: today != null
-          ? SpecialDay.fromJson(today)
-          : (json['picks'] as List<dynamic>? ?? const []).isEmpty
-          ? null
-          : SpecialDay.fromJson(<String, dynamic>{'date': '', 'slip': <String, dynamic>{}, 'picks': json['picks']}),
+      today: today == null ? null : SpecialSlip.fromJson(today),
       performance: SpecialPerformance.fromJson(
         json['performance'] as Map<String, dynamic>? ?? const {},
       ),

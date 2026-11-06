@@ -513,12 +513,56 @@ model DailyPick {
 /// selection settled from match *statistics*, so sharing the table would make `target` meaningless
 /// and branch settlement everywhere. The research pipeline, bookmaker adapters and cron are
 /// shared; the storage is not.
+/// One day's published accumulator.
+///
+/// The slip is the product, not its legs. Two or three selections are researched separately and
+/// published as one bet staked once, so the thing that wins, loses, is shared and appears in the
+/// record is this row - the legs hang off it.
+///
+/// It exists as its own table rather than being derived by grouping picks on a date because a slip
+/// has state of its own that no leg carries: the reference people share, when it was last
+/// re-verified against the bookmaker, the summary of the research behind it, and the combined
+/// price it was published at.
+model SpecialSlip {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Ghana date (GMT) this slip is published for. One slip a day, ever.
+  forDate   DateTime @unique @map("for_date") @db.Date
+  /// Short, public, URL-safe. What a share link and a share image are keyed on, so neither exposes
+  /// a database id and neither changes if the row is ever rebuilt.
+  reference String   @unique
+
+  /// The product of the legs' published prices, stored rather than recomputed so the record cannot
+  /// drift if a leg's price is ever corrected.
+  combinedOdds Decimal @map("combined_odds") @db.Decimal(10, 3)
+  /// What the target was on the day, so an old slip is not judged against a newer rule.
+  target       Decimal @db.Decimal(6, 3)
+
+  /// The research in a sentence, for the top of the slip and the share image.
+  summary String
+
+  status    PickStatus @default(PENDING)
+  settledAt DateTime?  @map("settled_at") @db.Timestamptz
+
+  publishedAt    DateTime  @default(now()) @map("published_at") @db.Timestamptz
+  /// When the legs' prices were last checked against the bookmaker. Shown on the slip, because a
+  /// price published this morning is not a price available now.
+  lastVerifiedAt DateTime? @map("last_verified_at") @db.Timestamptz
+
+  picks SpecialPick[]
+
+  @@index([status])
+  @@map("special_slips")
+}
+
 model SpecialPick {
-  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   /// Ghana date (GMT) this selection is published for.
   forDate  DateTime @map("for_date") @db.Date
-  /// 1 or 2. At most two a day, and fewer when fewer qualify.
+  /// Leg number on the day's slip, from 1. Two or three, and never more.
   position Int
+  /// The slip this is a leg of. Nullable only for the rows published before slips existed, which
+  /// the migration backfills; every new leg has one.
+  slipId   String?  @map("slip_id") @db.Uuid
 
   // --- the fixture -------------------------------------------------------
   /// The stats provider's fixture id, which is what settlement reads back.
@@ -534,14 +578,14 @@ model SpecialPick {
   /// lib/special-picks/markets.ts against measured bookmaker coverage and will change as that
   /// coverage is verified, and a migration per market is friction for no safety - the values are
   /// validated on the way in.
-  marketKind String  @map("market_kind")
+  marketKind   String  @map("market_kind")
   /// MATCH | HOME | AWAY.
-  marketSide String  @map("market_side")
+  marketSide   String  @map("market_side")
   /// FT for now; firstHalf/secondHalf statistics exist, so H1 is reachable later.
-  marketPeriod String @default("FT") @map("market_period")
-  line       Decimal @db.Decimal(5, 2)
+  marketPeriod String  @default("FT") @map("market_period")
+  line         Decimal @db.Decimal(5, 2)
   /// OVER | UNDER.
-  outcome    String
+  outcome      String
 
   // --- the price, kept strictly apart from our own estimate ---------------
   /// Null when no bookmaker price could be verified. Never a guess.
@@ -554,13 +598,13 @@ model SpecialPick {
 
   // --- what the research concluded ---------------------------------------
   /// Our estimated chance, 0..1. This is not a price and must never be shown as one.
-  probability Decimal  @db.Decimal(5, 4)
-  confidence  String
+  probability  Decimal  @db.Decimal(5, 4)
+  confidence   String
   /// The ranking score that selected this pick, kept so a published choice can be re-examined.
-  rating      Decimal  @db.Decimal(6, 3)
-  reason      String
+  rating       Decimal  @db.Decimal(6, 3)
+  reason       String
   /// The statistics the selection rests on, as researched.
-  evidence    Json
+  evidence     Json
   researchedAt DateTime @map("researched_at") @db.Timestamptz
 
   // --- outcome -----------------------------------------------------------
@@ -572,13 +616,15 @@ model SpecialPick {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   oddsHistory SpecialPickOdds[]
+  slip        SpecialSlip?      @relation(fields: [slipId], references: [id], onDelete: Cascade)
 
-  /// At most two a day, and the same slot cannot be published twice.
+  /// One leg per slot per day, and the same slot cannot be published twice.
   @@unique([forDate, position])
   /// Idempotency: a rerun of the generator cannot publish the same selection again, and two
   /// correlated lines on the same fixture and market cannot both go up.
   @@unique([forDate, statsFixtureId, marketKind, marketSide])
   @@index([forDate])
+  @@index([slipId])
   @@index([status, kickoffAt])
   @@map("special_picks")
 }
@@ -823,7 +869,6 @@ model Follow {
   @@index([kind, targetId])
   @@map("follows")
 }
-
 
 /// One alert that has already been sent, so it is never sent twice.
 ///

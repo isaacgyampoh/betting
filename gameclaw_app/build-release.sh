@@ -19,6 +19,11 @@ set -euo pipefail
 TARGET="${1:-apk}"
 API_BASE="https://gameclaw-api.onrender.com/api/v1"
 
+# The public website, which is not where the API lives. A shared slip link has to be one the
+# recipient can open, and the share image is fetched from the same host. Without this the app
+# falls back to https://gameclaw.win, which is correct today and wrong the moment it is not.
+SITE_BASE="https://gameclaw.win"
+
 # The **web** OAuth client, not the Android one: it is the audience the ID token is addressed to,
 # and the server checks it against GOOGLE_WEB_CLIENT_ID in render.yaml. Supplying the Android id
 # here produces a token the API rejects. See docs/release-signing.md.
@@ -55,6 +60,7 @@ fi
 
 exec "$FLUTTER" build "$TARGET" --release \
   --dart-define=GC_API_BASE="$API_BASE" \
+  --dart-define=GC_SITE_BASE="$SITE_BASE" \
   --dart-define=GC_AUTH_BASE="$API_BASE" \
   --dart-define=GC_GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
   --dart-define=GC_GOOGLE_IOS_CLIENT_ID="$GOOGLE_IOS_CLIENT_ID"

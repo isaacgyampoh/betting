@@ -58,6 +58,8 @@ async function generate(fixtures: ReturnType<typeof fixture>[], samples: Samples
     // The stats fixture id is derived from the bookmaker id so each fixture maps to its own match.
     lookupMatch: async (home: string) => {
       if (home.startsWith("Unmatched")) return null;
+      // Keyed by name so a fixture keeps its ids wherever it sits in the list.
+      if (home === "Spurs") return { id: 9009, home: { id: 3 }, away: { id: 4 } };
       const index = fixtures.findIndex((f) => f.event.home === home);
       return index < 0 ? null : { id: 9000 + index, home: { id: index * 2 + 1 }, away: { id: index * 2 + 2 } };
     },
@@ -79,6 +81,7 @@ async function generate(fixtures: ReturnType<typeof fixture>[], samples: Samples
 }
 
 beforeEach(async () => {
+  await db.specialSlip.deleteMany({}); // cascades to its legs
   await db.specialPick.deleteMany({});
 });
 afterEach(() => {
@@ -91,8 +94,13 @@ afterEach(() => {
 
 // Prices that reach the 2.00 target: a pair comfortably, and either one on its own, so a test
 // about publishing one selection is not really a test about the target.
-const corners = (line: string, odds = 2.2) => offer("Corners - Over/Under", "Over", line, odds);
-const shots = (line: string, odds = 2.1) => offer("Shots on Target Over/Under", "Over", line, odds);
+// Prices whose product lands on the target: 1.45 x 1.40 is 2.03, inside the 1.90-2.10 band.
+const corners = (line: string, odds = 1.45) => offer("Corners - Over/Under", "Over", line, odds);
+const shots = (line: string, odds = 1.4) => offer("Shots on Target Over/Under", "Over", line, odds);
+
+// A slip needs two legs, so a test about anything else still has to supply a second fixture.
+const partner = () => fixture("e9", "Spurs", "Everton", [shots("8.5")]);
+const withPartner = { "1": strong, "3": strong };
 
 describe("publishing the day's selections", () => {
   it("publishes two when two qualify, from different matches", async () => {
@@ -107,37 +115,42 @@ describe("publishing the day's selections", () => {
     expect(new Set(rows.map((r) => r.statsFixtureId)).size).toBe(2);
     // Every row carries a verified price from the offer it came from, never a made-up one.
     expect(rows.every((r) => r.odds !== null && r.bookmaker === "sportybet")).toBe(true);
-    expect(rows.map((r) => Number(r.odds)).sort()).toEqual([2.1, 2.2]);
+    expect(rows.map((r) => Number(r.odds)).sort()).toEqual([1.4, 1.45]);
   });
 
   // The bug this replaces: the slug came from the first live adapter in the registry while the
   // offers were always read from SportyBet, so a price could be published under another name.
   it("records the bookmaker the price was actually read from", async () => {
-    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")])], { "1": strong }, ["footballcom"]);
+    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")]), partner()], withPartner, ["footballcom"]);
     expect((await db.specialPick.findFirstOrThrow({})).bookmaker).toBe("footballcom");
   });
 
   it("publishes nothing when no bookmaker is connected to live prices", async () => {
-    const result = await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")])], { "1": strong }, []);
+    const result = await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")]), partner()], withPartner, []);
     expect(result.published).toBe(0);
     expect(result.skipped.join(" ")).toContain("No bookmaker is connected");
     expect(await db.specialPick.count()).toBe(0);
   });
 
-  it("publishes one when only one qualifies", async () => {
+  // A slip is an accumulator, so one qualifying selection is not a slip. The old behaviour -
+  // publish the one that qualified - is what made a day's research look like a single tip.
+  it("publishes nothing when only one selection qualifies", async () => {
     // The second fixture's sample sits exactly on its line, so the margin gate refuses it.
     const result = await generate(
       [fixture("e1", "Arsenal", "Chelsea", [corners("9.5")]), fixture("e2", "Spurs", "Everton", [shots("9.5")])],
       { "1": strong, "3": weak },
     );
 
-    expect(result.published).toBe(1);
-    expect(result.skipped.join(" ")).toContain("Only one selection");
-    expect(await db.specialPick.count()).toBe(1);
+    expect(result.published).toBe(0);
+    expect(await db.specialSlip.count()).toBe(0);
+    expect(await db.specialPick.count()).toBe(0);
   });
 
   it("publishes nothing when nothing qualifies, and says why", async () => {
-    const result = await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")])], { "1": weak });
+    const result = await generate(
+      [fixture("e1", "Arsenal", "Chelsea", [corners("9.5")]), fixture("e9", "Spurs", "Everton", [shots("9.5")])],
+      { "1": weak, "3": weak },
+    );
 
     expect(result.published).toBe(0);
     expect(result.skipped.join(" ")).toContain("threshold");
@@ -152,7 +165,7 @@ describe("publishing the day's selections", () => {
       offer("Both Teams To Score", "Yes", "", 1.7),
       offer("Double Chance", "1X", "", 1.3),
     ];
-    const result = await generate([fixture("e1", "Arsenal", "Chelsea", forbidden)], { "1": strong });
+    const result = await generate([fixture("e1", "Arsenal", "Chelsea", forbidden)], withPartner);
 
     expect(result.published).toBe(0);
     expect(result.skipped.join(" ")).toContain("No specialist market");
@@ -160,7 +173,7 @@ describe("publishing the day's selections", () => {
   });
 
   it("publishes nothing when the research has no statistics to work from", async () => {
-    const result = await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")])], {});
+    const result = await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")]), partner()], {});
     expect(result.published).toBe(0);
     expect(await db.specialPick.count()).toBe(0);
   });
@@ -169,13 +182,18 @@ describe("publishing the day's selections", () => {
   // settle it from later, so it must not reach the table however good its price looks.
   it("skips a fixture the stats provider cannot be matched to", async () => {
     const result = await generate(
-      [fixture("e1", "Unmatched FC", "Chelsea", [corners("9.5")]), fixture("e2", "Spurs", "Everton", [shots("8.5")])],
-      { "1": strong, "3": strong },
+      [
+        fixture("e1", "Unmatched FC", "Chelsea", [corners("9.5")]),
+        fixture("e2", "Spurs", "Everton", [shots("8.5")]),
+        fixture("e3", "Brighton", "Fulham", [corners("9.5")]),
+      ],
+      { "1": strong, "3": strong, "5": strong },
     );
 
-    expect(result.published).toBe(1);
-    const row = await db.specialPick.findFirstOrThrow({});
-    expect(row.homeTeam).toBe("Spurs");
+    // The slip is built from the two that could be matched; the third could never be settled.
+    expect(result.published).toBe(2);
+    const rows = await db.specialPick.findMany({});
+    expect(rows.map((r) => r.homeTeam).sort()).toEqual(["Brighton", "Spurs"]);
   });
 
   it("does not publish a second time when the day is already published", async () => {
@@ -192,18 +210,18 @@ describe("publishing the day's selections", () => {
 
   it("keeps the first run's selections and prices when the second run sees different odds", async () => {
     const samples = { "1": strong, "3": strong };
-    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5", 1.9)]), fixture("e2", "Spurs", "Everton", [shots("8.5")])], samples);
+    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5", 1.45)]), fixture("e2", "Spurs", "Everton", [shots("8.5")])], samples);
 
     // Same day, price moved. The published record must not follow it.
-    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5", 3.4)]), fixture("e2", "Spurs", "Everton", [shots("8.5")])], samples);
+    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5", 1.5)]), fixture("e2", "Spurs", "Everton", [shots("8.5")])], samples);
 
     const row = await db.specialPick.findFirstOrThrow({ where: { marketKind: "CORNERS" } });
-    expect(Number(row.odds)).toBe(1.9);
+    expect(Number(row.odds)).toBe(1.45);
   });
 
   it("records the evidence it decided on, so a published selection can be checked afterwards", async () => {
-    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")])], { "1": strong });
-    const row = await db.specialPick.findFirstOrThrow({});
+    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")]), partner()], withPartner);
+    const row = await db.specialPick.findFirstOrThrow({ where: { homeTeam: "Arsenal" } });
     const evidence = row.evidence as { sample: number; values: number[]; hitRate: number };
 
     expect(evidence.sample).toBe(8);
@@ -216,19 +234,19 @@ describe("publishing the day's selections", () => {
   });
 
   it("opens the day's odds history with the price it published", async () => {
-    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5", 2.05)])], { "1": strong });
-    const row = await db.specialPick.findFirstOrThrow({ include: { oddsHistory: true } });
+    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")]), partner()], withPartner);
+    const row = await db.specialPick.findFirstOrThrow({ where: { homeTeam: "Arsenal" }, include: { oddsHistory: true } });
 
     expect(row.oddsHistory).toHaveLength(1);
-    expect(Number(row.oddsHistory[0].odds)).toBe(2.05);
+    expect(Number(row.oddsHistory[0].odds)).toBe(1.45);
   });
 });
 
 describe("the day a selection belongs to", () => {
   it("files a selection under the Ghana date of the run, not the fixture's", async () => {
     // Ghana is GMT, so the boundary is UTC midnight. A 07:00 run on the 2nd publishes for the 2nd.
-    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")])], { "1": strong });
-    const row = await db.specialPick.findFirstOrThrow({});
+    await generate([fixture("e1", "Arsenal", "Chelsea", [corners("9.5")]), partner()], withPartner);
+    const row = await db.specialPick.findFirstOrThrow({ where: { homeTeam: "Arsenal" } });
     expect(row.forDate.toISOString().slice(0, 10)).toBe("2026-11-02");
   });
 

@@ -35,7 +35,48 @@ const base = {
   researchedAt: new Date(),
 };
 
+/**
+ * A published day: the slip and its legs.
+ *
+ * The record counts slips, so a test that creates only legs is testing nothing - the arithmetic it
+ * is checking reads from `special_slips`.
+ */
+async function publish(
+  date: string,
+  legs: { status: string; odds: number | null; kind?: string }[],
+  slipStatus = "PENDING",
+) {
+  const slip = await db.specialSlip.create({
+    data: {
+      forDate: new Date(date),
+      reference: `GC${date.slice(2).replace(/-/g, "")}`,
+      combinedOdds: legs.reduce((t, l) => t * (l.odds ?? 1), 1),
+      target: 2,
+      summary: "Test slip.",
+      status: slipStatus as never,
+    },
+  });
+
+  for (const [i, leg] of legs.entries()) {
+    await db.specialPick.create({
+      data: {
+        ...base,
+        slipId: slip.id,
+        forDate: new Date(date),
+        position: i + 1,
+        statsFixtureId: 1000 + i,
+        marketKind: leg.kind ?? "CORNERS",
+        status: leg.status as never,
+        odds: leg.odds,
+        bookmaker: leg.odds === null ? null : "sportybet",
+      },
+    });
+  }
+  return slip;
+}
+
 beforeEach(async () => {
+  await db.specialSlip.deleteMany({}); // cascades to its legs
   await db.specialPick.deleteMany({});
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -147,97 +188,78 @@ describe("grading reads the match, and refuses to guess", () => {
  * selections. Counting them separately described a product nobody has - and flattered it, because
  * a day where one leg won and the other lost reads as 50% rather than as the loss it was.
  */
+/**
+ * The slip is the bet.
+ *
+ * Two or three selections published together are one accumulator staked once, so the record counts
+ * slips. Counting legs separately described a product nobody has and flattered it: a day where one
+ * leg won and another lost read as 50% rather than as the loss it was.
+ */
 describe("the published record is not flattered", () => {
-  it("scores a day as one slip: one leg losing loses the day", async () => {
-    await db.specialPick.createMany({
-      data: [
-        { ...base, position: 1, status: "WON", odds: 2.0 },
-        { ...base, position: 2, statsFixtureId: 2, marketKind: "SHOTS", status: "LOST", odds: 1.9 },
-      ],
-    });
-    const { specialPerformance } = await import("@/lib/services/special-picks");
-    const p = await specialPerformance();
+  const perf = async () => (await import("@/lib/services/special-picks")).specialPerformance();
 
-    expect(p.total).toBe(1); // one day
+  it("loses the whole slip when one leg loses", async () => {
+    await publish(DATE, [{ status: "WON", odds: 1.45 }, { status: "LOST", odds: 1.4, kind: "SHOTS" }], "LOST");
+    const p = await perf();
+
+    expect(p.total).toBe(1); // one slip
     expect(p.lost).toBe(1);
     expect(p.won).toBe(0);
     expect(p.winRate).toBe(0);
-    // The legs are still reported, because a slip hides which half was wrong.
+    expect(p.profitUnits).toBeCloseTo(-1, 5);
+    // The legs are still reported, because a slip hides which one was wrong.
     expect(p.legs).toMatchObject({ total: 2, won: 1, lost: 1 });
   });
 
-  it("wins a day only when every leg wins, and pays the combined odds", async () => {
-    await db.specialPick.createMany({
-      data: [
-        { ...base, position: 1, status: "WON", odds: 1.5 },
-        { ...base, position: 2, statsFixtureId: 2, marketKind: "SHOTS", status: "WON", odds: 1.6 },
-      ],
-    });
-    const { specialPerformance } = await import("@/lib/services/special-picks");
-    const p = await specialPerformance();
+  it("wins only when every leg wins, and pays the combined price", async () => {
+    await publish(DATE, [{ status: "WON", odds: 1.45 }, { status: "WON", odds: 1.4, kind: "SHOTS" }], "WON");
+    const p = await perf();
 
     expect(p.won).toBe(1);
     expect(p.winRate).toBe(1);
-    // 1.5 x 1.6 = 2.4, so one unit returns 1.4.
-    expect(p.profitUnits).toBeCloseTo(1.4, 5);
+    // 1.45 x 1.40 = 2.03, so one unit returns 1.03.
+    expect(p.profitUnits).toBeCloseTo(1.03, 5);
     expect(p.stakedUnits).toBe(1);
   });
 
-  it("counts a losing day as one unit, not one per leg", async () => {
-    await db.specialPick.createMany({
-      data: [
-        { ...base, position: 1, status: "LOST", odds: 1.5 },
-        { ...base, position: 2, statsFixtureId: 2, marketKind: "SHOTS", status: "LOST", odds: 1.6 },
+  it("pays a three-leg slip at all three prices", async () => {
+    await publish(
+      DATE,
+      [
+        { status: "WON", odds: 1.27 },
+        { status: "WON", odds: 1.27, kind: "SHOTS" },
+        { status: "WON", odds: 1.27, kind: "SHOTS_ON_TARGET" },
       ],
-    });
-    const { specialPerformance } = await import("@/lib/services/special-picks");
-    const p = await specialPerformance();
-
-    expect(p.profitUnits).toBeCloseTo(-1, 5);
-    expect(p.stakedUnits).toBe(1);
-    expect(p.legs.lost).toBe(2);
+      "WON",
+    );
+    const p = await perf();
+    // 1.27 cubed is 2.048; profit is reported to the penny, so 1.05.
+    expect(p.profitUnits).toBeCloseTo(1.05, 5);
+    expect(p.legs.total).toBe(3);
   });
 
   // A bookmaker's rule, not one to invent: a void leg drops out at 1.00 rather than sinking a slip.
-  it("drops a void leg out of the slip instead of losing the day", async () => {
-    await db.specialPick.createMany({
-      data: [
-        { ...base, position: 1, status: "WON", odds: 2.4 },
-        { ...base, position: 2, statsFixtureId: 2, marketKind: "SHOTS", status: "VOID", odds: 1.6 },
-      ],
-    });
-    const { specialPerformance } = await import("@/lib/services/special-picks");
-    const p = await specialPerformance();
+  it("drops a void leg out instead of losing the slip", async () => {
+    await publish(DATE, [{ status: "WON", odds: 2.4 }, { status: "VOID", odds: 1.6, kind: "SHOTS" }], "WON");
+    const p = await perf();
 
     expect(p.won).toBe(1);
     expect(p.profitUnits).toBeCloseTo(1.4, 5); // the surviving leg alone
     expect(p.legs.void).toBe(1);
   });
 
-  it("voids the day when every leg voided", async () => {
-    await db.specialPick.createMany({
-      data: [
-        { ...base, position: 1, status: "VOID", odds: 2.0 },
-        { ...base, position: 2, statsFixtureId: 2, status: "VOID", odds: 1.9 },
-      ],
-    });
-    const { specialPerformance } = await import("@/lib/services/special-picks");
-    const p = await specialPerformance();
+  it("voids a slip whose legs all voided", async () => {
+    await publish(DATE, [{ status: "VOID", odds: 1.45 }, { status: "VOID", odds: 1.4 }], "VOID");
+    const p = await perf();
 
     expect(p.void).toBe(1);
     expect(p.winRate).toBeNull();
     expect(p.stakedUnits).toBe(0);
   });
 
-  it("leaves a day running while any leg is", async () => {
-    await db.specialPick.createMany({
-      data: [
-        { ...base, position: 1, status: "WON", odds: 2.0 },
-        { ...base, position: 2, statsFixtureId: 2, status: "PENDING", odds: 1.9 },
-      ],
-    });
-    const { specialPerformance } = await import("@/lib/services/special-picks");
-    const p = await specialPerformance();
+  it("leaves a slip running while any leg is", async () => {
+    await publish(DATE, [{ status: "WON", odds: 1.45 }, { status: "PENDING", odds: 1.4 }]);
+    const p = await perf();
 
     expect(p.pending).toBe(1);
     expect(p.won).toBe(0);
@@ -245,15 +267,9 @@ describe("the published record is not flattered", () => {
   });
 
   // Dropping these from the denominator would be exactly the flattering arithmetic to avoid.
-  it("reports a day it could not price rather than hiding it", async () => {
-    await db.specialPick.createMany({
-      data: [
-        { ...base, position: 1, status: "WON", odds: null, bookmaker: null },
-        { ...base, position: 2, statsFixtureId: 2, status: "WON", odds: 1.9 },
-      ],
-    });
-    const { specialPerformance } = await import("@/lib/services/special-picks");
-    const p = await specialPerformance();
+  it("reports a slip it could not price rather than hiding it", async () => {
+    await publish(DATE, [{ status: "WON", odds: null }, { status: "WON", odds: 1.4 }], "WON");
+    const p = await perf();
 
     expect(p.unpriced).toBe(1);
     expect(p.stakedUnits).toBe(0);
@@ -261,26 +277,19 @@ describe("the published record is not flattered", () => {
     expect(p.winRate).toBe(1);
   });
 
-  it("separates days that are settled from days that are not", async () => {
-    await db.specialPick.createMany({
-      data: [
-        { ...base, position: 1, status: "WON", odds: 2.0 },
-        { ...base, position: 2, statsFixtureId: 2, status: "WON", odds: 1.9 },
-        { ...base, forDate: new Date("2026-11-01"), position: 1, statsFixtureId: 3, status: "PENDING", odds: 2.2 },
-      ],
-    });
-    const { specialPerformance } = await import("@/lib/services/special-picks");
-    const p = await specialPerformance();
+  it("counts settled slips apart from running ones", async () => {
+    await publish(DATE, [{ status: "WON", odds: 1.45 }, { status: "WON", odds: 1.4 }], "WON");
+    await publish("2026-11-01", [{ status: "PENDING", odds: 1.5 }, { status: "PENDING", odds: 1.4 }]);
+    const p = await perf();
 
     expect(p.total).toBe(2);
     expect(p.won).toBe(1);
     expect(p.pending).toBe(1);
-    expect(p.winRate).toBe(1); // over settled days only
+    expect(p.winRate).toBe(1); // over settled slips only
   });
 
   it("has no win rate at all before anything is settled", async () => {
-    await db.specialPick.create({ data: { ...base, position: 1, status: "PENDING" } });
-    const { specialPerformance } = await import("@/lib/services/special-picks");
-    expect((await specialPerformance()).winRate).toBeNull();
+    await publish(DATE, [{ status: "PENDING", odds: 1.45 }, { status: "PENDING", odds: 1.4 }]);
+    expect((await perf()).winRate).toBeNull();
   });
 });

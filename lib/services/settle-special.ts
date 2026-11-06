@@ -29,7 +29,7 @@ const SETTLE_AFTER_MS = 3 * 60 * 60_000;
 /** After this, a pick nobody can grade is void rather than permanently pending. */
 const ABANDON_AFTER_MS = 3 * 24 * 60 * 60_000;
 
-export async function settleSpecialPicks(now = new Date()): Promise<{ settled: number; voided: number; waiting: number }> {
+export async function settleSpecialPicks(now = new Date()): Promise<{ settled: number; voided: number; waiting: number; slips: number }> {
   const due = await db.specialPick.findMany({
     where: { status: "PENDING", kickoffAt: { lt: new Date(now.getTime() - SETTLE_AFTER_MS) } },
     orderBy: { kickoffAt: "asc" },
@@ -86,8 +86,40 @@ export async function settleSpecialPicks(now = new Date()): Promise<{ settled: n
     settled++;
   }
 
-  if (settled || voided || waiting) logger.info("special.settled", { settled, voided, waiting });
-  return { settled, voided, waiting };
+  const slips = await settleSpecialSlips(now);
+
+  if (settled || voided || waiting || slips) logger.info("special.settled", { settled, voided, waiting, slips });
+  return { settled, voided, waiting, slips };
+}
+
+/**
+ * Closes a slip once every one of its legs is in.
+ *
+ * Derived from the legs rather than tracked alongside them, so the slip can never disagree with
+ * what it is made of. The rules are a bookmaker's: every surviving leg has to win, a void leg
+ * drops out rather than sinking the slip, a slip whose legs all voided is void, and a slip is
+ * still running while any leg is.
+ */
+export async function settleSpecialSlips(now = new Date()): Promise<number> {
+  const open = await db.specialSlip.findMany({
+    where: { status: "PENDING" },
+    include: { picks: { select: { status: true } } },
+    take: 50,
+  });
+
+  let closed = 0;
+  for (const slip of open) {
+    if (!slip.picks.length || slip.picks.some((p) => p.status === "PENDING")) continue;
+
+    const live = slip.picks.filter((p) => p.status !== "VOID");
+    const status = !live.length ? "VOID" : live.every((p) => p.status === "WON") ? "WON" : "LOST";
+
+    await db.specialSlip.update({ where: { id: slip.id }, data: { status, settledAt: now } });
+    closed++;
+  }
+
+  if (closed) logger.info("special.slips_settled", { closed });
+  return closed;
 }
 
 /**
@@ -131,6 +163,12 @@ export async function refreshSpecialOdds(now = new Date()): Promise<{ checked: n
 
     await db.specialPickOdds.create({ data: { pickId: pick.id, bookmaker: match.bookmaker, odds: match.odds, line: match.line } });
     moved++;
+  }
+
+  // The slip says when its prices were last checked, so a morning price is not read as a price now.
+  if (checked) {
+    const slipIds = [...new Set(upcoming.map((p) => p.slipId).filter((id): id is string => id !== null))];
+    if (slipIds.length) await db.specialSlip.updateMany({ where: { id: { in: slipIds } }, data: { lastVerifiedAt: now } });
   }
 
   if (moved) logger.info("special.odds_moved", { checked, moved });

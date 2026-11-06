@@ -76,7 +76,7 @@ class ProfileScreen extends ConsumerWidget {
                   // match statistics is not the same kind of bet as an accumulator graded from
                   // the score, and one win rate across both would describe neither.
                   GcButton(
-                    label: 'Daily special picks',
+                    label: 'Daily Special Slip',
                     kind: GcButtonKind.secondary,
                     icon: Icons.today_outlined,
                     onPressed: () => context.push('/claw/special'),
