@@ -1189,6 +1189,11 @@ enum BookmakerStatus {
   /// A booking code has genuinely been issued here and read back.
   available('available', 'Available'),
 
+  /// Its booking codes can be opened, but a new one cannot be booked here yet - so a slip can
+  /// come from it and not go to it. Without this the server's `source` fell back to `unsupported`
+  /// and told somebody holding a perfectly good code that we could not help them.
+  source('source', 'Read only'),
+
   /// The integration works and is waiting on configuration or authorisation that is ours.
   setup('setup', 'Setup required'),
 

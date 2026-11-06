@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createAdapter, AWAITING_SETUP, REFUSED_BY_BOOKMAKER } from "@/lib/bookmakers/registry";
 import { BOOKMAKER_SLUGS } from "@/lib/bookmakers/types";
+import { SOURCE_NOTE, statusOf } from "@/lib/services/bookmakers";
 
 /**
  * No bookmaker reaches a user as a bare status with nothing to explain it.
@@ -60,5 +61,49 @@ describe("a bookmaker that cannot be converted to explains itself", () => {
     for (const slug of Object.keys(REFUSED_BY_BOOKMAKER)) {
       expect(AWAITING_SETUP[slug as keyof typeof AWAITING_SETUP], slug).toBeUndefined();
     }
+  });
+});
+
+/**
+ * A bookmaker we can read from but not book at.
+ *
+ * Without a state of its own this came out as "unsupported", which is the one thing the status
+ * field exists to avoid: telling somebody holding a perfectly good betPawa code that we cannot
+ * help them, when opening it is exactly what we can do.
+ */
+describe("a bookmaker that is a source but not a destination", () => {
+  it("is reported as read-only, not as unsupported", () => {
+    expect(statusOf("betpawa", true, false)).toBe("source");
+    expect(statusOf("betpawa", true, false)).not.toBe("unsupported");
+  });
+
+  it("still reports a bookmaker with nothing at all as unsupported", () => {
+    expect(statusOf("betway", false, false)).toBe("unsupported");
+  });
+
+  it("does not downgrade a bookmaker that can do both", () => {
+    expect(statusOf("sportybet", true, true)).toBe("available");
+  });
+
+  // Being refused or awaiting setup is about the bookmaker or about us, and outranks the
+  // read-only state either way.
+  it("keeps the refusal and setup states ahead of read-only", () => {
+    for (const slug of Object.keys(AWAITING_SETUP) as (keyof typeof AWAITING_SETUP)[]) {
+      expect(statusOf(slug, true, false)).toBe("setup");
+    }
+  });
+
+  it("describes what read-only means rather than leaving the state bare", () => {
+    expect(SOURCE_NOTE).toContain("open its booking codes");
+    expect(SOURCE_NOTE).toContain("isn't built yet");
+  });
+
+  // A source is not a destination, and betPawa's adapter must keep saying so.
+  it("is never bookable", () => {
+    expect(createAdapter("betpawa", "live").capabilities).toEqual({
+      loadCode: true,
+      createCode: false,
+      events: false,
+    });
   });
 });

@@ -34,13 +34,20 @@ export type BookmakerListing = {
  * and only one of them is ours to fix:
  *
  *   available  - a booking code has genuinely been issued and read back.
+ *   source     - we can read its booking codes but cannot book at it, so a slip can come from it
+ *                and not go to it. betPawa is this: reading was built and verified, creating a
+ *                code is a different endpoint that is not.
  *   setup      - the integration exists and works, and needs configuration or authorisation that
  *                is ours to supply.
  *   unavailable- the integration is finished and the bookmaker itself is refusing us. Theirs to
  *                lift, not ours to work around.
  *   unsupported- no authorised integration route has been found. Research, not a bug.
+ *
+ * `source` exists because without it a bookmaker we can read from was reported as unsupported,
+ * which is the thing the note on `refusedReason` below warns against - telling somebody holding a
+ * perfectly good code that we cannot help them, when we can.
  */
-export const BOOKMAKER_STATUSES = ["available", "setup", "unavailable", "unsupported"] as const;
+export const BOOKMAKER_STATUSES = ["available", "source", "setup", "unavailable", "unsupported"] as const;
 export type BookmakerStatus = (typeof BOOKMAKER_STATUSES)[number];
 
 /**
@@ -48,12 +55,18 @@ export type BookmakerStatus = (typeof BOOKMAKER_STATUSES)[number];
  * The UI uses this so it never offers a conversion that is bound to fail: a bookmaker we cannot book
  * at is shown as coming soon rather than as a target.
  */
-function statusOf(slug: BookmakerSlug, canLoad: boolean, canBook: boolean): BookmakerStatus {
+/** Exported for its tests: pure, and the DB-backed listing around it needs a database to reach. */
+export function statusOf(slug: BookmakerSlug, canLoad: boolean, canBook: boolean): BookmakerStatus {
   if (canLoad && canBook) return "available";
   if (REFUSED_BY_BOOKMAKER[slug]) return "unavailable";
   if (AWAITING_SETUP[slug]) return "setup";
+  // Reading without booking is a real, useful state, not a half-broken one.
+  if (canLoad) return "source";
   return "unsupported";
 }
+
+/** What a `source` bookmaker can and cannot do, in the words a user needs. */
+export const SOURCE_NOTE = "We can open its booking codes. Booking a new one there isn't built yet.";
 
 export async function listEnabledBookmakers(): Promise<BookmakerListing[]> {
   const rows = await db.bookmaker.findMany({ where: { isEnabled: true }, orderBy: { name: "asc" } });
@@ -71,7 +84,10 @@ export async function listEnabledBookmakers(): Promise<BookmakerListing[]> {
         // the screen should not tell somebody holding a perfectly good code that it is unsupported.
         refusedReason: REFUSED_BY_BOOKMAKER[b.slug] ?? null,
         status: statusOf(b.slug, capabilities.loadCode, capabilities.createCode),
-        statusNote: REFUSED_BY_BOOKMAKER[b.slug] ?? AWAITING_SETUP[b.slug] ?? null,
+        statusNote:
+          REFUSED_BY_BOOKMAKER[b.slug] ??
+          AWAITING_SETUP[b.slug] ??
+          (capabilities.loadCode && !capabilities.createCode ? SOURCE_NOTE : null),
         country: b.country ?? null,
       };
     });
