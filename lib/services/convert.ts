@@ -8,7 +8,13 @@ import type { BookmakerAdapter, BookmakerSlug, RawMarket } from "@/lib/bookmaker
 import { AppError } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { sameMarket } from "@/lib/markets/types";
-import { bestMatch, type AliasIndex } from "@/lib/matching/similarity";
+import {
+  KICKOFF_TOLERANCE_MS,
+  MATCH_THRESHOLD,
+  soleMatch,
+  teamSimilarity,
+  type AliasIndex,
+} from "@/lib/matching/similarity";
 import { requireEnabledBookmaker } from "@/lib/services/bookmakers";
 import { getAliasIndex, linkMatchedEvents } from "@/lib/services/events";
 import {
@@ -33,8 +39,56 @@ type Converted = { draft: DraftSelection; link?: { targetExternalId: string; sco
 
 type Found = { target: { externalId: string; home: string; away: string; kickoffAt: Date; competition: string | null }; offers: Awaited<ReturnType<BookmakerAdapter["getEventMarkets"]>>["offers"]; score: number };
 
+/**
+ * A loose floor for competition names, not a match requirement.
+ *
+ * Measured 2026-11-06 over 30 fixtures carried by both SportyBet and MSport under the same
+ * Sportradar id: the competition string was byte-identical on every one of them, so anything in
+ * this region is comfortable. It is set low all the same, because the check exists to catch a
+ * destination that has handed us a different game entirely - not to arbitrate "Premier League"
+ * against "England Premier League", which are the same competition and score 0.88.
+ */
+const COMPETITION_CONFLICT_FLOOR = 0.5;
+
+/**
+ * Why a fixture returned for a shared id is not the game we asked for - or null when it is.
+ *
+ * An id-based conversion rests on one premise: `sr:match:N` means the same fixture at every
+ * bookmaker on the platform. That premise is worth more than any name comparison, and this check is
+ * deliberately not a second opinion on it. Re-matching the names would make things worse: over the
+ * same 30 shared fixtures, SportyBet's "RC Deportivo de A Coruna" is MSport's "La Coruna", which
+ * score 0.38 against a 0.8 threshold. Demanding both sides agree would throw that conversion away,
+ * and the id was right.
+ *
+ * So each clause below is calibrated to fire only when the premise itself has broken - a different
+ * game under the same id - and never on two feeds spelling the same game differently:
+ *
+ *   kick-off   differed by 0 minutes on all 30. A different game at the same minute is not a thing.
+ *   teams      at least one side must be recognisable. The worst real pair still scored 1.00 on its
+ *              other side, and a wrong fixture would miss on both.
+ *   competition only when both carry one, and only against the loose floor above.
+ */
+function conflictWith(
+  want: { home: string; away: string; kickoffAt: Date; competition: string | null },
+  got: { home: string; away: string; kickoffAt: Date; competition: string | null },
+  aliases: AliasIndex,
+): string | null {
+  if (Math.abs(got.kickoffAt.getTime() - want.kickoffAt.getTime()) > KICKOFF_TOLERANCE_MS) return "kickoff";
+  const home = teamSimilarity(want.home, got.home, aliases);
+  const away = teamSimilarity(want.away, got.away, aliases);
+  if (Math.max(home, away) < MATCH_THRESHOLD) return "teams";
+  if (want.competition && got.competition) {
+    if (teamSimilarity(want.competition, got.competition, aliases) < COMPETITION_CONFLICT_FLOOR) return "competition";
+  }
+  return null;
+}
+
 /** The same game by its shared id, or null when this bookmaker does not know it under that id. */
-async function convertById(sel: SlipRecord["selections"][number], adapter: BookmakerAdapter): Promise<Found | null> {
+async function convertById(
+  sel: SlipRecord["selections"][number],
+  adapter: BookmakerAdapter,
+  aliases: AliasIndex,
+): Promise<Found | null> {
   const id = sel.bookmakerEvent?.externalId;
   // Only the Sportradar id space is shared. A bookmaker with its own ids would just 404 on this.
   if (!id || !id.startsWith("sr:match:")) return null;
@@ -44,6 +98,14 @@ async function convertById(sel: SlipRecord["selections"][number], adapter: Bookm
     return null;
   });
   if (!hit?.offers.length) return null;
+  // The id is shared, so this should always be the same fixture. If it is not, the premise has
+  // broken and the right move is to fall through to the name search rather than price the wrong
+  // game - which would reach the user as a perfectly ordinary-looking leg.
+  const conflict = conflictWith({ home: sel.homeTeam, away: sel.awayTeam, kickoffAt: sel.kickoffAt, competition: sel.competition }, hit.event, aliases);
+  if (conflict) {
+    logger.warn("convert.id_conflict", { bookmaker: adapter.slug, eventId: id, on: conflict });
+    return null;
+  }
   return { target: hit.event, offers: hit.offers, score: 1 };
 }
 
@@ -83,12 +145,24 @@ async function convertViaSharedId(
     if (!resolver.capabilities.events) continue;
 
     const candidates = await resolver.searchEvent(sel.homeTeam, sel.awayTeam, sel.kickoffAt).catch(() => []);
-    const match = bestMatch({ home: sel.homeTeam, away: sel.awayTeam, kickoffAt: sel.kickoffAt }, candidates, aliases);
+    // soleMatch, not bestMatch: this is a name match made on the user's behalf at a bookmaker they
+    // never asked about, and two different games fitting equally well is not something to resolve by
+    // feed order. Refusing leaves the leg unconverted and explained.
+    const match = soleMatch({ home: sel.homeTeam, away: sel.awayTeam, kickoffAt: sel.kickoffAt }, candidates, aliases);
     const id = match?.candidate.externalId;
     if (!id?.startsWith("sr:match:")) continue;
 
     const hit = await adapter.getEventMarkets(id).catch(() => null);
     if (!hit?.offers.length) continue;
+
+    // Two hops, so two chances to land on the wrong game: the resolver's name match, then the
+    // destination's reading of the id. The first was checked by soleMatch against the source; this
+    // checks the second against the source as well, rather than trusting the chain end to end.
+    const conflict = conflictWith({ home: sel.homeTeam, away: sel.awayTeam, kickoffAt: sel.kickoffAt, competition: sel.competition }, hit.event, aliases);
+    if (conflict) {
+      logger.warn("convert.resolver_conflict", { destination: adapter.slug, resolver: slug, eventId: id, on: conflict });
+      continue;
+    }
 
     logger.info("convert.resolved_via", { destination: adapter.slug, resolver: slug, eventId: id });
     // The resolver's own confidence in the name match carries over: the id step after it is exact.
@@ -105,7 +179,9 @@ async function convertByName(
   const candidates = await adapter.searchEvent(sel.homeTeam, sel.awayTeam, sel.kickoffAt).catch((err) => {
     throw asBookmakerError(err, adapter.slug, "searchEvent");
   });
-  const match = bestMatch({ home: sel.homeTeam, away: sel.awayTeam, kickoffAt: sel.kickoffAt }, candidates, aliases);
+  // Ambiguity is refused here too: a slip converted to the wrong fixture is worse than one that
+  // reports the leg as not found, because only the second is visible to the person betting it.
+  const match = soleMatch({ home: sel.homeTeam, away: sel.awayTeam, kickoffAt: sel.kickoffAt }, candidates, aliases);
   if (!match) return null;
   const { offers } = await adapter.getEventMarkets(match.candidate.externalId).catch((err) => {
     throw asBookmakerError(err, adapter.slug, "getEventMarkets");
@@ -148,7 +224,7 @@ export async function convertSelection(
   // name means scanning a list the bookmaker will only serve the front of. MSport's returns its
   // earliest fifty fixtures and ignores the page number entirely, so anything kicking off later
   // today simply could not be found, and converting a slip failed for most of the day's football.
-  const byId = await convertById(sel, adapter);
+  const byId = await convertById(sel, adapter, aliases);
 
   const found =
     byId ?? (await convertByName(sel, adapter, aliases)) ?? (await convertViaSharedId(sel, adapter, aliases));

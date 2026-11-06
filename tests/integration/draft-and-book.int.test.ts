@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { getAdapter } from "@/lib/bookmakers/registry";
 import { convertSlip } from "@/lib/services/convert";
@@ -98,5 +98,58 @@ describe("a conversion that stops at the draft", () => {
     const source = await loadSlip({ user, bookmaker: "sportybet", code: "BC7K2Q", ipHash: null });
     const converted = await convertSlip({ user, source: { slipId: source.id }, target: "betway", book: true, ipHash: null });
     expect(converted.code).toEqual(expect.any(String));
+  });
+});
+
+/**
+ * "No code" is not the same statement as "nothing was booked".
+ *
+ * convertSlip deliberately swallows a refused booking: the matching work has already succeeded by
+ * that point and throwing it away would leave the user with nothing while we are holding the
+ * answer. The cost is that a codeless slip has two possible histories - nobody asked the bookmaker,
+ * or the bookmaker said no - and the tests above, which assert only that `code` is null, pass under
+ * either. So a draft that did attempt a booking and got refused would look exactly like a draft
+ * that correctly did not attempt one.
+ *
+ * That matters because booking is the single irreversible step in the whole flow: it creates a real
+ * coupon at a real bookmaker. The guarantee worth holding is about the call, not the result.
+ */
+describe("a draft never reaches the bookmaker's write endpoint", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("does not call createCode at all when book is false", async () => {
+    const user = await createUser();
+    const source = await loadSlip({ user, bookmaker: "sportybet", code: "BC7K2Q", ipHash: null });
+    const createCode = vi.spyOn(getAdapter("betway"), "createCode");
+
+    const draft = await convertSlip({ user, source: { slipId: source.id }, target: "betway", book: false, ipHash: null });
+
+    expect(createCode).not.toHaveBeenCalled();
+    expect(draft.code).toBeNull();
+    // And the conversion really did happen, so this is not passing by doing nothing.
+    expect(draft.selections.filter((s) => s.status === "OK").length).toBeGreaterThan(0);
+  });
+
+  it("calls it exactly once when the booking is asked for", async () => {
+    const user = await createUser();
+    const source = await loadSlip({ user, bookmaker: "sportybet", code: "BC7K2Q", ipHash: null });
+    const createCode = vi.spyOn(getAdapter("betway"), "createCode");
+
+    await convertSlip({ user, source: { slipId: source.id }, target: "betway", book: true, ipHash: null });
+
+    expect(createCode).toHaveBeenCalledTimes(1);
+  });
+
+  it("books the picks it converted, and no others", async () => {
+    const user = await createUser();
+    const source = await loadSlip({ user, bookmaker: "sportybet", code: "BCLIVE", ipHash: null });
+    const createCode = vi.spyOn(getAdapter("betway"), "createCode");
+
+    const converted = await convertSlip({ user, source: { slipId: source.id }, target: "betway", book: true, ipHash: null });
+
+    const ok = converted.selections.filter((s) => s.status === "OK");
+    // BCLIVE carries a started game and an unsupported market; neither may be sent to the bookmaker.
+    expect(createCode.mock.calls[0][0]).toHaveLength(ok.length);
+    expect(ok.length).toBeLessThan(converted.selections.length);
   });
 });

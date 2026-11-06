@@ -191,3 +191,40 @@ export function bestMatch<T extends FixtureRef>(
   }
   return best;
 }
+
+/** Whether two candidate fixtures describe the same game: same kick-off, and both sides agree. */
+export function sameFixture(a: FixtureRef, b: FixtureRef, index: AliasIndex = DEFAULT_INDEX): boolean {
+  if (Math.abs(a.kickoffAt.getTime() - b.kickoffAt.getTime()) > KICKOFF_TOLERANCE_MS) return false;
+  return (
+    teamSimilarity(a.home, b.home, index) >= MATCH_THRESHOLD && teamSimilarity(a.away, b.away, index) >= MATCH_THRESHOLD
+  );
+}
+
+/**
+ * The best match, but only when nothing else matches it equally well.
+ *
+ * `bestMatch` resolves a tie by keeping whichever candidate the feed happened to list first, which
+ * for two genuinely different games is a coin flip on somebody's bet - and a silent one, since the
+ * loser never appears anywhere. Where that choice is being made on a user's behalf, refusing is the
+ * honest answer: "we could not tell which game you meant" is recoverable, booking the wrong one is
+ * not.
+ *
+ * A feed listing the same fixture twice is not ambiguous, so the tie is only fatal when the rival
+ * is a different game - which is what `sameFixture` decides. Without that distinction every
+ * duplicated listing would become an unconvertible leg.
+ */
+export function soleMatch<T extends FixtureRef>(
+  source: FixtureRef,
+  candidates: T[],
+  index: AliasIndex = DEFAULT_INDEX,
+): { candidate: T; score: number } | null {
+  const best = bestMatch(source, candidates, index);
+  if (!best) return null;
+  for (const c of candidates) {
+    if (c === best.candidate) continue;
+    if (Math.abs(c.kickoffAt.getTime() - source.kickoffAt.getTime()) > KICKOFF_TOLERANCE_MS) continue;
+    const score = Math.min(teamSimilarity(source.home, c.home, index), teamSimilarity(source.away, c.away, index));
+    if (score === best.score && !sameFixture(best.candidate, c, index)) return null;
+  }
+  return best;
+}
