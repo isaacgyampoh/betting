@@ -18,7 +18,13 @@ export const shareSize = (legs: number) => ({ width: 1080, height: 700 + legs * 
 const DATE = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 const KICKOFF = new Intl.DateTimeFormat("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
 
-const MARKET_SHORT: Record<string, string> = { CORNERS: "corners", SHOTS: "shots", SHOTS_ON_TARGET: "shots on target" };
+const MARKET_SHORT: Record<string, string> = {
+  CORNERS: "corners",
+  SHOTS: "shots",
+  SHOTS_ON_TARGET: "shots on target",
+  FOULS: "fouls",
+  OFFSIDES: "offsides",
+};
 
 /**
  * The slip as one image, composed here rather than screenshotted.

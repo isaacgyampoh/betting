@@ -13,23 +13,33 @@
  *      selection nobody can grade is worse than no selection: it sits "pending" for ever and
  *      quietly keeps itself out of the published record.
  *
- * What that rules out, despite the odds existing:
+ * What that rules out, and why - every line below is a measurement, not a guess. The bookmaker
+ * side is `scripts/market-probe.ts`; the provider side is six finished, well-covered fixtures on
+ * 4 November 2026 (two Serie A, Championship, two Champions League, Ligue 1).
  *
- *   * **Player markets** - and they are the deepest thing on offer: 237 Player Fouls, 234 Player
- *     Fouls Won, 188 Player passes, 153 Player 2nd half shots on target on one fixture. The stats
- *     provider returns an empty `players` array on lower-tier competitions and a populated one on
- *     the top five, so research would silently work for Barcelona and silently fail for everyone
- *     else. Needs its own verification pass before it can be trusted.
- *   * **Tackles.** Priced by the bookmaker, and the provider publishes no tackle statistic at all -
- *     not for a team, not for a player. Nothing to research it with and nothing to settle it from.
- *   * **Team or match fouls.** The provider has fouls; the bookmaker, on the fixture measured,
- *     offers only *Player* Fouls. No team-level line to price against.
- *   * **Cards.** Both sides look available - "Match Cards" is priced, and the provider reports
- *     Yellow Cards - but a cards line is normally settled on yellows *and* reds, and no Red Cards
- *     row appeared in the provider's twenty-five. Settling a cards bet from yellows alone is wrong
- *     exactly when a red is shown, which is the moment the bet matters. Excluded until reds are
- *     confirmed.
- *   * **Halves.** `firstHalf` and `secondHalf` statistics do exist, so H1 markets are reachable
+ *   * **Throw-ins.** Priced well - "Throw-Ins Over/Under" on 14 offers, with team variants - and
+ *     GOAL returns a `Throw In` row. It is not populated: three of the six read 0/0 while the
+ *     other three read 19/17, 13/19 and 17/15. A real match has throw-ins, so a reported 0 is a
+ *     gap wearing a number, and settling an over against it loses a bet that won.
+ *   * **Tackles, clearances, blocks, interceptions.** GOAL reported none of them in any of the
+ *     six. Tackles are priced, thinly (2 offers); the rest are not priced either. Nothing to
+ *     research with and nothing to settle from.
+ *   * **Goalkeeper saves, passes.** GOAL has both on all six. The bookmaker prices them only as
+ *     *player* markets - "Player Saves" (28 offers), "Player passes" (372) - and there is no team
+ *     line to price against.
+ *   * **Cards and bookings.** The closest call, and still out. The bookmaker prices them properly
+ *     ("Bookings - Over/Under", team totals, "Match Cards"), and GOAL gives Yellow Cards on all
+ *     six. Red Cards appears on only two - the two where a red was shown - so "no row" has to be
+ *     read as zero, and nothing can confirm that: the events feed carries goals and nothing else
+ *     on these fixtures, so it cannot corroborate a card either way. A cards line settled one red
+ *     short flips the result, silently and permanently, exactly when the bet mattered. It becomes
+ *     available the moment reds can be corroborated.
+ *   * **Player markets** - the deepest thing on offer: 372 Player passes, 237 Player Fouls, 163
+ *     Player shots on one fixture. GOAL returns an empty `players` array on lower-tier
+ *     competitions and a populated one on the top five, so research would silently work for
+ *     Barcelona and silently fail for everyone else. Expected participation is not available
+ *     either, and the brief requires it.
+ *   * **Halves.** `firstHalf` and `secondHalf` statistics exist, so H1 markets are reachable
  *     later. Full time only to begin with: one period is one settlement path to get right.
  *
  * Everything here is deliberately narrow. The feature is allowed to publish nothing.
@@ -37,7 +47,7 @@
 import type { TeamStatistics } from "@/lib/stats/types";
 
 /** The statistic a selection is about. Each one maps to a field we can read after the match. */
-export type SpecialMarketKind = "CORNERS" | "SHOTS" | "SHOTS_ON_TARGET";
+export type SpecialMarketKind = "CORNERS" | "SHOTS" | "SHOTS_ON_TARGET" | "FOULS" | "OFFSIDES";
 
 /** Whose count the line applies to. */
 export type SpecialSide = "MATCH" | "HOME" | "AWAY";
@@ -107,6 +117,18 @@ const BY_NAME: Record<string, SpecialMarket> = {
   "away shots on target over/under": { kind: "SHOTS_ON_TARGET", side: "AWAY", period: "FT" },
   "home team shots on target o/u": { kind: "SHOTS_ON_TARGET", side: "HOME", period: "FT" },
   "away team shots on target o/u": { kind: "SHOTS_ON_TARGET", side: "AWAY", period: "FT" },
+
+  // --- fouls ---
+  "fouls over/under": { kind: "FOULS", side: "MATCH", period: "FT" },
+  "home team fouls over/under": { kind: "FOULS", side: "HOME", period: "FT" },
+  "away team fouls over/under": { kind: "FOULS", side: "AWAY", period: "FT" },
+
+  // --- offsides ---
+  "offsides over/under": { kind: "OFFSIDES", side: "MATCH", period: "FT" },
+  "home offsides over/under": { kind: "OFFSIDES", side: "HOME", period: "FT" },
+  "away offsides over/under": { kind: "OFFSIDES", side: "AWAY", period: "FT" },
+  "home team offsides over/under": { kind: "OFFSIDES", side: "HOME", period: "FT" },
+  "away team offsides over/under": { kind: "OFFSIDES", side: "AWAY", period: "FT" },
 };
 
 /**
@@ -131,7 +153,9 @@ export function actualFor(market: SpecialMarket, stats: TeamStatistics[]): numbe
   const [home, away] = stats;
   if (!home || !away) return null;
 
-  const field = ({ CORNERS: "corners", SHOTS: "shotsTotal", SHOTS_ON_TARGET: "shotsOnGoal" } as const)[market.kind];
+  const field = (
+    { CORNERS: "corners", SHOTS: "shotsTotal", SHOTS_ON_TARGET: "shotsOnGoal", FOULS: "fouls", OFFSIDES: "offsides" } as const
+  )[market.kind];
   const h = home[field];
   const a = away[field];
 
@@ -142,7 +166,13 @@ export function actualFor(market: SpecialMarket, stats: TeamStatistics[]): numbe
 
 /** Human label for the published pick, e.g. "Home team corners". */
 export function marketLabel(market: SpecialMarket): string {
-  const kind = { CORNERS: "corners", SHOTS: "shots", SHOTS_ON_TARGET: "shots on target" }[market.kind];
+  const kind = {
+    CORNERS: "corners",
+    SHOTS: "shots",
+    SHOTS_ON_TARGET: "shots on target",
+    FOULS: "fouls",
+    OFFSIDES: "offsides",
+  }[market.kind];
   const side = { MATCH: "Match", HOME: "Home team", AWAY: "Away team" }[market.side];
   return `${side} ${kind}`;
 }

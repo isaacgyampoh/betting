@@ -23,7 +23,13 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wi
   );
 }
 
-const MARKET_LABEL: Record<string, string> = { CORNERS: "Corners", SHOTS: "Shots", SHOTS_ON_TARGET: "Shots on target" };
+const MARKET_LABEL: Record<string, string> = {
+  CORNERS: "Corners",
+  SHOTS: "Shots",
+  SHOTS_ON_TARGET: "Shots on target",
+  FOULS: "Fouls",
+  OFFSIDES: "Offsides",
+};
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gameclaw.win";
 

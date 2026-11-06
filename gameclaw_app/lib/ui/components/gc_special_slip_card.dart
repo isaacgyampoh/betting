@@ -13,7 +13,13 @@ final _kickoff = DateFormat('E HH:mm');
 final _verified = DateFormat('HH:mm');
 
 const _bookmakers = {'sportybet': 'SportyBet', 'footballcom': 'Football.com'};
-const _markets = {'CORNERS': 'corners', 'SHOTS': 'shots', 'SHOTS_ON_TARGET': 'shots on target'};
+const _markets = {
+  'CORNERS': 'corners',
+  'SHOTS': 'shots',
+  'SHOTS_ON_TARGET': 'shots on target',
+  'FOULS': 'fouls',
+  'OFFSIDES': 'offsides',
+};
 
 /// The Daily Special Slip, as one publication.
 ///

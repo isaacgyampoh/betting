@@ -45,6 +45,12 @@ describe("markets we publish", () => {
     ["Shots on Target Over/Under", "SHOTS_ON_TARGET", "MATCH"],
     ["Home Shots on Target Over/Under", "SHOTS_ON_TARGET", "HOME"],
     ["Away Team Shots on Target O/U", "SHOTS_ON_TARGET", "AWAY"],
+    ["Fouls Over/Under", "FOULS", "MATCH"],
+    ["Home Team Fouls Over/Under", "FOULS", "HOME"],
+    ["Away Team Fouls Over/Under", "FOULS", "AWAY"],
+    ["Offsides Over/Under", "OFFSIDES", "MATCH"],
+    ["Home Offsides Over/Under", "OFFSIDES", "HOME"],
+    ["Away Team Offsides Over/Under", "OFFSIDES", "AWAY"],
   ])("%s -> %s %s", (raw, kind, side) => {
     const m = parseSpecialMarket(raw);
     expect(m, `${raw} should be recognised`).not.toBeNull();
@@ -150,15 +156,76 @@ describe("what a selection is graded against", () => {
 
 describe("the supported set", () => {
   it("is small, and contains nothing from the forbidden families", () => {
-    expect(SUPPORTED_MARKETS.length).toBe(9);
+    // Five statistics across match, home and away. Small on purpose: every one of them is a
+    // statistic the provider populates on a real fixture and the bookmaker prices at team level.
+    expect(SUPPORTED_MARKETS.length).toBe(15);
     for (const m of SUPPORTED_MARKETS) {
-      expect(["CORNERS", "SHOTS", "SHOTS_ON_TARGET"]).toContain(m.kind);
+      expect(["CORNERS", "SHOTS", "SHOTS_ON_TARGET", "FOULS", "OFFSIDES"]).toContain(m.kind);
       expect(isForbiddenMarket(marketLabel(m))).toBe(false);
+    }
+  });
+
+  it("covers each statistic on the match and on either team", () => {
+    for (const kind of ["CORNERS", "SHOTS", "SHOTS_ON_TARGET", "FOULS", "OFFSIDES"]) {
+      const sides = SUPPORTED_MARKETS.filter((m) => m.kind === kind).map((m) => m.side).sort();
+      expect(sides).toEqual(["AWAY", "HOME", "MATCH"]);
     }
   });
 
   it("labels a selection in words a reader understands", () => {
     expect(marketLabel({ kind: "CORNERS", side: "HOME", period: "FT" })).toBe("Home team corners");
     expect(marketLabel({ kind: "SHOTS_ON_TARGET", side: "MATCH", period: "FT" })).toBe("Match shots on target");
+  });
+});
+
+/**
+ * The categories that stay out, and the measurement that keeps them there.
+ *
+ * Each of these is priced by the bookmaker, asked for by name, or both. They are excluded because
+ * of what the stats provider does - or does not - return, measured over six finished, well-covered
+ * fixtures on 4 November 2026. These tests exist so that adding one back is a deliberate act with
+ * a reason attached, rather than something that happens because a market name looked plausible.
+ */
+describe("markets we can price but cannot settle", () => {
+  // GOAL returns a Throw In row and it reads 0/0 on half of them. A real match has throw-ins, so
+  // a reported zero is a gap wearing a number.
+  it("refuses throw-ins, which the provider reports but does not populate", () => {
+    for (const name of ["Throw-Ins Over/Under", "Home Team Throw-Ins Over/Under", "Throw-Ins 1X2"]) {
+      expect(parseSpecialMarket(name)).toBeNull();
+    }
+  });
+
+  // Never reported by the provider on any of the six.
+  it("refuses tackles, clearances, blocks and interceptions", () => {
+    for (const name of ["Tackles Over/Under", "Home Team Tackles Over/Under", "Clearances Over/Under", "Interceptions Over/Under"]) {
+      expect(parseSpecialMarket(name)).toBeNull();
+    }
+  });
+
+  // The provider has both on all six; the bookmaker prices them only per player.
+  it("refuses saves and passes, which exist only as player markets", () => {
+    for (const name of ["Player Saves", "Player passes", "Saves Over/Under", "Passes Over/Under"]) {
+      expect(parseSpecialMarket(name)).toBeNull();
+    }
+  });
+
+  // Red Cards appears only when a red was shown, and nothing can corroborate its absence.
+  it("refuses cards and bookings until a red card can be corroborated", () => {
+    for (const name of ["Bookings - Over/Under", "Match Cards", "Home Team Total Bookings", "Total Booking Points", "Exact Bookings"]) {
+      expect(parseSpecialMarket(name)).toBeNull();
+    }
+  });
+
+  it("refuses player markets, whose data is there for the top five and absent below", () => {
+    for (const name of ["Player Fouls", "Player shots", "Player Offsides", "Player SoT outside box"]) {
+      expect(parseSpecialMarket(name)).toBeNull();
+    }
+  });
+
+  // The brief's hard exclusions, restated against the real names the book uses.
+  it("still refuses every result and goals market", () => {
+    for (const name of ["1X2", "Double Chance", "Over/Under", "Both Teams To Score", "Corners 1X2", "Fouls 1X2", "Shots 1X2"]) {
+      expect(parseSpecialMarket(name)).toBeNull();
+    }
   });
 });

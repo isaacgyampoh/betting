@@ -39,6 +39,8 @@ const FIELD: Record<SpecialMarketKind, keyof TeamStatistics> = {
   CORNERS: "corners",
   SHOTS: "shotsTotal",
   SHOTS_ON_TARGET: "shotsOnGoal",
+  FOULS: "fouls",
+  OFFSIDES: "offsides",
 };
 
 type Sample = { observations: Observation[]; incomplete: number };
