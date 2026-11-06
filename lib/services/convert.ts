@@ -47,6 +47,56 @@ async function convertById(sel: SlipRecord["selections"][number], adapter: Bookm
   return { target: hit.event, offers: hit.offers, score: 1 };
 }
 
+/**
+ * Bookmakers that address a fixture by its Sportradar id.
+ *
+ * All three run the hopegaming platform, so `sr:match:N` means the same game on each - which is
+ * what makes conversion between them exact rather than a name match.
+ */
+const SPORTRADAR_SPACE: readonly BookmakerSlug[] = ["sportybet", "msport", "footballcom"];
+
+/** Bookmakers in that space whose own fixture search actually reaches beyond today. */
+const ID_RESOLVERS: readonly BookmakerSlug[] = ["sportybet", "footballcom"];
+
+/**
+ * Ask a bookmaker that can find the game what its Sportradar id is, then address the destination
+ * by that id.
+ *
+ * MSport shares the id space but cannot search its own feed past the live window: `pageNum` is
+ * ignored and `pageSize` capped at 50, so `all-matches/next-7-days` returns the fifty games
+ * nearest kick-off and nothing else. A source with its own ids - betPawa - therefore converted to
+ * MSport at 0 of 4 fixtures, while SportyBet and Football.com found 4 of 4 by name.
+ *
+ * This runs only after both other strategies have failed, so it costs nothing on the common path,
+ * and only for destinations in the shared id space: anywhere else the id would mean nothing.
+ */
+async function convertViaSharedId(
+  sel: SlipRecord["selections"][number],
+  adapter: BookmakerAdapter,
+  aliases: AliasIndex,
+): Promise<Found | null> {
+  if (!SPORTRADAR_SPACE.includes(adapter.slug)) return null;
+
+  for (const slug of ID_RESOLVERS) {
+    if (slug === adapter.slug) continue;
+    const resolver = getAdapter(slug);
+    if (!resolver.capabilities.events) continue;
+
+    const candidates = await resolver.searchEvent(sel.homeTeam, sel.awayTeam, sel.kickoffAt).catch(() => []);
+    const match = bestMatch({ home: sel.homeTeam, away: sel.awayTeam, kickoffAt: sel.kickoffAt }, candidates, aliases);
+    const id = match?.candidate.externalId;
+    if (!id?.startsWith("sr:match:")) continue;
+
+    const hit = await adapter.getEventMarkets(id).catch(() => null);
+    if (!hit?.offers.length) continue;
+
+    logger.info("convert.resolved_via", { destination: adapter.slug, resolver: slug, eventId: id });
+    // The resolver's own confidence in the name match carries over: the id step after it is exact.
+    return { target: hit.event, offers: hit.offers, score: match!.score };
+  }
+  return null;
+}
+
 async function convertByName(
   sel: SlipRecord["selections"][number],
   adapter: BookmakerAdapter,
@@ -100,7 +150,8 @@ export async function convertSelection(
   // today simply could not be found, and converting a slip failed for most of the day's football.
   const byId = await convertById(sel, adapter);
 
-  const found = byId ?? (await convertByName(sel, adapter, aliases));
+  const found =
+    byId ?? (await convertByName(sel, adapter, aliases)) ?? (await convertViaSharedId(sel, adapter, aliases));
   if (!found) return skip("EVENT_NOT_FOUND");
   const { target, offers, score } = found;
   const targetEvent = { ...target, externalId: null };

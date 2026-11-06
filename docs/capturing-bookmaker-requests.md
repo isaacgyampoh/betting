@@ -163,13 +163,19 @@ as deliberately unmapped, with the reason, so the gap is not later "fixed".
 | Endpoint | Gives us |
 |---|---|
 | `GET /api/sportsbook/v3/booking-number/{code}` | read a booking code (JSON errors, protobuf body) |
-| `POST /api/sportsbook/v3/booking-number` | create one; takes `{"selections":[...]}` |
+| `POST /api/sportsbook/v3/booking-number` | create one - **shape unknown**, see below |
 | `POST /api/sportsbook/v4/events/lists/by-queries` | fixtures |
 | `POST /api/sportsbook/v3/prices/list` | odds |
 | `GET /api/sportsbook/v4/categories/list/{id}` | categories (this one *is* JSON) |
 
 Headers: `x-pawa-brand: betpawa-ghana`, `x-pawa-language: en`. Errors are
 `{error, params, payload, uuid}`; a bad code gives `BOOKING_CODE_NOT_FOUND`.
+
+> **Creating a code: the body shape is not known.** The endpoint is there and answers, but every
+> shape derived from the read payload is refused with `BAD_REQUEST` - tried 2026-11-06 with
+> `{"selections":["<id>"]}`, `{"selections":[{"id"}]}` and `{"selections":[{"eventId","selectionId"}]}`.
+> Three attempts was the limit: guessing repeatedly at a bookmaker's production write endpoint is
+> what this file tells you not to do, and one `betpawa-book.har` settles it.
 
 **Why it stops here.** The schema is compiled into their generated protobuf code
 (`proto-json-converter-*.js`), not shipped as a readable descriptor. Guessing field numbers would
