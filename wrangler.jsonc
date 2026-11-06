@@ -22,7 +22,15 @@
   "observability": { "enabled": true },
 
   // 03:30 GMT cleanup, 07:00 GMT daily picks: see worker.ts → /api/v1/cron/*.
-  "triggers": { "crons": ["30 3 * * *", "0 7 * * *"] },
+  // 03:30 settles yesterday, 07:00 publishes today, 15:00 re-reads the prices.
+  //
+  // The third one is not housekeeping. refreshSpecialOdds only looks at picks that have not kicked
+  // off (`kickoffAt > now`), and with only the first two triggers there was no moment when that
+  // could match anything: at 03:30 the day's picks do not exist, and by the next 03:30 they have
+  // been played. So prices were never re-read, `lastVerifiedAt` stayed at publication time, and the
+  // "price moved" indicator could not fire. 15:00 sits after the 07:00 publish and before the
+  // evening kick-offs, which is the window where a price check means something.
+  "triggers": { "crons": ["30 3 * * *", "0 7 * * *", "0 15 * * *"] },
 
   // Public / non-secret configuration. Secrets are set with `wrangler secret put` (see docs/deploy.md).
   // scripts/cf-build.mjs also injects the NEXT_PUBLIC_* values below into `next build`.

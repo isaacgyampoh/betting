@@ -5,7 +5,9 @@ import { cleanup } from "@/lib/services/maintenance";
 import { settlePublishedPicks } from "@/lib/services/settle-published";
 import { refreshSpecialOdds, settleSpecialPicks } from "@/lib/services/settle-special";
 
-// Early-morning job (Cloudflare Cron, see wrangler.jsonc), with `Authorization: Bearer $CRON_SECRET`.
+// Runs at 03:30 and 15:00 (Cloudflare Cron, see wrangler.jsonc), with `Authorization: Bearer
+// $CRON_SECRET`. Everything it does is idempotent - age-based deletes, and settlement that only
+// ever touches PENDING rows - so running it more than once a day is safe by construction.
 //
 // It also settles the published picks. That is not housekeeping: it is here because settling needs
 // a window where nothing else is competing for the time, and this slot has one.
@@ -30,8 +32,12 @@ export async function GET(req: NextRequest) {
     logger.warn("cron.settle_special_failed", { err });
     return { settled: 0, voided: 0, waiting: 0, slips: 0 };
   });
-  // Prices are re-read once a day, which is all two cron triggers afford. The published price is
-  // never overwritten; a move is a new row in the history.
+  // The published price is never overwritten; a move is a new row in the history.
+  //
+  // This is why there is a third cron trigger. refreshSpecialOdds only considers picks that have
+  // not kicked off yet, so running it at 03:30 could never match anything: the day's picks are
+  // published at 07:00 and are over before the next early-morning slot. The 15:00 run is the one
+  // that does the work.
   const odds = await refreshSpecialOdds().catch((err) => {
     logger.warn("cron.refresh_odds_failed", { err });
     return { checked: 0, moved: 0 };
