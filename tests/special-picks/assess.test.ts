@@ -190,3 +190,57 @@ describe("a price that does not reward the finding", () => {
     expect(qualifies(overwhelming, quality(overwhelming, null), edge(0.9, 1))).toBe(false);
   });
 });
+
+/**
+ * The price that was actually published, and why it should not have been.
+ *
+ * Friday 6 November's slip led with Sevilla v Alaves, over 4.5 shots on target at 1.06, carrying
+ * our own estimate of 90%. Those two numbers together are a losing bet: 0.90 x 1.06 is 0.954, so
+ * the selection returns about 95p for every pound risked even if the estimate is exactly right.
+ * A 90% chance reads like a strong finding and 1.06 reads like a safe price; the product of them
+ * is the only thing that matters and it is negative.
+ *
+ * It published because the run that produced it predated the edge gate reaching production - the
+ * gate was committed on 5 November, the slip model only at 10:42 on the 6th, after that morning's
+ * 07:00 run. This pins the behaviour so the question cannot come back: whatever else a selection
+ * has going for it, a price that does not reward the finding is refused.
+ */
+describe("the price has to reward the finding", () => {
+  // Sixteen of sixteen clear of a 4.5 line, which is what the published evidence described.
+  const observations: Observation[] = Array.from({ length: 16 }, (_, i) => ({
+    value: [11, 9, 12, 10, 8, 13, 10, 11, 9, 12, 10, 11, 8, 12, 9, 11][i],
+    kickoffAt: `2026-10-${String(i + 1).padStart(2, "0")}T15:00:00Z`,
+    wasHome: i % 2 === 0,
+  }));
+
+  it("computes a negative edge for the published Alaves price", () => {
+    expect(edge(0.9, 1.06)).toBeCloseTo(-0.046, 3);
+    expect(edge(0.9, 1.06)!).toBeLessThan(0);
+  });
+
+  it("refuses it however strong the underlying evidence is", () => {
+    const a = assess(observations, 4.5, "OVER")!;
+    expect(a).not.toBeNull();
+    // The finding itself is about as strong as this feature ever sees.
+    expect(a.probability).toBeGreaterThan(0.85);
+    expect(a.sample).toBe(16);
+
+    const value = edge(a.probability, 1.06);
+    expect(value!).toBeLessThan(DEFAULT_THRESHOLD.minEdge);
+    expect(qualifies(a, quality(a, value), value)).toBe(false);
+  });
+
+  it("accepts the same finding once the price is long enough to pay for it", () => {
+    const a = assess(observations, 4.5, "OVER")!;
+    // 1.25 against a ~0.9 estimate is a positive edge, and nothing else about the pick changed.
+    const value = edge(a.probability, 1.25);
+    expect(value!).toBeGreaterThan(DEFAULT_THRESHOLD.minEdge);
+    expect(qualifies(a, quality(a, value), value)).toBe(true);
+  });
+
+  it("refuses a missing price rather than treating it as free", () => {
+    const a = assess(observations, 4.5, "OVER")!;
+    expect(qualifies(a, quality(a, null), null)).toBe(false);
+  });
+});
+
