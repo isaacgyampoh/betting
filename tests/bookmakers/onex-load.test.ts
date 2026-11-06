@@ -18,12 +18,15 @@ import * as betwinner from "@/lib/bookmakers/live/betwinner";
  * 1xBet can move their slip to a bookmaker we can book - and needs nothing but a working
  * endpoint.
  *
- * There is reason to think it works. `GetCoupon` is live and discriminating: a bogus code returns
- * `{"Success":false,"Error":"Incorrect code","ErrorCode":100849}`, which is exactly the shape
- * loadCode expects and turns into INVALID_CODE. What has never been checked is whether a real,
- * populated coupon comes back with its events in the shape the parser wants.
+ * **It was run, and the answer was no.** On 2026-11-06 two codes created minutes earlier in
+ * 1xBet's own app - NZEG9 and BXBH9 - both came back `Incorrect code` (ErrorCode 100849) on all
+ * four domains. The endpoint is alive and discriminating, and it does return Success for codes
+ * SaveCoupon created, so GetCoupon reads an internal coupon object and not the code a user
+ * shares. Reading a shared code needs an endpoint we have not captured.
  *
- * One real code settles it. Build a slip on any of the four, tap Book, and run:
+ * The test is kept rather than deleted, because it is the cheapest way to re-check: if the right
+ * endpoint is ever found, point `loadCode` at it and run this again. Build a slip on any of the
+ * four, tap Book, and run:
  *
  *   ONEX_TEST_CODE=<code> ONEX_TEST_SLUG=1xbet pnpm vitest run tests/bookmakers/onex-load.test.ts
  *

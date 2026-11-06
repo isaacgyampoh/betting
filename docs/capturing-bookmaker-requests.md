@@ -197,7 +197,7 @@ That bundle carries the whole betting API surface (192 `/service-api/` paths).
 | `/service-api/LineFeed/GetSportsShortZip?lng=en` | GET | sports list |
 | `/service-api/LineFeed/GetGameZip?id={id}&lng=en&cfView=0&isSubGames=true&GroupEvents=true` | GET | one event, markets and odds |
 | `/service-api/LiveBet/Open/SaveCoupon` | POST | **creates a booking code** |
-| `/service-api/LiveBet/Open/GetCoupon` | POST | **reads a booking code** |
+| `/service-api/LiveBet/Open/GetCoupon` | POST | reads an **internal coupon** — *not* a user's booking code (see below) |
 | `/service-api/LiveBet-update/Open/UpdateCoupon` | POST | prices a slip |
 
 ```
@@ -205,6 +205,16 @@ POST /service-api/LiveBet/Open/SaveCoupon   {"Events":[ ... ],"Lng":"en"}
   -> {"Value":"BEMY7","Success":true,"ErrorCode":0}       <- the booking code
 
 POST /service-api/LiveBet/Open/GetCoupon    {"guid":"BEMY7","CfView":0,"Lng":"en"}
+
+> **GetCoupon does not read the codes users share.** Measured 2026-11-06 with two codes created
+> minutes earlier in 1xBet's own app, NZEG9 and BXBH9: both returned
+> `{"Success":false,"Error":"Incorrect code","ErrorCode":100849}` on all four domains above. The
+> endpoint is alive and discriminating, and it *does* return Success for codes SaveCoupon created,
+> so the two are different namespaces — an internal coupon object versus the shareable bet code.
+>
+> Reading a shared code needs an endpoint we have not captured. The bundle path below now 404s and
+> the global domains answer with a Cloudflare challenge, so finding it means probing their current
+> production site. That is a decision to take deliberately, not a loose end to tidy.
   -> {"Success":false,"Error":"Incorrect code","ErrorCode":100849}   for a bad code
 ```
 

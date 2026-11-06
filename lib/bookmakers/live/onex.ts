@@ -43,6 +43,20 @@ import { bestMatch } from "@/lib/matching/similarity";
 //    integration, not a sequence of experiments against their production service.
 //
 //    So loadCode and createCode stay declared unsupported, and nothing here reaches a user.
+//  * **GetCoupon does not read user-facing booking codes**, which is not what the name suggests
+//    and is the reason loadCode cannot simply be switched on. Measured on 2026-11-06 with two
+//    codes created minutes earlier in 1xBet's own app - NZEG9 and BXBH9 - both answered
+//    `{"Success":false,"Error":"Incorrect code","ErrorCode":100849}` on all four domains we
+//    support. The endpoint is alive and discriminating, and it does return Success for codes
+//    SaveCoupon made, so these two namespaces are different objects: SaveCoupon/GetCoupon operate
+//    on an internal coupon, not on the code a user shares with a friend.
+//
+//    Reading a shared code therefore needs a different endpoint, which is not in what we
+//    captured. The bundle path recorded in docs/capturing-bookmaker-requests.md for discovering
+//    the API surface now 404s, and the global domains (1xbet.com, 1xbet.ng) answer with a
+//    Cloudflare challenge. Finding it means probing their current site, which is the thing the
+//    paragraph above says not to do - so it waits for a decision, not for someone's spare
+//    afternoon.
 //  * These bookmakers publish no per-outcome probability (SportyBet does), so offers carry
 //    `probability: null` and the AI slip builder will skip them. They are for loading and
 //    converting codes, not for building slips.
