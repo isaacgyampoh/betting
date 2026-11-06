@@ -130,14 +130,58 @@ afternoon's work, not a reverse-engineering project.
 
 ## 2. Betway Ghana (betway.com.gh)
 
-**Status: not connected, and harder than the others.** The site is a Nuxt app, but its sportsbook is
-an embedded third-party feed (`feeds-roa.ragingriver.io`), so the booking code is not resolved by
-Betway's own API. `/bookabet/{code}` and `/share-bet` are client routes, not endpoints: the first
-redirects to `/sport/soccer/?bookingCode=X`. API hosts are `api.betwayafrica.com/api` and
-`apic.betwayafrica.com/api`. The capture below is the way in.
+**Status: still not connected. But two things this section used to say were wrong, and they were
+what made it look like a reverse-engineering project.**
 
+Re-measured 2026-11-06 by loading the public pages in a real browser (Playwright, headless
+chromium) and recording every request the site's own JavaScript made. No login, no account, no
+bot-check handling - the pages answered 200 and presented no challenge.
 
-Repeat A, B and C:
+What changed:
+
+1. **`feeds-roa.ragingriver.io` never appeared.** Not once, on any page. The sportsbook is served
+   from Betway's *own* domain, as ordinary REST. The "embedded third-party feed" premise - and the
+   401 that followed from it - was about a host the site does not use.
+2. **`/sports/soccer` is a 404 page.** The path is `/sport/soccer`, singular. Earlier probing was
+   reading Betway's not-found page and concluding the feed was unreachable.
+
+The endpoints its own client calls, all 200 in-browser:
+
+| Endpoint | Carries |
+| --- | --- |
+| `GET /sportsapi/br/v1/BetBook/Highlights/?countryCode=GH&sportId=soccer&Skip=0&Take=20&cultureCode=en-US&isEsport=false&boostedOnly=false&marketTypes=` | 177 KB: fixtures with their odds |
+| `GET /sportsapi/br/v1/Feeds/RegionsAndLeagues/soccer?countryCode=GH` | 81 KB: competitions and regions |
+| `GET /sportsapi/br/v1/FeedsOutcome/emop/?CountryCode=GH&CultureCode=en-US` | small; outcome metadata |
+
+Public config, on a separate host and plainly reachable: `config.betwayafrica.com/cron/sports/GH/en-US`,
+`/cron/sitemaps/synapseV2/GH/en-US` (the real URL map), and
+`/cron/sports-book/market-header-config/synapse/GH/soccer` (which markets the UI groups together).
+`apic.betwayafrica.com` requests carry an `x-brandid` header whose value sits in the client bundle,
+so it is a public tenant id rather than a secret - read it off the page rather than copying it here.
+
+A websocket also opens, `wss://www.betway.com.gh/synapse-hub/br/synapse-hub`. No frames arrived in
+the window observed, so whether prices stream over it or it is only for live betting is unconfirmed.
+
+**The one open question, and it is a decision rather than a discovery.** Server-side, with a plain
+request and no browser:
+
+- `Feeds/RegionsAndLeagues/soccer` → **200, 81 KB**. Works today, from a server, with no headers.
+- `BetBook/Highlights` → **520**.
+
+So one of the two already answers us and the other does not. Finding out what the difference is
+means sending the request headers a browser sends, and that is the line this project does not cross
+on its own: a client that identifies itself honestly is one thing, and dressing a server request up
+as a browser to get past a check is another. It needs a deliberate decision about which of those it
+would be, so it is left here rather than attempted.
+
+**One real booking code**, read off the rendered page: `BW8046A46C`. Ten characters, upper-case
+alphanumeric, `BW` prefix. The adapter's assumed `codeFormat` of `/^[A-Z0-9]{5,10}$/` accepts it, so
+that guess is at least consistent with reality - on a sample of one.
+
+Capabilities remain all false and the catalogue still reports Betway as unsupported, which is
+accurate: nothing here has been built or verified end to end.
+
+If you would rather settle it by capture, repeat A, B and C:
 - **A:** Betslip, then the load/enter **booking code** box.
 - **B:** Add picks, then **Book a bet** / **Share** to get a code.
 - **C:** Open a match page, and search for a team.
@@ -162,7 +206,7 @@ as deliberately unmapped, with the reason, so the gap is not later "fixed".
 
 | Endpoint | Gives us |
 |---|---|
-| `GET /api/sportsbook/v3/booking-number/{code}` | read a booking code (JSON errors, protobuf body) |
+| `GET /api/sportsbook/v3/booking-number/{code}` | read a booking code - JSON throughout, and built |
 | `POST /api/sportsbook/v3/booking-number` | create one - **shape unknown**, see below |
 | `POST /api/sportsbook/v4/events/lists/by-queries` | fixtures |
 | `POST /api/sportsbook/v3/prices/list` | odds |
@@ -177,10 +221,13 @@ Headers: `x-pawa-brand: betpawa-ghana`, `x-pawa-language: en`. Errors are
 > Three attempts was the limit: guessing repeatedly at a bookmaker's production write endpoint is
 > what this file tells you not to do, and one `betpawa-book.har` settles it.
 
-**Why it stops here.** The schema is compiled into their generated protobuf code
-(`proto-json-converter-*.js`), not shipped as a readable descriptor. Guessing field numbers would
-risk silently mis-reading odds, which is the one mistake that must never ship. A DevTools capture
-(step A below) unblocks it, because the browser shows the decoded body.
+**Why it stops at reading.** Only the *write* shape is unknown now; the read is plain JSON and
+built. betPawa's request schema is compiled into their generated code
+(`proto-json-converter-*.js`) rather than shipped as a readable descriptor, so the body for creating
+a code cannot be derived from the client - and guessing at a production write endpoint is what this
+file tells you not to do. A single `captures/betpawa-book.har` settles it, because the browser shows
+the decoded request body. Until that exists, betPawa stays **read-only: booking not verified**, and
+the adapter says so with `createCode: false`.
 
 ## 3a. 1xBet platform (1xBet, PariPesa, 22Bet, Betwinner) — built; one check from live
 
