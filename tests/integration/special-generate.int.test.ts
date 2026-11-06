@@ -256,3 +256,117 @@ describe("the day a selection belongs to", () => {
     expect(ghanaDate(new Date("2026-11-03T00:00:00Z"))).toBe("2026-11-03");
   });
 });
+
+/**
+ * A slip belongs to one calendar day.
+ *
+ * Friday 6 November's slip went out carrying Bristol City v Norwich, which kicked off Saturday
+ * lunchtime. The generator asked the bookmaker for the next 36 hours and published from whatever
+ * came back: that morning the window held 57 fixtures, 7 of them Friday's and 50 Saturday's, so
+ * most of what it was choosing from belonged to a day the slip was not for.
+ *
+ * The run below is dated 2026-11-02, so "the next day" is the 3rd.
+ */
+describe("only the day's own fixtures", () => {
+  /** The same fixture helper, with a kickoff and status of your choosing. */
+  const fixtureAt = (
+    externalId: string,
+    home: string,
+    away: string,
+    kickoffAt: string,
+    offers: ReturnType<typeof offer>[],
+    status = "NOT_STARTED",
+  ) => ({
+    ...fixture(externalId, home, away, offers),
+    event: { ...fixture(externalId, home, away, offers).event, kickoffAt: new Date(kickoffAt), status: status as "NOT_STARTED" },
+  });
+
+  const SAME_DAY = "2026-11-02T15:00:00Z";
+  const NEXT_DAY = "2026-11-03T12:30:00Z";
+
+  it("will not take a leg from the next day, and publishes nothing rather than reaching for one", async () => {
+    const result = await generate(
+      [
+        fixtureAt("e1", "Arsenal", "Chelsea", SAME_DAY, [corners("9.5")]),
+        // Would qualify on every count except the one that matters.
+        fixtureAt("e2", "Spurs", "Everton", NEXT_DAY, [shots("8.5")]),
+      ],
+      { "1": strong, "3": strong },
+    );
+
+    expect(result.published).toBe(0);
+    expect(await db.specialSlip.count()).toBe(0);
+    // And it says so, rather than reporting a thin day.
+    expect(result.skipped.join(" ")).toMatch(/no combination|no slip|kicks off/i);
+  });
+
+  it("publishes when both legs are on the day, proving the filter is about the date", async () => {
+    const result = await generate(
+      [
+        fixtureAt("e1", "Arsenal", "Chelsea", SAME_DAY, [corners("9.5")]),
+        fixtureAt("e2", "Spurs", "Everton", "2026-11-02T19:45:00Z", [shots("8.5")]),
+      ],
+      { "1": strong, "3": strong },
+    );
+
+    expect(result.published).toBe(2);
+    const rows = await db.specialPick.findMany({});
+    for (const r of rows) expect(r.kickoffAt.toISOString().slice(0, 10)).toBe("2026-11-02");
+  });
+
+  // The failure mode in its purest form: a day with one good fixture of its own and a full card
+  // the following day. Widening by even one day would produce a slip here.
+  it("does not widen the range when the day alone is not enough", async () => {
+    const tomorrow = ["a", "b", "c", "d"].map((id, i) =>
+      fixtureAt(`t${id}`, `Tomorrow${i}`, `Away${i}`, NEXT_DAY, [corners("9.5"), shots("8.5")]),
+    );
+    const result = await generate(
+      [fixtureAt("e1", "Arsenal", "Chelsea", SAME_DAY, [corners("9.5")]), ...tomorrow],
+      { "1": strong, "3": strong, "5": strong, "7": strong, "9": strong },
+    );
+
+    expect(result.published).toBe(0);
+    expect(await db.specialSlip.count()).toBe(0);
+  });
+
+  it("ignores a fixture that has already kicked off, even on the right day", async () => {
+    // The run is at 07:00; this one started at 05:00.
+    const result = await generate(
+      [
+        fixtureAt("e1", "Arsenal", "Chelsea", "2026-11-02T05:00:00Z", [corners("9.5")]),
+        fixtureAt("e2", "Spurs", "Everton", SAME_DAY, [shots("8.5")]),
+      ],
+      { "1": strong, "3": strong },
+    );
+    expect(result.published).toBe(0);
+  });
+
+  it("ignores a postponed fixture on the right day", async () => {
+    const result = await generate(
+      [
+        fixtureAt("e1", "Arsenal", "Chelsea", SAME_DAY, [corners("9.5")], "POSTPONED"),
+        fixtureAt("e2", "Spurs", "Everton", SAME_DAY, [shots("8.5")]),
+      ],
+      { "1": strong, "3": strong },
+    );
+    expect(result.published).toBe(0);
+  });
+
+  // Not a formatting detail: the published figure is what a bettor is told the slip pays, and it
+  // has to be the product of the prices actually read, never a target the generator was aiming at.
+  it("publishes combined odds that are the product of the real prices", async () => {
+    await generate(
+      [
+        fixtureAt("e1", "Arsenal", "Chelsea", SAME_DAY, [corners("9.5", 1.45)]),
+        fixtureAt("e2", "Spurs", "Everton", SAME_DAY, [shots("8.5", 1.4)]),
+      ],
+      { "1": strong, "3": strong },
+    );
+
+    const slip = await db.specialSlip.findFirstOrThrow({ include: { picks: true } });
+    const product = slip.picks.reduce((t, p) => t * Number(p.odds), 1);
+    expect(Number(slip.combinedOdds)).toBeCloseTo(product, 3);
+    expect(Number(slip.combinedOdds)).toBeCloseTo(1.45 * 1.4, 3);
+  });
+});
+

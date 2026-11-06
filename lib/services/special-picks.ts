@@ -5,6 +5,7 @@ import { ghanaDate } from "@/lib/services/daily-picks";
 import { readViaApi } from "@/lib/services/remote-data";
 import { lookupMatch } from "@/lib/services/stats";
 import { assess, DEFAULT_THRESHOLD, edge, quality, qualifies, type Threshold } from "@/lib/special-picks/assess";
+import { fixtureAllowedOn } from "@/lib/special-picks/fixture-date";
 import { candidatesFrom, dedupe, type SpecialCandidate } from "@/lib/special-picks/candidates";
 import { marketLabel } from "@/lib/special-picks/markets";
 import { coverage, describeEvidence, MIN_COVERAGE, research } from "@/lib/special-picks/research";
@@ -101,6 +102,12 @@ type Assessed = {
 
 export async function generateSpecialPicks(now = new Date(), threshold: Threshold = DEFAULT_THRESHOLD): Promise<SpecialResult> {
   const date = ghanaDate(now);
+  // Research takes minutes, so the pre-publication check below needs a later clock than this one.
+  // It is measured as elapsed time from here rather than read from `new Date()`, because `now` is
+  // injected - by the tests, and by any future backfill - and a check that quietly consulted the
+  // wall clock instead would reject every fixture whenever the two disagreed.
+  const startedAt = Date.now();
+  const sinceStart = () => new Date(now.getTime() + (Date.now() - startedAt));
   const skipped: string[] = [];
 
   // Idempotent by construction: the unique indexes make a duplicate publish impossible, and
@@ -120,7 +127,28 @@ export async function generateSpecialPicks(now = new Date(), threshold: Threshol
     return [];
   });
 
-  const candidates = dedupe(candidatesFrom(source.slug, fixtures));
+  // Only today's fixtures, and the filter is the guarantee rather than the window.
+  //
+  // The bookmaker is asked for 36 hours because a run has to see the whole of its own day whatever
+  // time it happens at, but 36 hours from a Friday morning is mostly Saturday: measured here on
+  // 2026-11-06, 50 of the 57 fixtures returned belonged to the next day. Nothing filtered them, so
+  // Friday's slip went out carrying a Saturday lunchtime fixture. Narrowing the request would not
+  // fix that - a window is a request, and a bookmaker is free to answer it loosely - so the date is
+  // enforced here, on what came back.
+  const verdicts = fixtures.map((f) => ({ f, verdict: fixtureAllowedOn(f.event, date, now) }));
+  const onDate = verdicts.filter((x) => x.verdict.ok).map((x) => x.f);
+  const rejected = new Map<string, number>();
+  for (const { verdict } of verdicts) {
+    if (!verdict.ok) rejected.set(verdict.reason, (rejected.get(verdict.reason) ?? 0) + 1);
+  }
+  if (rejected.size) {
+    logger.info("special.fixtures_filtered", { date, kept: onDate.length, rejected: Object.fromEntries(rejected) });
+  }
+  if (!onDate.length) {
+    return { date, published: 0, skipped: [`No fixture kicks off on ${date} with markets we price, so no slip was published.`] };
+  }
+
+  const candidates = dedupe(candidatesFrom(source.slug, onDate));
   if (!candidates.length) {
     return { date, published: 0, skipped: ["No specialist market was priced for today's fixtures."] };
   }
@@ -202,6 +230,26 @@ export async function generateSpecialPicks(now = new Date(), threshold: Threshol
         `No combination of today's ${assessed.length} qualifying selections landed between ` +
           `${SPECIAL_BAND.min} and ${SPECIAL_BAND.max}, so no slip was published.`,
       ],
+    };
+  }
+
+  // Checked again, against the clock as it is now rather than as it was when the fixtures were
+  // listed. Research costs minutes and a provider can revise a kick-off in that time, so the state
+  // this slip is published on is read immediately before it is written - not inherited from a list
+  // that was true earlier.
+  const atPublish = sinceStart();
+  const stale = chosen
+    .map((c) => ({ c, verdict: fixtureAllowedOn(c.candidate.event, date, atPublish) }))
+    .filter((x) => !x.verdict.ok);
+  if (stale.length) {
+    logger.warn("special.stale_at_publish", {
+      date,
+      legs: stale.map((x) => `${x.c.candidate.event.home} v ${x.c.candidate.event.away}: ${(x.verdict as { reason: string }).reason}`),
+    });
+    return {
+      date,
+      published: 0,
+      skipped: [`A selection stopped being valid for ${date} before it could be published, so no slip went out.`],
     };
   }
 

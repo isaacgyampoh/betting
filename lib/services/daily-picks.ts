@@ -11,6 +11,7 @@ import { getActiveSubscription } from "@/lib/services/profile";
 import { buildFromFixtures, hasEvidenceSupport, reasonFor, shortlistCandidates, toCandidates } from "@/lib/slips/fixture-picks";
 import { enrich, pickKey, rankByEvidence, reasonWithEvidence, withConviction, withoutContradicted } from "@/lib/slips/enrich";
 import { canSettleFromScore } from "@/lib/services/slip-results";
+import { accraDate } from "@/lib/special-picks/fixture-date";
 
 // Daily picks are generated once per day for everyone (not per user) to keep AI cost flat, and
 // published unchanged. Results are filled in automatically after kickoff; rows are never edited
@@ -59,7 +60,9 @@ export type DailyPickView = {
 
 /** Today in Ghana (GMT), as YYYY-MM-DD. */
 export function ghanaDate(now = new Date()): string {
-  return now.toISOString().slice(0, 10);
+  // Was `now.toISOString().slice(0, 10)`, which is right only because Ghana sits at UTC+0 all year.
+  // That is a fact about Ghana, not about this line, and nothing recorded which it depended on.
+  return accraDate(now);
 }
 
 function chanceInWords(probability: number): string {
