@@ -76,8 +76,15 @@ type Item = {
     additionalInfo?: { live?: boolean };
   };
   selections?: {
-    market?: { typeId?: string; name?: string; displayName?: string; formattedHandicap?: string };
-    selectionInfo?: { id?: string; name?: string; displayName?: string; typeId?: string };
+    market?: {
+      typeId?: string;
+      name?: string;
+      displayName?: string;
+      formattedHandicap?: string;
+      /** Where the line actually lives: `total` for a total, `hcp` for a handicap. */
+      specifier?: { total?: string; hcp?: string } | null;
+    };
+    selectionInfo?: { id?: string; name?: string; displayName?: string; typeId?: string; handicap?: string };
   }[];
   odds?: { price?: number };
 };
@@ -112,10 +119,19 @@ function toEventInfo(info: NonNullable<Item["eventInfo"]>, sides: { home: string
  * outcome id, so a selection can still be found again if the names are ever renamed.
  */
 function toRawMarket(selection: NonNullable<Item["selections"]>[number]): RawMarket {
+  // `formattedHandicap` is the obvious-looking field and it is empty even on markets that have a
+  // line: a 2.5 total and a -4 handicap both carried "" there while `specifier` held the number.
+  // Reading it alone meant every total and handicap arrived without a line and could not convert.
+  //
+  // `selectionInfo.handicap` holds it too but sometimes decorated - "Home -4" against the plain
+  // "-4" in `specifier` - so `specifier` is the one to trust.
+  const spec = selection.market?.specifier;
+  const line = spec?.total ?? spec?.hcp ?? selection.market?.formattedHandicap ?? "";
+
   return {
     marketId: selection.market?.name ?? "",
     outcomeId: selection.selectionInfo?.name ?? "",
-    specifier: selection.market?.formattedHandicap ?? "",
+    specifier: line,
     marketName: selection.market?.displayName ?? selection.market?.name ?? undefined,
     outcomeName: selection.selectionInfo?.displayName ?? selection.selectionInfo?.name ?? undefined,
   };

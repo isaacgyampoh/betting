@@ -22,19 +22,19 @@ import type { Market, MarketPeriod, MarketType } from "@/lib/markets/types";
 type Def = { type: MarketType; period: MarketPeriod };
 
 const MARKETS: Record<string, Def> = {
-  // Verified: seen in booking code QANPYA1, four picks, all mapped and all converted to SportyBet.
-  "1X2 - FT": { type: "MATCH_RESULT", period: "FT" },
-
-  // Inferred from betPawa's "<market> - <period>" naming, not yet seen in a payload. They are
-  // here because the cost of being wrong is that they never match, and the cost of leaving them
-  // out is that a common slip silently fails to convert. Move one up as a payload confirms it -
-  // and check the outcome labels at the same time, since those are what the table below keys on.
-  "1X2 - 1H": { type: "MATCH_RESULT", period: "H1" },
-  "Double Chance - FT": { type: "DOUBLE_CHANCE", period: "FT" },
-  "Over/Under - FT": { type: "OVER_UNDER", period: "FT" },
-  "Over/Under - 1H": { type: "OVER_UNDER", period: "H1" },
-  "Both Teams To Score - FT": { type: "BTTS", period: "FT" },
-  "Handicap - FT": { type: "HANDICAP", period: "FT" },
+  // Every row here has been seen in a real booking code. The first attempt at this table inferred
+  // six names from betPawa's "<market> - <period>" pattern and got two of the three that have
+  // since appeared wrong - it is "Total Score Over/Under - FT", not "Over/Under - FT", and
+  // "Handicap 1X2 - FT", not "Handicap - FT". So inference is out: a guessed name that never
+  // matches costs a silent failure to convert, and looks identical to a market betPawa does not
+  // sell.
+  "1X2 - FT": { type: "MATCH_RESULT", period: "FT" }, // QANPYA1
+  "Both Teams To Score - FT": { type: "BTTS", period: "FT" }, // CFQUYS8
+  "Total Score Over/Under - FT": { type: "OVER_UNDER", period: "FT" }, // CFQUYS8
+  // "Handicap 1X2" names itself three-way, which is what our HANDICAP is - home, draw or away
+  // against a line. betPawa reports it as handicapType EUROPEAN, and an Asian handicap would be a
+  // different market with a different name and only two outcomes.
+  "Handicap 1X2 - FT": { type: "HANDICAP", period: "FT" }, // CFQUYS8
 };
 
 /**
@@ -45,6 +45,9 @@ const MARKETS: Record<string, Def> = {
 const NEVER_MAP: Record<string, string> = {
   "1X2 1UP - FT": "pays out early at one goal ahead, so it is not a 1X2 result and converts into a different bet",
   "1X2 2UP - FT": "pays out early at two goals ahead; same reason",
+  // Both conditions have to come in. Our Market model holds one pick, so mapping this to either
+  // half would drop a condition and hand someone an easier bet than the one they made.
+  "1X2 and Totals - FT": "one bet on the result and the total together, which our model cannot carry as a single pick",
 };
 
 const OUTCOME: Record<string, Record<string, string>> = {
@@ -52,7 +55,8 @@ const OUTCOME: Record<string, Record<string, string>> = {
   DOUBLE_CHANCE: { "1X": "HOME_DRAW", "12": "HOME_AWAY", X2: "DRAW_AWAY" },
   OVER_UNDER: { Over: "OVER", Under: "UNDER" },
   BTTS: { Yes: "YES", No: "NO" },
-  HANDICAP: { "1": "HOME", "2": "AWAY" },
+  // Three-way, so the draw is a real outcome and leaving it out would silently drop a pick.
+  HANDICAP: { "1": "HOME", X: "DRAW", "2": "AWAY" },
 };
 
 /** The line out of betPawa's `formattedHandicap`, which carries "2.5" or "-1" or "". */
