@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
-import { BRAND_ACCENT, BrandIcon } from "@/lib/brand-icon";
+import { BRAND_UI_ACCENT, BrandIcon } from "@/lib/brand-icon";
 import { formatKickoff, formatOdds } from "@/lib/format";
 import { getSlip } from "@/lib/services/slips";
 import { fitShareList } from "@/lib/slips/share-layout";
@@ -45,7 +45,7 @@ export async function GET(req: Request, { params }: RouteContext<"/slip/[id]/sha
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
             <span style={{ color: "#a1a1aa", fontSize: 24 }}>{games.length} games · total odds</span>
-            <span style={{ fontSize: 54, fontWeight: 700, color: BRAND_ACCENT === "#2346b5" ? "#7aa2ff" : BRAND_ACCENT }}>{formatOdds(slip.totalOdds)}</span>
+            <span style={{ fontSize: 54, fontWeight: 700, color: BRAND_UI_ACCENT }}>{formatOdds(slip.totalOdds)}</span>
           </div>
         </div>
 

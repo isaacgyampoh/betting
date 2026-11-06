@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { NextResponse } from "next/server";
-import { BRAND_ACCENT, BrandIcon } from "@/lib/brand-icon";
+import { BRAND_UI_ACCENT, BrandIcon } from "@/lib/brand-icon";
 import { formatOdds } from "@/lib/format";
 import { specialSlipByReference } from "@/lib/services/special-picks";
 
@@ -12,8 +12,18 @@ export const dynamic = "force-dynamic";
  * A fixed height sized for three legs left a two-leg slip airy, with each row floating in a third
  * of the picture. Both of these are portrait and neither is cropped by WhatsApp, Instagram or
  * Telegram, which is what the shape has to survive.
+ *
+ * The base was 700 and that was still 190px too tall, which does not read as generous spacing: the
+ * footer is pinned with `marginTop: auto`, so every pixel of slack opens as one empty band above it.
+ * Measured off the rendered 2-leg card: header 84, title block 112, the odds figure 156, the legs'
+ * top border 33 and the footer 124 - 509 of fixed furniture, and 170 for each leg, which is what a
+ * row measures rather than what its paddings suggest.
+ *
+ * 540 rather than 510, because the summary line can wrap to two at this width and a bounded 30px of
+ * headroom is cheaper than clipping it. That is the whole of the cushion; it used to be six times
+ * larger by accident.
  */
-export const shareSize = (legs: number) => ({ width: 1080, height: 700 + legs * 170 });
+export const shareSize = (legs: number) => ({ width: 1080, height: 540 + legs * 170 });
 
 const DATE = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 const KICKOFF = new Intl.DateTimeFormat("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
@@ -45,7 +55,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ referen
   const slip = await specialSlipByReference(reference).catch(() => null);
   if (!slip) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Slip not found." } }, { status: 404 });
 
-  const accent = BRAND_ACCENT === "#2346b5" ? "#7aa2ff" : BRAND_ACCENT;
+  const accent = BRAND_UI_ACCENT;
   const tone = { WON: "#5ee08a", LOST: "#ff5a5f", VOID: "#a1a1aa", PENDING: "#a1a1aa" }[slip.status] ?? "#a1a1aa";
   const label = { WON: "WON", LOST: "LOST", VOID: "VOID", PENDING: "RUNNING" }[slip.status] ?? "RUNNING";
 
