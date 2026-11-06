@@ -24,8 +24,13 @@ const sportybet = createAdapter("sportybet", "live");
  * live window - 304 of 400 already in play, none more than twenty minutes away - so it reported a
  * block that had already lifted. Not finding a convenient fixture is not a refusal.
  */
+// Two different things, which the previous version ran together and so could not tell apart.
+// `refused` is MSport turning us away - an empty feed or a throw. `noTarget` is this file failing
+// to find a fixture worth testing against, which happens whenever MSport's live window holds
+// nothing upcoming with open markets, and is not MSport's fault or a reason to go red.
 let refused = false;
 let refusal = "";
+let noTarget = "";
 
 describe.skipIf(!live)("MSport live API", () => {
   let fixtures: BookmakerEventInfo[] = [];
@@ -69,10 +74,7 @@ describe.skipIf(!live)("MSport live API", () => {
       }
     }
     if (!target) {
-      refused = true;
-      // Deliberately not a refusal: the feed answered, we just did not find a fixture carrying
-      // both markets this test wants. Left as a skip with the reason attached.
-      refusal = `no MSport fixture with a full market list among ${candidates.length} candidates`;
+      noTarget = `no MSport fixture with open markets among ${candidates.length} not-started candidates`;
     }
   }, 120_000);
 
@@ -84,7 +86,7 @@ describe.skipIf(!live)("MSport live API", () => {
   });
 
   it("lists real upcoming fixtures", (ctx) => {
-    if (refused) return ctx.skip();
+    if (refused || noTarget) return ctx.skip();
     expect(fixtures.length).toBeGreaterThan(10);
     for (const f of fixtures) {
       expect(f.home).toBeTruthy();
@@ -94,7 +96,7 @@ describe.skipIf(!live)("MSport live API", () => {
   });
 
   it("maps the markets Ghanaian slips use", (ctx) => {
-    if (refused) return ctx.skip();
+    if (refused || noTarget) return ctx.skip();
     expect(offers.length).toBeGreaterThan(10);
     expect(offers.every((o) => o.odds > 1)).toBe(true);
     const types = new Set(offers.filter((o) => o.market).map((o) => o.market!.type));
@@ -103,7 +105,7 @@ describe.skipIf(!live)("MSport live API", () => {
   });
 
   it("round-trips every mapped offer to the same ids", (ctx) => {
-    if (refused) return ctx.skip();
+    if (refused || noTarget) return ctx.skip();
     const teams = { home: target!.home, away: target!.away };
     for (const o of offers.filter((x) => x.market)) {
       const back = msport.unmapMarket(o.market!, teams);
@@ -116,7 +118,7 @@ describe.skipIf(!live)("MSport live API", () => {
   });
 
   it("books a code and reads back the same picks", async (ctx) => {
-    if (refused) return ctx.skip();
+    if (refused || noTarget) return ctx.skip();
     // A game minutes from kick-off is refused by the bookmaker, which is correct of it and not
     // something this test can assert around.
     const minutesOut = (target!.kickoffAt.getTime() - Date.now()) / 60_000;
@@ -142,7 +144,7 @@ describe.skipIf(!live)("MSport live API", () => {
   }, 90_000);
 
   it("rejects an unknown code without blaming the user's code format", async (ctx) => {
-    if (refused) return ctx.skip();
+    if (refused || noTarget) return ctx.skip();
     await expect(msport.loadCode("ZZZ999")).rejects.toMatchObject({
       code: expect.stringMatching(/INVALID_CODE|EXPIRED_CODE/),
     });
@@ -153,7 +155,7 @@ describe.skipIf(!live)("MSport live API", () => {
 // only the price changes — which is exactly the thing worth telling a bettor.
 describe.skipIf(!live)("converting a real slip from SportyBet to MSport", () => {
   it("books the same picks on MSport and reports MSport's own prices", async (ctx) => {
-    if (refused) return ctx.skip();
+    if (refused || noTarget) return ctx.skip();
     const { listUpcomingWithOffers } = await import("@/lib/bookmakers/live/sportybet");
     const sbFixtures = await listUpcomingWithOffers({ hours: 72, pages: 3 });
 
