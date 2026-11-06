@@ -28,6 +28,7 @@ working the moment you revoke it at the provider, so revoke *after* the deploy i
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys → Create key | the same page |
 | `API_FOOTBALL_KEY` | dashboard.api-football.com → Account | the same page |
 | `PAYSTACK_SECRET_KEY` | Paystack → Settings → API Keys & Webhooks → Generate new | the same page |
+| `GOAL_API_KEY` | the GOAL API account page you signed up on → API key → regenerate | the same page |
 
 ```bash
 npx wrangler secret put ANTHROPIC_API_KEY
@@ -89,6 +90,11 @@ Three different things, often confused:
   `.env.local` as `SERVICE_KEY`.
 - **personal access token** — your account, not the project.
 
+> **Retired.** Supabase is no longer part of this system — Postgres on Render and the app's own
+> auth replaced it, and nothing in the deployed app or the Worker reads a Supabase key. This section
+> is kept only for the case where an old key is still live at Supabase and should be revoked there.
+> Do not reintroduce these variables. `docs/supabase-retirement.md` has the full account.
+
 Supabase → Project Settings → API → *Rotate* the keys there, then:
 
 ```bash
@@ -98,6 +104,28 @@ $EDITOR .env.local            # SERVICE_KEY=...
 
 If the anon key changed, update `wrangler.jsonc` → `vars` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`, commit
 and deploy. **Rotating the JWT secret signs every user out**, so do that only if it was exposed.
+
+## 4b. The Render API key — not an app secret, and the worst one to lose
+
+It is worth separating from everything above, because nothing in the app reads it and that makes it
+easy to think of as low-stakes. It is the opposite. An app secret buys an attacker whatever that one
+service does; a Render API key buys them the account: reading and rewriting every environment
+variable (the database URL among them), triggering deploys, and suspending or deleting services.
+
+It is also not rotatable from the API it belongs to — there is no "create me a new key" call — so
+this one is always done by hand:
+
+1. **dashboard.render.com → (your avatar) → Account Settings → API Keys.**
+2. **Create** a new key. Copy it straight into `.env.local` as `RENDER_API_KEY=` — not into a chat
+   window, a terminal command, a commit, or a screenshot. A key pasted into any of those is burnt
+   and has to be rotated again.
+3. **Delete** the old key on that same page. Deletion is immediate and total, so do it after the new
+   one is in place.
+4. Check it: `curl -s -H "Authorization: Bearer $RENDER_API_KEY" https://api.render.com/v1/services`
+   should list the services, and the old key should now answer `401`.
+
+Because `.env.local` is gitignored, keeping it there means later deploys can read it from the file
+instead of having it typed into a command — which is how it leaks in the first place.
 
 ## 5. The database password — last, and all at once
 
