@@ -80,11 +80,15 @@ describe("live mode claims nothing it cannot do", () => {
     msport: { loadCode: true, createCode: true, events: true },
     footballcom: { loadCode: true, createCode: true, events: true },
     // 1xBet platform: fixtures and odds verified; booking implemented but never checked end to end,
-    // so it stays off.
+    // so it stays off. Reading a shared booking code was measured on 2026-11-06 and does not work
+    // either - GetCoupon reads an internal coupon, not the code a user shares.
     "1xbet": { loadCode: false, createCode: false, events: true },
     paripesa: { loadCode: false, createCode: false, events: true },
     "22bet": { loadCode: false, createCode: false, events: true },
     betwinner: { loadCode: false, createCode: false, events: true },
+    // betPawa: reading booking codes verified 2026-11-06 against a real code. Creating one is a
+    // different endpoint and is not built, and its fixture feed is not read, so both stay off.
+    betpawa: { loadCode: true, createCode: false, events: false },
   };
 
   it.each(BOOKMAKER_SLUGS)("%s declares only verified capabilities", (slug) => {
@@ -92,7 +96,9 @@ describe("live mode claims nothing it cannot do", () => {
     expect(createAdapter(slug, "live").capabilities).toEqual(expected);
   });
 
-  // Unconnected bookmakers: every operation must report unavailability instead of guessing.
+  // Unconnected bookmakers: every operation must report unavailability instead of guessing. A
+  // bookmaker that can do one thing is not unconnected, so it is excluded here and covered by its
+  // own test - betPawa reads codes and refuses the rest, which `betpawa-real.test.ts` asserts.
   const unconnected = BOOKMAKER_SLUGS.filter((s) => !VERIFIED[s]);
   it.each(unconnected)("%s refuses every live operation", async (slug) => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});

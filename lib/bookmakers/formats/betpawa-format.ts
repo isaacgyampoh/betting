@@ -1,0 +1,82 @@
+import type { RawMarket } from "@/lib/bookmakers/types";
+import type { Market, MarketPeriod, MarketType } from "@/lib/markets/types";
+
+/**
+ * betPawa's own market names, and what each one actually is.
+ *
+ * Keyed on the market's `name` as the booking-code payload gives it ("1X2 - FT"), with the pick
+ * read from the selection's `name` ("1", "Over", "Yes"). betPawa does not put team names in the
+ * outcome the way the label format expects, so this is its own table rather than a reuse.
+ *
+ * **Only names seen in a real payload appear here.** An unrecognised market maps to null, the
+ * selection still loads, and the leg is shown as one we cannot convert. That is the safe failure:
+ * the alternative is guessing a name from the pattern of another, and a market mapped to the wrong
+ * type converts into a different bet at the destination without anything looking wrong.
+ *
+ * The clearest example is already in the table. "1X2 1UP" is not 1X2: it is a promotion that pays
+ * out early if the side goes a goal ahead, so it wins in matches a 1X2 pick loses. Mapping it to
+ * MATCH_RESULT would turn one bet into another silently, which is why it is listed as deliberately
+ * unmapped rather than left to look like an oversight.
+ */
+type Def = { type: MarketType; period: MarketPeriod };
+
+/** Verified against a real booking code. Add a row only when a payload has shown the name. */
+const MARKETS: Record<string, Def> = {
+  "1X2 - FT": { type: "MATCH_RESULT", period: "FT" },
+  "1X2 - 1H": { type: "MATCH_RESULT", period: "H1" },
+  "Double Chance - FT": { type: "DOUBLE_CHANCE", period: "FT" },
+  "Over/Under - FT": { type: "OVER_UNDER", period: "FT" },
+  "Over/Under - 1H": { type: "OVER_UNDER", period: "H1" },
+  "Both Teams To Score - FT": { type: "BTTS", period: "FT" },
+  "Handicap - FT": { type: "HANDICAP", period: "FT" },
+};
+
+/**
+ * Markets we can read but must never map, with the reason.
+ *
+ * Listed rather than omitted so that nobody "fixes" the gap by adding them to the table above.
+ */
+const NEVER_MAP: Record<string, string> = {
+  "1X2 1UP - FT": "pays out early at one goal ahead, so it is not a 1X2 result and converts into a different bet",
+  "1X2 2UP - FT": "pays out early at two goals ahead; same reason",
+};
+
+const OUTCOME: Record<string, Record<string, string>> = {
+  MATCH_RESULT: { "1": "HOME", X: "DRAW", "2": "AWAY" },
+  DOUBLE_CHANCE: { "1X": "HOME_DRAW", "12": "HOME_AWAY", X2: "DRAW_AWAY" },
+  OVER_UNDER: { Over: "OVER", Under: "UNDER" },
+  BTTS: { Yes: "YES", No: "NO" },
+  HANDICAP: { "1": "HOME", "2": "AWAY" },
+};
+
+/** The line out of betPawa's `formattedHandicap`, which carries "2.5" or "-1" or "". */
+function parseLine(specifier: string): number | null {
+  const trimmed = specifier.trim();
+  return /^[+-]?\d+(\.\d+)?$/.test(trimmed) ? Number(trimmed) : null;
+}
+
+export const betpawaFormat = {
+  mapMarket(raw: RawMarket): Market | null {
+    if (NEVER_MAP[raw.marketId]) return null;
+
+    const def = MARKETS[raw.marketId];
+    if (!def) return null;
+
+    const outcome = OUTCOME[def.type]?.[raw.outcomeId.trim()];
+    if (!outcome) return null;
+
+    const line = parseLine(raw.specifier);
+    // A totals or handicap market without a line is not a market we can rebuild elsewhere.
+    if ((def.type === "OVER_UNDER" || def.type === "HANDICAP") && line === null) return null;
+
+    return { ...def, outcome, line };
+  },
+
+  /** Why a market we recognise by name is nonetheless not convertible. Null when there is no reason. */
+  refusedReason(raw: RawMarket): string | null {
+    return NEVER_MAP[raw.marketId] ?? null;
+  },
+};
+
+export const BETPAWA_MARKET_NAMES = Object.keys(MARKETS);
+export const BETPAWA_NEVER_MAP = NEVER_MAP;

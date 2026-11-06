@@ -142,10 +142,23 @@ Repeat A, B and C:
 - **B:** Add picks, then **Book a bet** / **Share** to get a code.
 - **C:** Open a match page, and search for a team.
 
-## 2b. betPawa Ghana (betpawa.com.gh) — found, but blocked on protobuf
+## 2b. betPawa Ghana (betpawa.com.gh) — reading booking codes is live
 
-**Status: endpoints known, not implemented.** No account is needed to read a booking code, but the
-response bodies are **protobuf**, not JSON.
+**Status: built and verified 2026-11-06.** `lib/bookmakers/live/betpawa.ts` reads booking codes,
+and the adapter declares `loadCode: true`. Creating a code is a different endpoint and is not
+built, so betPawa is a place a slip can come *from*.
+
+**The protobuf blocker is gone.** This section previously recorded the response as protobuf, which
+is why betPawa was never built: reading it would have meant guessing field numbers, and a mis-read
+price is the one mistake that must not ship. Re-checked against a real code, `GET
+/api/sportsbook/v3/booking-number/{code}` answers `content-type: application/json` with every
+field named - event id, participants with positions, kick-off, competition, region, market name,
+selection and price. Whatever was true before, it is readable now.
+
+One trap found in the first real payload: betPawa sells **"1X2 1UP"**, which pays out early once a
+side goes a goal ahead. It is not a 1X2 result and must never be mapped to one - it wins matches a
+1X2 pick loses, so converting it would hand someone a different bet. `betpawa-format.ts` lists it
+as deliberately unmapped, with the reason, so the gap is not later "fixed".
 
 | Endpoint | Gives us |
 |---|---|
